@@ -1,0 +1,206 @@
+# PANTRYSWIPE — UX/UI UPGRADE PATCH v2.1
+### Add this section into the master prompt under DESIGN REQUIREMENTS
+
+---
+
+## HOME SCREEN LAYOUT — PROPORTIONS (CRITICAL)
+
+The swipe card is the HERO of the entire app. It must feel like the main event.
+
+Layout proportion from top to bottom of screen:
+- Top bar (greeting + icons): 60px
+- Search bar: 44px
+- Mood chip strip (horizontal scroll): 38px
+- Pantry match banner: 52px
+- **Swipe card: minimum 320px — the dominant element**
+- Swipe action buttons: 80px
+- Tab bar: 64px
+
+DO NOT reduce the swipe card height to accommodate other elements. Reduce or remove other elements first.
+
+The card must be full-width with 8px margin on each side. It must NOT be cut off at the bottom. It must show the complete card face including recipe name, meta info, and ingredient match pill.
+
+---
+
+## QUICK ACTION BUTTONS — REDESIGN
+
+REMOVE the tall rectangle buttons (Scan Fridge, Add Ingredient, Party Planner, Meal Planner).
+
+REPLACE with:
+- A horizontal scrollable mood chip strip above the card
+- Chips are small pill shapes: 32px height, rounded, subtle dark background
+- Tapping a chip filters the swipe deck instantly
+- Mood options: ✦ Date Night · Family Dinner · Quick Meal · Gym Fuel · Cheat Meal · Party Mode · Meal Prep · Surprise Me
+- Active chip: Saffron (#F5A623) background, dark text, no border
+- Inactive chip: dark surface (#1A1815), grey text, faint border
+
+Scan Fridge and Add Ingredient move to a floating bottom sheet triggered by a "+" button, or to the Pantry tab. They must NOT be large hero buttons on the home screen.
+
+---
+
+## SWIPE BUTTON HIERARCHY
+
+Three buttons below the card. Sizes must communicate hierarchy:
+
+- Skip (✕): 46px circle, red (#E84040) icon, semi-transparent red fill, faint red border
+- Cook This (♥): 58px circle, Saffron (#F5A623) solid fill, dark icon — this is the primary action, it is larger
+- Save (🔖): 46px circle, blue (#5B8EF5) icon, semi-transparent blue fill, faint blue border
+
+All three are equally spaced horizontally under the card. Cook This is vertically offset slightly upward (8px) to make it feel elevated. Labels below each button: 8px, muted grey.
+
+---
+
+## COLOR SYSTEM — DARK MODE FIRST
+
+This app renders in dark mode as the primary experience.
+
+Background layers (darkest to lightest surface):
+- App background: #0D0B09 (espresso — not pure black)
+- Screen background: #111009
+- Card surface: #1A1815
+- Elevated surface: #1E1B18
+- Border: #2A2724
+
+Brand colors:
+- Saffron (primary CTA, active state): #F5A623
+- Herb Green (match, freshness, success): #4CAF76
+- Skip Red (left swipe, discard): #E84040
+- Save Blue (up swipe, bookmark): #5B8EF5
+
+Text:
+- Primary: #F0EDE8
+- Secondary: #9E9E9E
+- Muted: #555555
+
+Light mode: invert all background colors. Keep brand colors identical. Text primary becomes #1A1A1A.
+
+IMPORTANT: Never use pure #000000 or #FFFFFF for backgrounds. The warmth of #0D0B09 and #FAFAF8 is what separates this from a generic app.
+
+---
+
+## TYPOGRAPHY SPEC
+
+Load these fonts via Google Fonts:
+- Fraunces (variable, opsz 9-144) — for recipe names, hero titles, onboarding headers
+- Inter (variable) — for all UI, body, instructions, labels, buttons
+- Space Grotesk — for all numeric data: calories, timers, prices, badge counts
+
+Usage rules:
+- Recipe card title: Fraunces 22px / 700 / letter-spacing -0.3px / color #F0EDE8
+- Section headers: Inter 13px / 500 / uppercase / letter-spacing 0.08em / color #555
+- Body instructions: Inter 15px / 400 / line-height 1.6
+- Numeric badges (kcal, time, rating): Space Grotesk 11px / 600
+- Tab labels: Inter 9px / 500
+
+---
+
+## SWIPE ANIMATIONS — INGREDIENT FLARE (BUILD THESE)
+
+These animations are what make this feel like a million-dollar app.
+
+### Swipe Right — Cook This
+Trigger: card dragged >80px rightward OR Cook This button tapped.
+
+Animation sequence:
+1. Card rotates +15 degrees along Z axis
+2. Green checkmark circle overlay fades in at center of card (scale 0 → 1, spring physics)
+3. Particle burst: 8 small ingredient emoji characters (🧄 🫙 🥚 🧅 🧀 🍋 🌿 🧂) explode outward from card center in a radial pattern, fade to 0 opacity over 600ms
+4. Card translates to right, scales down to 0.6, opacity 0 — exits screen
+5. Next card springs up from z-stack with a slight bounce
+6. Haptic feedback: medium impact
+
+### Swipe Left — Skip
+Trigger: card dragged >80px leftward OR Skip button tapped.
+
+Animation sequence:
+1. Card rotates -15 degrees along Z axis
+2. Red ✕ overlay fades in at card center
+3. Three grey circles emit from center and dissipate outward (like a puff of smoke/steam) — 400ms
+4. Card translates left, fades to 0 opacity
+5. Next card advances from stack
+6. Haptic feedback: light impact
+
+### Swipe Up — Save for Later
+Trigger: card dragged >100px upward OR Save button tapped.
+
+Animation sequence:
+1. Card translates upward and simultaneously scales from 1.0 to 0.0
+2. Blue bookmark icon floats upward from card origin and pulses (scale 1.0 → 1.2 → 1.0) before fading
+3. Sparkle burst: 6 small ✦ star shapes radiate from center in random directions, fade over 500ms
+4. Toast notification slides in from top: "Saved for later 🔖"
+5. Haptic feedback: light impact
+
+### During Drag (Live Feedback)
+As the user drags the card:
+- 0–30px drag: no overlay
+- 30–80px rightward: green tint overlay builds up from 0 to 40% opacity, green ✓ icon fades in at card center
+- 30–80px leftward: red tint overlay builds up, red ✕ fades in
+- 30–80px upward: blue tint overlay builds up, blue 🔖 fades in
+- Card rotates proportionally to drag distance (max ±18 degrees)
+- Cards beneath rotate slightly in reverse (parallax stack effect)
+
+### First Swipe Tutorial
+On first launch, after pantry is set:
+- Subtle animated arrows show swipe directions on the first card
+- Labels: "← Skip" / "Cook this →" / "Save ↑"
+- Arrows fade out after first successful swipe and never appear again
+
+---
+
+## ADDITIONAL INGREDIENT FLARE MOMENTS
+
+### AI Chef Loading
+When AI Chef is thinking:
+- 6 ingredient emoji characters (🧄 🥕 🧅 🫙 🥚 🌿) orbit a central loading circle like planets around a sun
+- Each rotates at a slightly different speed
+- Replaces any spinner. Duration matches API response time.
+
+### Pantry Expiry Indicator
+Ingredients near expiry (< 3 days):
+- Show an animated wilting leaf (CSS animation: slight droop and yellow color shift)
+- Urgency increases as days decrease
+- "3 days" = slight wilt · "1 day" = yellowing · "Today" = full wilt + red tint
+
+### Cooking Streak Flame (Profile)
+- Animated Lottie fire icon next to streak counter
+- Flame height and intensity scales with streak length
+- 1-3 days: small flicker · 7 days: medium flame · 30 days: large roaring flame with orange glow
+
+### Post-Cook Celebration
+After marking a recipe as cooked:
+- Full-screen confetti burst using ingredient emojis + ✦ shapes
+- Trophy animation for first cook of that cuisine
+- XP counter animates upward (number rolls)
+- Achievement badge slides in from right if milestone hit
+
+### Recipe Match Reveal
+When landing on home screen:
+- Pantry match number counts up from 0 to the actual number (e.g., 0 → 24) over 800ms
+- Creates a satisfying sense of "your pantry is full of possibilities"
+
+---
+
+## LAYOUT COMPONENTS — DO NOT DO THESE
+
+❌ Do NOT use tall rectangle quick action buttons on the home screen
+❌ Do NOT cut off the swipe card at the bottom of the screen
+❌ Do NOT use the same button size for all three swipe actions
+❌ Do NOT use spinner loading states anywhere — use skeletons or custom animations
+❌ Do NOT use pure black (#000000) backgrounds
+❌ Do NOT use generic flat colour backgrounds with no depth
+❌ Do NOT put more than 4 elements above the swipe card
+
+---
+
+## CARD STACK VISUAL DEPTH
+
+The swipe deck must show exactly 3 cards in a z-stack:
+- Front card: full opacity, no offset
+- Second card: 8px lower, 10px narrower on each side, 70% opacity
+- Third card: 16px lower, 16px narrower on each side, 40% opacity
+
+This gives the visual sense of a physical deck of recipe cards. As the front card is swiped away, the second card springs forward with a subtle bounce (spring physics, not linear ease).
+
+---
+
+*End of UI Upgrade Patch v2.1 — combine with Master Prompt v2.0*

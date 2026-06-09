@@ -5,6 +5,8 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
+import { Fraunces_700Bold } from "@expo-google-fonts/fraunces";
+import { SpaceGrotesk_600SemiBold } from "@expo-google-fonts/space-grotesk";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -40,6 +42,8 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    Fraunces_700Bold,
+    SpaceGrotesk_600SemiBold,
   });
 
   useEffect(() => {

@@ -13,8 +13,10 @@ import { useColors } from "@/hooks/useColors";
 import { Recipe } from "@/data/mockData";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.3;
-const SWIPE_UP_THRESHOLD = -SCREEN_HEIGHT * 0.2;
+const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.28;
+const SWIPE_UP_THRESHOLD = -80;
+const MAX_ROTATION = 18;
+const CARD_BASE_WIDTH = SCREEN_WIDTH - 16;
 
 const RECIPE_IMAGES: Record<string, ReturnType<typeof require>> = {
   "recipe-pasta": require("@/assets/images/recipe-pasta.png"),
@@ -31,6 +33,7 @@ interface SwipeCardProps {
   onSwipeUp: () => void;
   isTop: boolean;
   index: number;
+  containerHeight: number;
 }
 
 export default function SwipeCard({
@@ -41,75 +44,101 @@ export default function SwipeCard({
   onSwipeUp,
   isTop,
   index,
+  containerHeight,
 }: SwipeCardProps) {
   const colors = useColors();
   const pan = useRef(new Animated.ValueXY()).current;
 
+  const cardHeight = containerHeight > 0 ? containerHeight - 8 : SCREEN_HEIGHT * 0.52;
+  const imageHeight = cardHeight * 0.62;
+
+  // Rotation tied to horizontal drag
   const rotate = pan.x.interpolate({
-    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
-    outputRange: ["-8deg", "0deg", "8deg"],
+    inputRange: [-SCREEN_WIDTH * 0.5, 0, SCREEN_WIDTH * 0.5],
+    outputRange: [`-${MAX_ROTATION}deg`, "0deg", `${MAX_ROTATION}deg`],
     extrapolate: "clamp",
   });
 
-  const likeOpacity = pan.x.interpolate({
-    inputRange: [0, SCREEN_WIDTH / 4],
+  // RIGHT overlay — builds from 30px to 80px drag
+  const rightTintOpacity = pan.x.interpolate({
+    inputRange: [0, 30, 80],
+    outputRange: [0, 0, 0.42],
+    extrapolate: "clamp",
+  });
+  const rightIconOpacity = pan.x.interpolate({
+    inputRange: [30, 80],
     outputRange: [0, 1],
     extrapolate: "clamp",
   });
 
-  const nopeOpacity = pan.x.interpolate({
-    inputRange: [-SCREEN_WIDTH / 4, 0],
+  // LEFT overlay — builds from -30px to -80px drag
+  const leftTintOpacity = pan.x.interpolate({
+    inputRange: [-80, -30, 0],
+    outputRange: [0.42, 0, 0],
+    extrapolate: "clamp",
+  });
+  const leftIconOpacity = pan.x.interpolate({
+    inputRange: [-80, -30],
     outputRange: [1, 0],
     extrapolate: "clamp",
   });
 
-  const saveOpacity = pan.y.interpolate({
-    inputRange: [-SCREEN_HEIGHT / 4, 0],
+  // UP overlay — builds from -30px to -100px vertical drag
+  const upTintOpacity = pan.y.interpolate({
+    inputRange: [-100, -30, 0],
+    outputRange: [0.42, 0, 0],
+    extrapolate: "clamp",
+  });
+  const upIconOpacity = pan.y.interpolate({
+    inputRange: [-100, -30],
     outputRange: [1, 0],
     extrapolate: "clamp",
   });
 
   const panResponder = PanResponder.create({
     onMoveShouldSetPanResponder: (_, gestureState) =>
-      isTop && (Math.abs(gestureState.dx) > 8 || Math.abs(gestureState.dy) > 8),
+      isTop && (Math.abs(gestureState.dx) > 6 || Math.abs(gestureState.dy) > 6),
     onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
       useNativeDriver: false,
     }),
     onPanResponderRelease: (_, gestureState) => {
       if (gestureState.dx > SWIPE_THRESHOLD) {
         Animated.timing(pan, {
-          toValue: { x: SCREEN_WIDTH * 1.5, y: gestureState.dy },
-          duration: 300,
+          toValue: { x: SCREEN_WIDTH * 1.6, y: gestureState.dy * 1.5 },
+          duration: 280,
           useNativeDriver: false,
         }).start(onSwipeRight);
       } else if (gestureState.dx < -SWIPE_THRESHOLD) {
         Animated.timing(pan, {
-          toValue: { x: -SCREEN_WIDTH * 1.5, y: gestureState.dy },
-          duration: 300,
+          toValue: { x: -SCREEN_WIDTH * 1.6, y: gestureState.dy * 1.5 },
+          duration: 280,
           useNativeDriver: false,
         }).start(onSwipeLeft);
       } else if (gestureState.dy < SWIPE_UP_THRESHOLD) {
         Animated.timing(pan, {
-          toValue: { x: gestureState.dx, y: -SCREEN_HEIGHT * 1.5 },
+          toValue: { x: gestureState.dx, y: -SCREEN_HEIGHT },
           duration: 300,
           useNativeDriver: false,
         }).start(onSwipeUp);
       } else {
         Animated.spring(pan, {
           toValue: { x: 0, y: 0 },
-          friction: 5,
-          tension: 40,
+          friction: 6,
+          tension: 42,
           useNativeDriver: false,
         }).start();
       }
     },
   });
 
-  const cardScale = isTop ? 1 : 1 - index * 0.04;
-  const cardTranslateY = isTop ? 0 : index * 10;
+  // Z-stack visual depth
+  const stackWidthReduction = index === 0 ? 0 : index === 1 ? 20 : 32;
+  const cardWidth = CARD_BASE_WIDTH - stackWidthReduction;
+  const cardOpacity = index === 0 ? 1 : index === 1 ? 0.7 : 0.4;
+  const stackOffsetY = index === 0 ? 0 : index === 1 ? 8 : 16;
+
   const matchedCount = recipe.ingredients.filter((i) => i.inPantry).length;
   const missingCount = recipe.ingredients.filter((i) => !i.inPantry).length;
-
   const difficultyColor =
     recipe.difficulty === "Easy"
       ? colors.secondary
@@ -124,101 +153,149 @@ export default function SwipeCard({
       style={[
         styles.card,
         {
+          width: cardWidth,
+          height: cardHeight,
           backgroundColor: colors.card,
+          opacity: cardOpacity,
           shadowColor: "#000",
           transform: isTop
-            ? [
-                { translateX: pan.x },
-                { translateY: pan.y },
-                { rotate },
-              ]
-            : [{ scale: cardScale }, { translateY: cardTranslateY }],
+            ? [{ translateX: pan.x }, { translateY: pan.y }, { rotate }]
+            : [{ translateY: stackOffsetY }],
         },
       ]}
       {...(isTop ? panResponder.panHandlers : {})}
     >
       {/* Food Image */}
-      <View style={styles.imageContainer}>
+      <View style={[styles.imageContainer, { height: imageHeight }]}>
         {imageSource ? (
           <Image source={imageSource} style={styles.image} resizeMode="cover" />
         ) : (
           <View style={[styles.imagePlaceholder, { backgroundColor: colors.muted }]}>
-            <Text style={[styles.placeholderEmoji]}>
-              {recipe.cuisine === "Italian" ? "🍝" :
-               recipe.cuisine === "Japanese" ? "🍜" :
-               recipe.cuisine === "Korean" ? "🥘" :
-               recipe.cuisine === "Mexican" ? "🌮" :
-               recipe.cuisine === "Indian" ? "🍛" : "🍽"}
+            <Text style={styles.placeholderEmoji}>
+              {recipe.cuisine === "Italian"
+                ? "🍝"
+                : recipe.cuisine === "Japanese"
+                ? "🍜"
+                : recipe.cuisine === "Korean"
+                ? "🥘"
+                : recipe.cuisine === "Mexican"
+                ? "🌮"
+                : recipe.cuisine === "Indian"
+                ? "🍛"
+                : "🍽"}
             </Text>
           </View>
         )}
+
+        {/* Gradient overlay */}
         <View style={styles.imageGradient} />
 
         {/* Difficulty badge */}
         <View style={[styles.difficultyBadge, { backgroundColor: difficultyColor }]}>
-          <Text style={styles.difficultyText}>{recipe.difficulty}</Text>
+          <Text style={[styles.difficultyText, { fontFamily: "SpaceGrotesk_600SemiBold" }]}>
+            {recipe.difficulty}
+          </Text>
         </View>
 
-        {/* Swipe indicators */}
-        {isTop && (
-          <>
-            <Animated.View style={[styles.indicator, styles.likeIndicator, { opacity: likeOpacity }]}>
-              <Feather name="check-circle" size={28} color="#fff" />
-              <Text style={styles.indicatorText}>COOK</Text>
-            </Animated.View>
-            <Animated.View style={[styles.indicator, styles.nopeIndicator, { opacity: nopeOpacity }]}>
-              <Feather name="x-circle" size={28} color="#fff" />
-              <Text style={styles.indicatorText}>SKIP</Text>
-            </Animated.View>
-            <Animated.View style={[styles.indicator, styles.saveIndicator, { opacity: saveOpacity }]}>
-              <Feather name="bookmark" size={28} color="#fff" />
-              <Text style={styles.indicatorText}>SAVE</Text>
-            </Animated.View>
-          </>
-        )}
+        {/* Pantry match % */}
+        <View style={[styles.matchPill, { backgroundColor: "rgba(0,0,0,0.55)" }]}>
+          <Feather name="check-circle" size={11} color={colors.secondary} />
+          <Text style={[styles.matchPillText, { color: colors.secondary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
+            {pantryMatchScore}% match
+          </Text>
+        </View>
       </View>
 
       {/* Card Info */}
       <View style={styles.infoContainer}>
-        <Text style={[styles.recipeTitle, { color: colors.foreground }]} numberOfLines={2}>
+        <Text
+          style={[styles.recipeTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}
+          numberOfLines={2}
+        >
           {recipe.title}
         </Text>
         <View style={styles.metaRow}>
-          <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
+          <Text style={[styles.metaText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
             {recipe.cuisine}
           </Text>
-          <View style={styles.dot} />
-          <Feather name="clock" size={12} color={colors.mutedForeground} />
-          <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
+          <View style={[styles.dot, { backgroundColor: colors.textMuted }]} />
+          <Feather name="clock" size={11} color={colors.textMuted} />
+          <Text style={[styles.metaNum, { color: colors.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
             {recipe.prepTime + recipe.cookTime}m
           </Text>
-          <View style={styles.dot} />
-          <Feather name="zap" size={12} color={colors.mutedForeground} />
-          <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
+          <View style={[styles.dot, { backgroundColor: colors.textMuted }]} />
+          <Text style={[styles.metaNum, { color: colors.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
             {recipe.calories} kcal
           </Text>
-          <View style={styles.dot} />
-          <Feather name="star" size={12} color={colors.saffron} />
-          <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
+          <View style={[styles.dot, { backgroundColor: colors.textMuted }]} />
+          <Feather name="star" size={11} color={colors.saffron} />
+          <Text style={[styles.metaNum, { color: colors.saffron, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
             {recipe.rating}
           </Text>
         </View>
         <View style={styles.matchRow}>
-          <View style={[styles.matchBadge, { backgroundColor: colors.secondary + "20" }]}>
-            <Feather name="check" size={12} color={colors.secondary} />
-            <Text style={[styles.matchText, { color: colors.secondary }]}>
+          <View style={[styles.matchBadge, { backgroundColor: colors.secondary + "22" }]}>
+            <Feather name="check" size={11} color={colors.secondary} />
+            <Text style={[styles.matchText, { color: colors.secondary, fontFamily: "Inter_600SemiBold" }]}>
               {matchedCount}/{recipe.ingredients.length} in pantry
             </Text>
           </View>
           {missingCount > 0 && (
-            <View style={[styles.missingBadge, { backgroundColor: colors.saffron + "20" }]}>
-              <Text style={[styles.matchText, { color: colors.saffron }]}>
+            <View style={[styles.missingBadge, { backgroundColor: colors.saffron + "22" }]}>
+              <Text style={[styles.matchText, { color: colors.saffron, fontFamily: "Inter_600SemiBold" }]}>
                 +{missingCount} needed
               </Text>
             </View>
           )}
         </View>
       </View>
+
+      {/* Swipe tint overlays — only on top card */}
+      {isTop && (
+        <>
+          {/* Right / Cook */}
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFill,
+              styles.tintOverlay,
+              { backgroundColor: "#4CAF76", opacity: rightTintOpacity, pointerEvents: "none" },
+            ]}
+          >
+            <Animated.View style={[styles.overlayContent, { opacity: rightIconOpacity }]}>
+              <Feather name="check-circle" size={64} color="#fff" />
+              <Text style={[styles.overlayLabel, { fontFamily: "Inter_700Bold" }]}>COOK</Text>
+            </Animated.View>
+          </Animated.View>
+
+          {/* Left / Skip */}
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFill,
+              styles.tintOverlay,
+              { backgroundColor: "#E84040", opacity: leftTintOpacity, pointerEvents: "none" },
+            ]}
+          >
+            <Animated.View style={[styles.overlayContent, { opacity: leftIconOpacity }]}>
+              <Feather name="x-circle" size={64} color="#fff" />
+              <Text style={[styles.overlayLabel, { fontFamily: "Inter_700Bold" }]}>SKIP</Text>
+            </Animated.View>
+          </Animated.View>
+
+          {/* Up / Save */}
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFill,
+              styles.tintOverlay,
+              { backgroundColor: "#5B8EF5", opacity: upTintOpacity, pointerEvents: "none" },
+            ]}
+          >
+            <Animated.View style={[styles.overlayContent, { opacity: upIconOpacity }]}>
+              <Feather name="bookmark" size={64} color="#fff" />
+              <Text style={[styles.overlayLabel, { fontFamily: "Inter_700Bold" }]}>SAVE</Text>
+            </Animated.View>
+          </Animated.View>
+        </>
+      )}
     </Animated.View>
   );
 }
@@ -226,17 +303,16 @@ export default function SwipeCard({
 const styles = StyleSheet.create({
   card: {
     position: "absolute",
-    width: SCREEN_WIDTH - 32,
     borderRadius: 24,
     overflow: "hidden",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 10,
   },
   imageContainer: {
-    height: SCREEN_HEIGHT * 0.38,
     position: "relative",
+    width: "100%",
   },
   image: {
     width: "100%",
@@ -248,89 +324,67 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  placeholderEmoji: {
-    fontSize: 80,
-  },
+  placeholderEmoji: { fontSize: 72 },
   imageGradient: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    height: 80,
-    backgroundColor: "rgba(0,0,0,0.3)",
+    height: 100,
+    backgroundColor: "rgba(0,0,0,0.35)",
   },
   difficultyBadge: {
     position: "absolute",
-    top: 16,
-    right: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    top: 14,
+    right: 14,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
     borderRadius: 100,
   },
   difficultyText: {
     color: "#fff",
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 11,
   },
-  indicator: {
+  matchPill: {
     position: "absolute",
+    bottom: 12,
+    left: 14,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    top: 20,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 100,
   },
-  likeIndicator: {
-    left: 16,
-    backgroundColor: "rgba(76, 175, 118, 0.85)",
-  },
-  nopeIndicator: {
-    right: 16,
-    backgroundColor: "rgba(232, 64, 64, 0.85)",
-  },
-  saveIndicator: {
-    left: "50%",
-    transform: [{ translateX: -60 }],
-    backgroundColor: "rgba(91, 142, 245, 0.85)",
-  },
-  indicatorText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 14,
-    letterSpacing: 1,
-  },
+  matchPillText: { fontSize: 11 },
   infoContainer: {
-    padding: 20,
-    paddingBottom: 16,
-    gap: 10,
+    flex: 1,
+    padding: 18,
+    paddingBottom: 14,
+    gap: 8,
+    justifyContent: "center",
   },
   recipeTitle: {
     fontSize: 22,
-    fontWeight: "700",
-    lineHeight: 28,
-    letterSpacing: -0.5,
+    lineHeight: 27,
+    letterSpacing: -0.3,
   },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
     flexWrap: "wrap",
   },
-  metaText: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
+  metaText: { fontSize: 12 },
+  metaNum: { fontSize: 12 },
   dot: {
     width: 3,
     height: 3,
     borderRadius: 2,
-    backgroundColor: "#ccc",
   },
   matchRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 7,
     flexWrap: "wrap",
   },
   matchBadge: {
@@ -338,16 +392,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 100,
   },
   missingBadge: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 100,
   },
-  matchText: {
-    fontSize: 12,
-    fontWeight: "600",
+  matchText: { fontSize: 12 },
+  tintOverlay: {
+    borderRadius: 24,
+    zIndex: 10,
+  },
+  overlayContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  overlayLabel: {
+    color: "#fff",
+    fontSize: 20,
+    letterSpacing: 3,
   },
 });
