@@ -1,0 +1,696 @@
+# MASTER APP-BUILDER PROMPT — PANTRYSWIPE
+### Version 2.0 — Full UX/UI + Design System + AI Behavior Spec
+
+Build a production-ready mobile-first application called **PantrySwipe** for iOS, Android, and Web.
+
+PantrySwipe is an AI-powered cooking ecosystem. It is not a recipe app. It is the answer to one universal question:
+
+> **"What can I cook right now, with what I already have?"**
+
+The experience should feel like a seamless blend of Tinder's swipe decisions, TikTok's discovery feed, Spotify's mood-based filtering, MyFitnessPal's nutrition intelligence, and a personal AI chef that knows your kitchen better than you do.
+
+---
+
+## DESIGN SYSTEM & VISUAL IDENTITY
+
+### Philosophy
+Food is emotional. The design must feel warm, alive, and indulgent — like a well-lit kitchen at golden hour, not a sterile health app. Every screen should make the user want to cook *right now*.
+
+### Color Palette
+- **Primary Background (Light Mode):** `#FAFAF8` — warm off-white, like parchment
+- **Primary Background (Dark Mode):** `#141210` — deep espresso, not pure black
+- **Surface Cards:** `#FFFFFF` light / `#1E1B18` dark
+- **Brand Accent — Saffron:** `#F5A623` — used for CTAs, highlights, active states
+- **Secondary Accent — Herb Green:** `#4CAF76` — used for "match" states, freshness indicators
+- **Destructive / Skip:** `#E84040` — swipe left, discard
+- **Save / Bookmark:** `#5B8EF5` — swipe up, save for later
+- **Text Primary:** `#1A1A1A` light / `#F0EDE8` dark
+- **Text Secondary:** `#6B6B6B` light / `#9E9E9E` dark
+- **Divider:** `#EBEBEB` light / `#2A2724` dark
+
+### Typography
+- **Display / Hero:** `Fraunces` (variable, optical size) — serif, warm, editorial. Used for recipe titles, hero moments.
+- **Body / UI:** `Inter` (variable) — clean, legible, neutral. Used for instructions, labels, body text.
+- **Accent / Badges:** `Space Grotesk` — geometric, modern. Used for tags, calorie counts, timers, numeric data.
+- **Type Scale:**
+  - Hero: 36px / 700 weight / -1px tracking
+  - Title: 24px / 600
+  - Subtitle: 18px / 500
+  - Body: 15px / 400 / 1.6 line height
+  - Caption / Label: 12px / 500 / uppercase + 0.5px tracking
+
+### Iconography
+Use `Phosphor Icons` (duotone variant). Never mix icon sets. Icons must always have a label on first use.
+
+### Motion & Animation
+- Swipe cards: physics-based spring animation (react-spring or Framer Motion). Cards should feel like physical cards with weight.
+- Screen transitions: slide-up for detail views, fade for tab switches.
+- Skeleton loaders: always, no spinners.
+- Micro-interactions: subtle haptic-paired animations on swipe decisions (bounce right for yes, tilt left for skip, float up for save).
+- Reduce motion: respect `prefers-reduced-motion` system setting fully.
+
+### Component Language
+- Border radius: `16px` cards, `12px` inputs, `100px` pills/chips, `8px` small elements
+- Shadows: `0 2px 12px rgba(0,0,0,0.08)` cards light mode; `0 2px 16px rgba(0,0,0,0.4)` dark mode
+- Spacing unit: `8px` base grid
+- Image treatment: always full-bleed on cards, `object-fit: cover`, darkened gradient overlay at bottom for text legibility
+- Bottom safe area: always respect iOS/Android notch and home indicator
+
+---
+
+## APP ARCHITECTURE
+
+### Navigation Structure
+```
+Tab Bar (bottom):
+├── 🏠 Home (Feed)
+├── 🥕 Pantry
+├── 📅 Planner
+├── 👥 Social
+└── 👤 Profile
+```
+
+Floating persistent element: **AI Chef button** (bottom right, above tab bar) — always accessible.
+
+---
+
+## SCREEN-BY-SCREEN SPECIFICATION
+
+---
+
+### SCREEN 1 — SPLASH / WELCOME
+
+Layout: Full-screen cinematic food photography background (looping subtle Ken Burns motion on still image). Dark gradient overlay (bottom 60%).
+
+Elements:
+- App logo: wordmark `PantrySwipe` in Fraunces, white, centered upper third
+- Tagline below logo: `"Cook what you already have."` in Inter Regular, 17px, white/80% opacity
+- Bottom section: two buttons stacked
+  - **Get Started** — filled, Saffron background, white label, full-width pill
+  - **Sign In** — outlined, white border, white label, full-width pill
+- Below buttons: `"By continuing, you agree to our Terms & Privacy Policy"` in 11px, white/50%
+
+Behavior: Auto-advance to onboarding if first launch. Auto-advance to home if returning user with valid session.
+
+---
+
+### SCREEN 2 — ONBOARDING (Multi-step, no more than 6 steps)
+
+Design: Clean white/dark card modal that slides up. Progress dots at top. Skip option top-right (except step 1).
+
+**Step 1 — Who are you cooking for?**
+- Name (text input)
+- Country (searchable dropdown with flag emoji)
+- Language (auto-detected, confirm or change)
+- Household size: icon-based selector (1, 2, 3, 4, 5+)
+
+**Step 2 — Your cooking style**
+- Skill level: horizontal segmented control
+  - `🥄 Beginner` / `🍳 Home Cook` / `👨‍🍳 Confident` / `🌟 Advanced`
+- Preferred cooking time: slider — `< 15 min` → `> 60 min`
+- Equipment owned: chip multi-select
+  - Oven, Air Fryer, Wok, Rice Cooker, Instant Pot, Grill, Microwave only, Stovetop only
+
+**Step 3 — Dietary profile**
+- Diet type: visual grid (icon + label cards, multi-select)
+  - Omnivore, Vegetarian, Vegan, Pescatarian, Halal, Kosher, Keto, Paleo
+- Allergies: chip multi-select + free text option
+  - Nuts, Dairy, Gluten, Shellfish, Eggs, Soy, + Add Custom
+
+**Step 4 — Your goals**
+- Primary goal: single select cards
+  - 🥗 Eat Healthier / 💪 Build Muscle / 💸 Save Money / ⏱ Cook Faster / 🌍 Explore Cuisines / 🎉 Cook for Others
+- Weekly budget for groceries: currency-aware slider
+
+**Step 5 — Cuisine love**
+- "Which cuisines make your mouth water?"
+- Visual scrollable grid of cuisine cards with flag + food image thumbnail
+  - Pre-selected based on user's country
+  - Singaporean, Malaysian, Japanese, Korean, Chinese, Thai, Vietnamese, Indian, Italian, French, Mexican, American, Middle Eastern, African, Mediterranean, and more
+- Min 1 selection required
+
+**Step 6 — Your pantry starts here**
+- Headline: `"What's in your kitchen right now?"`
+- Three entry options side by side:
+  - 📷 `Scan Fridge` — opens camera
+  - 📄 `Scan Receipt` — opens camera/photo library
+  - ✏️ `Type It In` — opens ingredient search input
+- Skip option: `"I'll add later"` — text link
+- Progress indicator: shows this populates their first recipe cards
+
+Store all onboarding data in User Profile. Use it to immediately personalise all content.
+
+---
+
+### SCREEN 3 — HOME FEED (Primary Screen)
+
+**Layout:** Full-screen card swipe experience.
+
+**Top Bar:**
+- Left: App logo (small) + greeting `"Good evening, [Name] 👋"`
+- Right: notification bell (with red dot if unread) + avatar
+
+**Search Bar:** Rounded, below header. Placeholder: `"Ingredient, dish, cuisine, mood..."`
+
+**Quick Action Pills** (horizontal scroll, below search):
+- 📷 Scan Fridge
+- ✏️ Add Ingredient
+- 🎉 Party Planner
+- 📅 Meal Planner
+- 💡 Surprise Me
+
+**Pantry Match Banner:** Appears when pantry has data.
+> `"You have 8 ingredients. 24 recipes match your pantry right now."`
+> Small pill: `View All Matches →`
+
+**Recipe Swipe Deck:**
+Full-screen card stack (3 cards visible with z-stack depth perspective).
+
+**Each Card Contains:**
+- Full-bleed food photography (top 65% of card)
+- Bottom gradient overlay panel:
+  - Recipe name in Fraunces 24px
+  - Row: `🍽 [Cuisine]` · `⏱ [X min]` · `🔥 [X kcal]` · `⭐ [Rating]`
+  - Ingredient match badge: `✅ 5/7 ingredients in pantry` — green pill
+  - Missing ingredients: `+ 2 items needed` — tappable
+  - Difficulty badge: `Easy` / `Medium` / `Hard` — pill, top-right of card
+
+**Swipe Actions:**
+- **Swipe Left:** Skip — red ✕ appears, card flies left
+- **Swipe Right:** Cook this — green ✓ appears, card flies right, opens Recipe Detail
+- **Swipe Up:** Save for later — blue bookmark appears, card flies up, saves to Saved list
+- **Tap card:** Opens Recipe Detail (peek animation)
+
+**Swipe Action Overlay Buttons** (shown below card for accessibility):
+- ✕ Skip · ♥ Cook This · 🔖 Save
+
+**Empty State (no more cards):**
+- Illustration: friendly empty bowl
+- `"You've seen everything for now. Add more ingredients to unlock more recipes."`
+- CTA: `Add Ingredients`
+
+---
+
+### SCREEN 4 — RECIPE DETAIL PAGE
+
+**Entry:** Slides up as full-screen sheet from swipe right or tap.
+
+**Layout Sections (scrollable):**
+
+**Hero Section:**
+- Full-bleed image (top 40% of screen), pinch-to-zoom enabled
+- Play button overlay if video tutorial available
+- Back button (chevron left) top-left, Share button top-right
+- Floating pill at bottom of image: `⏱ 30 min · 🔥 420 kcal · 👥 Serves 2`
+
+**Recipe Info:**
+- Title: Fraunces 28px
+- Creator byline: `By @[username]` with avatar + Follow button
+- Cuisine + Diet tags: horizontal chip scroll
+- Star rating + review count: `⭐ 4.7 (2,341 reviews)`
+- Short description: 2-3 sentence teaser
+
+**Ingredient Match Panel** (most important section — highlight prominently):
+- Section header: `"Your Pantry Match"`
+- Two columns: `✅ You Have (5)` and `🛒 You Need (2)`
+- Each ingredient: icon + name + quantity
+- Missing items: each has `+ Add to Cart` button
+- CTA at bottom: `Generate Shopping List` — full width, Saffron
+
+**AI Variations Row** (horizontal scroll of option pills):
+- `🥦 Make Vegetarian`
+- `💰 Budget Version`
+- `💪 High Protein`
+- `🌶 Spicier`
+- `🌿 Make Halal`
+- `⏱ Faster Version`
+Tapping any generates a new AI-modified version of the recipe inline.
+
+**Cooking Instructions:**
+- Step-by-step numbered list
+- Each step: large step number (Space Grotesk), instruction text, optional embedded image
+- Tap step to mark as complete (strikethrough + checkmark)
+- Timer button appears on steps that require it: `⏱ Start 20 min Timer`
+
+**Video Tutorial** (if available):
+- Embedded in-app player, no redirect
+- Chapters list below player
+
+**Nutrition Panel:**
+- Expandable section
+- Macro ring chart: Protein / Carbs / Fat
+- Full micronutrient table: Fiber, Sugar, Sodium, Vitamins
+
+**Reviews:**
+- Top 3 reviews shown, `View All` CTA
+- Each review: avatar, username, star rating, text, food photo (if uploaded), like count
+
+**Sticky Bottom Bar:**
+- Left: `🔖 Save`
+- Center: `Cook This Now` — large Saffron button
+- Right: `Share`
+
+**Cook Mode** (triggered by "Cook This Now"):
+- Enters fullscreen step-by-step guided mode
+- Large text, one step per screen
+- Built-in timers for each step
+- Voice readout option
+- At end: `"Done cooking? Update your pantry"` prompt
+
+---
+
+### SCREEN 5 — PANTRY MANAGER
+
+**Layout:** List + grid toggle view.
+
+**Top:**
+- Header: `"My Pantry"`
+- Right: `+ Add Item` button
+- Search bar within pantry
+
+**Category Tabs** (horizontal scroll):
+- All · Fridge · Freezer · Pantry · Spices · Sauces · Beverages
+
+**Ingredient Card** (each item):
+- Ingredient icon/emoji
+- Name + quantity remaining
+- Expiry badge: `🟢 Fresh` / `🟡 Use Soon` / `🔴 Expires Tomorrow` / `⚫ Expired`
+- Last updated timestamp
+- Tap to edit quantity, expiry, or delete
+
+**Expiry Alert Banner** (appears when items expiring within 48h):
+- `"⚠️ 3 items expiring soon. See recipes that use them."`
+- CTA: `Show Recipes → `
+
+**Add Item Flow:**
+- Three options: Scan barcode / Search ingredient / Voice input
+- On search: ingredient autocomplete with nutrition database lookup
+- Fields: Quantity, Unit, Expiry date (optional), Category (auto-suggested)
+
+**Pantry Intelligence Panel** (bottom card, expandable):
+- `"You can make 31 complete recipes right now"`
+- `"You're missing 1 ingredient for 14 more recipes"`
+- `"Estimated pantry value: $42"`
+- `"Food saved from waste this month: 6 items"`
+
+---
+
+### SCREEN 6 — MEAL PLANNER
+
+**Views:** Toggle between Day / Week / Month.
+
+**Weekly View (default):**
+- 7-column grid, 3 meal rows: Breakfast / Lunch / Dinner
+- Each cell: thumbnail + recipe name or `+ Add Meal`
+- Drag-and-drop to rearrange (with haptic feedback)
+- Tap cell to swap, remove, or view recipe
+
+**Top Controls:**
+- `← Previous Week` / `Next Week →`
+- `✨ Auto-Generate Plan` button — Saffron, prominent
+
+**Auto-Generate Plan Modal:**
+- Inputs shown before generation:
+  - Calorie target (pre-filled from profile)
+  - Budget for the week
+  - "Use up expiring ingredients first?" — toggle, default ON
+  - Variety preference: slider `Familiar ←→ Adventurous`
+- CTA: `Generate My Week` — generates instantly with AI
+
+**Plan Summary Card** (below calendar):
+- Total week calories
+- Estimated cost
+- Ingredients needed (with what you already have checked off)
+- `Generate Shopping List` CTA
+
+**Shopping List View:**
+- Grouped by store section: Produce / Meat / Dairy / Dry Goods / Other
+- Each item: checkbox, name, quantity, estimated cost
+- `Share List` button (sends as text, WhatsApp, AirDrop, etc.)
+- `Order via [Grocery Partner]` affiliate CTA (optional, premium)
+
+---
+
+### SCREEN 7 — PARTY PLANNER
+
+**Entry:** Quick action from Home Feed or from Planner tab.
+
+**Step 1 — Event Setup:**
+- Event type: visual card select
+  - 🎂 Birthday · 💍 Wedding Reception · 🍖 BBQ · 🌙 Dinner Party · 🎄 Holiday Feast · 🎓 Graduation · 🍿 Movie Night · ☕ Brunch
+- Guest count: large numeric stepper (with note: "Be generous with estimates")
+- Date picker
+
+**Step 2 — Menu Preferences:**
+- Cuisine or theme: chip multi-select
+- Dietary restrictions of guests: same chip options as profile
+- Budget total: currency-aware slider
+- Serving style: Buffet / Plated / Finger Food / Family Style
+
+**Step 3 — AI Party Plan (generated output):**
+- Menu card: suggested dishes with thumbnail grid
+  - Starter / Main / Side 1 / Side 2 / Dessert / Drinks
+  - Each dish: swappable (tap to replace with alternatives)
+- Ingredient list: total quantities for all guests, automatically scaled
+- What you already have checked off in green
+- Shopping list for remainder
+- Cooking timeline: reverse-planned from event time
+  - `"Day before: Marinate chicken · 2h before: Prep salads · 1h before: Start mains"`
+- Estimated total cost
+- Serving tips: `"For 20 guests, set up a self-serve buffet station..."`
+- `Save This Plan` + `Share With Co-host` buttons
+
+---
+
+### SCREEN 8 — AI CHEF ASSISTANT
+
+**Entry:** Floating button (always visible, bottom right, above tab bar).
+
+**Layout:** Chat interface, but elevated.
+
+Design: Dark background chat (`#141210`), Saffron accent for user bubbles, dark surface for AI responses.
+
+**Quick prompt chips at top (before first message):**
+- `"What can I make tonight?"`
+- `"I have 10 minutes"`
+- `"High protein dinner"`
+- `"Something impressive for a date"`
+- `"Use up my expiring ingredients"`
+
+**AI Behavior:**
+- AI always knows the user's current pantry contents (injected as context).
+- AI always knows dietary restrictions (injected as context).
+- AI responds conversationally in short paragraphs, never bullet walls.
+- AI can generate recipe cards inline within the chat (swipeable).
+- AI can modify a recipe mid-conversation: `"Make it spicier"` / `"Remove the dairy"`.
+- AI can check pantry: `"You have garlic and olive oil, so the base is covered."`
+- AI can add to pantry: `"Want me to add these ingredients to your pantry?"` — one-tap confirm.
+
+**Sample interactions to support:**
+- "What can I cook tonight?" → AI checks pantry, suggests 3 recipes
+- "I only have eggs and butter" → AI suggests 5 variations from eggs + butter
+- "I'm cooking for a first date, want to impress" → AI suggests romantic plated dinner
+- "Convert this recipe to halal" → AI modifies and presents new version
+- "I'm trying to lose weight, give me dinner ideas" → AI filters by calorie target
+
+---
+
+### SCREEN 9 — SOCIAL FEED
+
+**Layout:** Vertical scroll feed (similar to Instagram, but food-only).
+
+**Post Types:**
+- Photo post (dish with ingredients list)
+- Video post (cooking reel, 15–90 sec)
+- Recipe share (recipe card from PantrySwipe deck)
+- Milestone post (achievement unlocked)
+
+**Post Card:**
+- Avatar + username + follow button
+- Food image/video (full width)
+- Like (❤️), Comment (💬), Share (↗️), Save (🔖) actions
+- Caption + hashtags
+- `"View Recipe"` pill button if recipe is attached
+
+**Discovery Tabs:**
+- `For You` (AI-personalised)
+- `Following`
+- `Trending`
+- `Near Me` (local dishes, regional content)
+
+**Cuisines Row** (horizontal scroll at top of For You):
+- 🌏 All · 🇸🇬 Singaporean · 🇯🇵 Japanese · 🇮🇳 Indian · 🇮🇹 Italian · 🇲🇽 Mexican · ...
+
+---
+
+### SCREEN 10 — PROFILE
+
+**Layout:** Standard profile structure, but food-forward.
+
+**Header:**
+- Cover photo (user's best food photo, editable)
+- Avatar
+- Display name + @username
+- Bio: free text + diet tag chips
+- Stats row: `Recipes Cooked · Followers · Following`
+- `Edit Profile` / `Follow` button (own vs other profiles)
+
+**Tabs:**
+- `🍽 Recipes` — posted recipes
+- `❤️ Saved` — bookmarked recipes
+- `📊 Stats` — cooking stats and streaks
+- `🏅 Badges` — achievements earned
+
+**Cooking Stats Card:**
+- Total meals cooked
+- Cooking streak (flame icon, Duolingo-style)
+- Money saved vs. eating out (estimated)
+- Food waste prevented (weight in kg)
+- Top 3 cuisines cooked
+- Favorite ingredient used most
+
+**Achievement Badges:**
+- `🍳 First Cook` — cooked first recipe
+- `🔥 7-Day Streak` — cooked 7 days in a row
+- `🌍 World Traveler` — cooked 10 different cuisines
+- `♻️ Waste Warrior` — used 20 expiring ingredients before they went bad
+- `🎉 Party Pro` — used party planner for 5+ guests
+- `💰 Budget Chef` — cooked 10 meals under budget
+- `📸 Food Photographer` — posted 10 food photos
+- `👨‍🍳 Meal Prep Master` — completed a full week meal plan
+
+---
+
+### SCREEN 11 — NOTIFICATIONS
+
+- Expiry alerts: `"Your milk expires tomorrow. Here are 5 recipes to use it."`
+- Recipe match: `"You now have everything for Carbonara. Ready to cook?"`
+- Social: `"[Friend] liked your Laksa recipe"`
+- Streak: `"Don't break your 7-day streak! Cook something tonight."`
+- Weekly: `"Your meal plan for next week is ready to review."`
+- Friend activity: `"[Friend] cooked Chicken Rice. Ask them for the recipe?"`
+
+---
+
+## SMART PANTRY SYSTEM — DATA SPEC
+
+```
+pantry_items table:
+- pantry_id (uuid)
+- user_id (foreign key)
+- ingredient_name (string)
+- quantity (float)
+- unit (enum: g, kg, ml, L, cups, tbsp, tsp, pieces, packs)
+- purchase_date (timestamp)
+- expiry_date (timestamp, nullable)
+- estimated_cost (float, nullable)
+- category (enum: Produce, Meat, Dairy, Dry Goods, Frozen, Condiments, Beverages, Spices, Other)
+- storage_location (enum: Fridge, Freezer, Pantry, Counter)
+- status (enum: Fresh, Use Soon, Expiring, Expired)
+- source (enum: Manual, Receipt Scan, Camera Scan, Recipe Cook, Grocery Import)
+- last_updated (timestamp)
+```
+
+**Auto-update triggers:**
+1. After cooking: deduct exact recipe quantities used, scaled to servings made
+2. After receipt scan: add new items, increment existing item quantities
+3. After camera scan: create or update items with confidence score > 70%
+4. Manual edit: user direct edit
+5. Expiry AI estimate: if no expiry entered, AI estimates based on ingredient type and category
+
+**Post-cooking flow:**
+- Prompt: `"How many servings did you make?"` (stepper)
+- Prompt: `"Did you use the full amounts?"` (toggle, default YES)
+- If no: per-ingredient sliders to adjust actual usage
+- Pantry updates instantly
+- Show: `"Pantry updated. You have 250g chicken left."` toast
+
+---
+
+## AI COMPUTER VISION — FRIDGE/PANTRY SCANNER
+
+- User opens camera in-app
+- Real-time overlay shows detected ingredients as bounding boxes
+- Confidence score shown per detection: `"Broccoli 94%" · "Chicken (raw) 88%"`
+- Detects: vegetables, fruits, raw meat, cooked dishes, dairy, beverages, condiments, sauces, packaged goods (barcode fallback)
+- After capture: review screen shows all detections as editable chips
+  - User can: confirm, correct name, adjust quantity, delete
+- CTA: `"Add X items to pantry"` — batch confirmation
+- Edge case: `"Not sure what this is?"` — tap to manually type
+
+---
+
+## RECEIPT SCANNER
+
+- OCR extracts: item name, quantity, unit price, total price, store name, purchase date
+- AI normalizes ingredient names (e.g., `"CHKN BRST 500G"` → `"Chicken Breast, 500g"`)
+- Shows parsed list for review before adding
+- Estimated expiry auto-suggested per item type
+- Adds directly to pantry with `source: Receipt Scan`
+
+---
+
+## RECIPE RECOMMENDATION ENGINE — RANKING LOGIC
+
+```
+Recommendation Score =
+  Ingredient Match Score (40% weight)
+  × Preference Score (25% weight)
+  × Nutrition Score (20% weight)
+  × Popularity Score (10% weight)
+  × Freshness Urgency Score (5% weight — boost recipes using expiring ingredients)
+```
+
+**Ingredient Match Score:** % of recipe ingredients found in pantry
+**Preference Score:** cuisine preference + dietary compliance + skill level match
+**Nutrition Score:** closeness to user's daily nutrition goals
+**Popularity Score:** global rating × recency weighted
+**Freshness Urgency Score:** recipes using the user's soonest-expiring ingredients are boosted
+
+---
+
+## INGREDIENT SHARING (COMMUNITY FEATURE)
+
+- User can optionally list surplus ingredients: e.g., `"Half a block of Parmesan — free to collect"`
+- Geo-radius: within X km (user sets)
+- Receiver sends request message, sender approves
+- No personal address shown until both approve
+- Privacy: only city-level location shown publicly
+- Built-in in-app message thread per exchange
+
+---
+
+## FRIEND SYSTEM
+
+- Search by username or contact sync (opt-in)
+- Send friend request / accept / decline
+- Friend activity visible in Social feed
+- Ping friend: `"Hey, what's in your pantry? 👀"` — sends notification
+- Share recipe: sends recipe card link within app
+- Collaborative meal plan: invite friends to shared weekly plan (editable by all)
+- Group: create cooking groups (e.g., "Flatmates", "Office Lunch Crew")
+
+---
+
+## NUTRITION ENGINE
+
+Track per day and per meal:
+- Calories, Protein (g), Carbohydrates (g), Fat (g), Fiber (g), Sugar (g), Sodium (mg)
+- Key micronutrients: Iron, Calcium, Vitamin C, Vitamin D, B12
+- Pulls from standardized nutrition database (USDA FoodData or equivalent)
+- Daily ring summary on home and health dashboard
+- Weekly trend graphs
+
+**Goals engine:**
+- Weight loss: creates calorie deficit targets
+- Muscle gain: targets protein per kg of body weight
+- Maintenance: equilibrium targets
+- Custom: user sets own macros
+
+---
+
+## GAMIFICATION SYSTEM
+
+**XP per action:**
+- Cook a recipe: +50 XP
+- Log a meal: +10 XP
+- Prevent food waste (use expiring item): +25 XP
+- Complete meal plan week: +100 XP
+- Post a recipe: +30 XP
+- Get a recipe liked: +5 XP
+- Add receipt scan: +15 XP
+- Invite a friend who joins: +75 XP
+
+**Levels:** 1–50, with unlockable profile frames and badge borders per tier.
+
+**Streaks:**
+- Daily cook streak (like Duolingo flame)
+- Lose streak if no logged meal or cook action in 24h
+- Streak shield (1 per week — forgive one missed day)
+
+---
+
+## MONETIZATION TIERS
+
+### Free
+- 20 recipe swipes per day
+- Basic pantry (up to 30 items)
+- Manual ingredient entry only
+- Basic meal planner (day view)
+- Social feed (read only)
+- 3 AI Chef messages per day
+
+### PantrySwipe Premium ($6.99/month or $49.99/year)
+- Unlimited swipes
+- Unlimited pantry items
+- Camera scan + receipt scan
+- Full meal planner (week + month)
+- Party planner
+- Unlimited AI Chef
+- Advanced nutrition tracking
+- Ingredient expiry forecasting
+- Social posting + followers
+- Ad-free
+
+### Family Plan ($12.99/month)
+- Up to 6 accounts
+- Shared pantry (household view)
+- Separate dietary profiles per member
+- Family meal planner
+
+---
+
+## TECH STACK RECOMMENDATIONS
+
+- **Frontend:** React Native (Expo) for iOS + Android + Web
+- **Animations:** Reanimated 3 + Gesture Handler for swipe physics
+- **Backend:** Supabase (auth, database, real-time) or Firebase
+- **AI/LLM:** OpenAI GPT-4o or Anthropic Claude API for AI Chef + recipe generation
+- **Computer Vision:** Google Vision API or custom YOLOv8 model for fridge scanning
+- **OCR:** Google Document AI for receipt scanning
+- **Nutrition DB:** USDA FoodData Central API or Edamam API
+- **Image CDN:** Cloudinary for recipe photography
+- **Search:** Algolia or Meilisearch for recipe + ingredient search
+- **Push Notifications:** Expo Notifications + OneSignal
+- **Analytics:** Mixpanel or PostHog
+
+---
+
+## ACCESSIBILITY REQUIREMENTS
+
+- WCAG 2.1 AA minimum compliance
+- All tap targets minimum 44×44pt
+- All text minimum 4.5:1 contrast ratio
+- Full VoiceOver (iOS) and TalkBack (Android) support
+- All swipe actions have accessible button alternatives
+- Reduce motion mode fully supported
+- All images have alt text
+- Color is never the only indicator of status (always paired with icon or text)
+
+---
+
+## EMPTY & ERROR STATES
+
+Every screen must have:
+- **Loading state:** skeleton screens (no spinners)
+- **Empty state:** helpful illustration + clear action CTA (not just "Nothing here")
+- **Error state:** plain language error + retry action
+- **Offline state:** cached content shown with offline banner
+
+---
+
+## ONBOARDING RE-ENGAGEMENT
+
+After 3 days of inactivity:
+- Push: `"Your pantry has 4 items expiring this week. Let's cook!"`
+
+After completing first cook:
+- Celebration animation + first badge awarded inline
+
+After adding 10 pantry items:
+- `"You can make 18 recipes right now"` — triggers home feed session
+
+---
+
+*End of PantrySwipe Master Builder Prompt v2.0*
+*This prompt is intended for use with AI app builders, development teams, or no-code/low-code platforms to produce a complete, production-grade application.*

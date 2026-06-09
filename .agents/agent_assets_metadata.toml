@@ -1,0 +1,26 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "arKiDGL9-dQ3x2S74b2Be"
+uri = "file://artifacts/pantryswipe/assets/images/hero-food.png"
+type = "image"
+title = "hero food background"
+
+[[generated]]
+id = "tWRYG-slPpiiki5kMOMVb"
+uri = "file://artifacts/pantryswipe/assets/images/recipe-pasta.png"
+type = "image"
+title = "pasta recipe card"
+
+[[generated]]
+id = "2A5qmb9nlrsF8c3g3pBBa"
+uri = "file://artifacts/pantryswipe/assets/images/recipe-salmon.png"
+type = "image"
+title = "salmon recipe card"
+
+[[generated]]
+id = "CTF3SIP23a1_WfaerWdvY"
+uri = "file://artifacts/pantryswipe/assets/images/recipe-bibimbap.png"
+type = "image"
+title = "bibimbap recipe card"

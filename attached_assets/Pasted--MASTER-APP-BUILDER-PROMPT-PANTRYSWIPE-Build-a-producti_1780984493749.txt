@@ -1,0 +1,980 @@
+# MASTER APP-BUILDER PROMPT — PANTRYSWIPE
+
+Build a production-ready mobile application called **PantrySwipe** for iOS, Android, and Web.
+
+This is not simply a recipe application.
+
+PantrySwipe is an AI-powered cooking ecosystem that combines recipe discovery, pantry management, meal planning, grocery tracking, event planning, nutrition tracking, social networking, and food waste reduction into a single platform.
+
+The experience should feel like a combination of Tinder, TikTok, Instagram, MyFitnessPal, Pinterest, and a personal AI chef.
+
+The primary goal is to answer one question:
+
+"What can I cook with what I already have?"
+
+---
+
+# TARGET USERS
+
+Primary Users:
+
+* Busy professionals
+* Students
+* Families
+* Fitness enthusiasts
+* Home cooks
+* Beginner cooks
+* Food lovers
+
+Secondary Users:
+
+* Food creators
+* Recipe creators
+* Nutrition coaches
+* Meal prep businesses
+* Grocery partners
+
+---
+
+# CORE USER JOURNEY
+
+User downloads app.
+
+Onboarding asks:
+
+* Name
+* Country
+* Preferred language
+* Cooking skill level
+* Dietary restrictions
+* Allergies
+* Household size
+* Budget range
+* Fitness goals
+* Preferred cuisines
+
+After onboarding:
+
+User lands on Home Feed.
+
+The app immediately asks:
+
+"What ingredients do you currently have?"
+
+User can:
+
+* Type ingredients manually
+* Scan ingredients
+* Scan receipts
+* Import grocery orders
+
+AI then generates personalized recipes.
+
+---
+
+# SCREEN STRUCTURE
+
+## Screen 1 — Welcome
+
+Components:
+
+* App logo
+* Tagline
+
+"Turn your ingredients into meals."
+
+Buttons:
+
+* Get Started
+* Sign In
+
+---
+
+## Screen 2 — Onboarding
+
+Collect:
+
+Personal Information
+
+Cooking Information
+
+Dietary Information
+
+Budget Preferences
+
+Cuisine Preferences
+
+Nutrition Goals
+
+Store in User Profile.
+
+---
+
+## Screen 3 — Home Feed
+
+Primary screen.
+
+Contains:
+
+Search bar
+
+Quick actions:
+
+* Scan Fridge
+* Add Ingredients
+* Meal Planner
+* Party Planner
+
+Below:
+
+Recipe swipe deck.
+
+Each card contains:
+
+* Recipe image
+* Recipe name
+* Cuisine
+* Calories
+* Cooking time
+* Difficulty
+
+Actions:
+
+Swipe Left
+
+Skip recipe
+
+Swipe Right
+
+Interested
+
+Swipe Up
+
+Save recipe
+
+Tap
+
+Open details
+
+---
+
+# RECIPE RECOMMENDATION ENGINE
+
+The recommendation engine should rank recipes using:
+
+Available ingredients
+
+Dietary restrictions
+
+Cuisine preference
+
+Historical likes
+
+Historical dislikes
+
+Nutrition goals
+
+Budget
+
+Cooking skill level
+
+Cooking equipment
+
+Event type
+
+Seasonality
+
+Recipe score formula:
+
+Ingredient Match Score
+
+*
+
+Preference Score
+
+*
+
+Nutrition Score
+
+*
+
+Popularity Score
+
+=
+Recommendation Score
+
+---
+
+# SMART PANTRY SYSTEM
+
+Create Pantry Table.
+
+Fields:
+
+pantry_id
+
+user_id
+
+ingredient_name
+
+quantity
+
+measurement_unit
+
+purchase_date
+
+expiry_date
+
+estimated_cost
+
+category
+
+last_updated
+
+status
+
+The pantry should update automatically whenever:
+
+A recipe is cooked
+
+Ingredients are purchased
+
+Ingredients are manually edited
+
+Inventory is scanned
+
+---
+
+# AI INVENTORY TRACKING
+
+After cooking:
+
+Prompt:
+
+"How many servings did you make?"
+
+"Did you use all ingredients?"
+
+AI estimates remaining quantities.
+
+Update pantry automatically.
+
+Example:
+
+User has:
+
+500g chicken
+
+Recipe used:
+
+250g chicken
+
+Inventory updates:
+
+250g remaining
+
+---
+
+# COMPUTER VISION SYSTEM
+
+Build AI scanner.
+
+User takes picture of:
+
+Fridge
+
+Pantry
+
+Freezer
+
+Countertop
+
+AI detects:
+
+Vegetables
+
+Fruits
+
+Meat
+
+Dairy
+
+Sauces
+
+Condiments
+
+Beverages
+
+Confidence scores required.
+
+Allow manual correction.
+
+---
+
+# RECEIPT SCANNER
+
+User photographs receipt.
+
+OCR extracts:
+
+Ingredient names
+
+Quantities
+
+Prices
+
+Purchase dates
+
+Automatically updates pantry inventory.
+
+---
+
+# RECIPE DATABASE
+
+Recipe Fields:
+
+recipe_id
+
+title
+
+description
+
+cuisine
+
+difficulty
+
+prep_time
+
+cook_time
+
+servings
+
+ingredients
+
+instructions
+
+nutrition
+
+video_url
+
+thumbnail
+
+creator_id
+
+rating
+
+reviews
+
+diet_tags
+
+cost_estimate
+
+Required support:
+
+100,000+ recipes
+
+Multilingual support
+
+Regional variations
+
+Ingredient substitutions
+
+---
+
+# RECIPE DETAIL PAGE
+
+Sections:
+
+Hero Image
+
+Recipe Overview
+
+Ingredients
+
+Missing Ingredients
+
+Substitutions
+
+Cooking Instructions
+
+Video Tutorial
+
+Nutrition
+
+Reviews
+
+Save Recipe
+
+Cook Now
+
+Generate Shopping List
+
+Generate Healthier Version
+
+Generate Vegetarian Version
+
+Generate Budget Version
+
+---
+
+# AI CHEF ASSISTANT
+
+Chat interface.
+
+Examples:
+
+"What can I cook tonight?"
+
+"I have eggs, rice and garlic."
+
+"I need dinner for 12 guests."
+
+"I want high protein meals."
+
+"Convert this recipe to halal."
+
+AI should respond conversationally.
+
+---
+
+# MEAL PLANNER
+
+Views:
+
+Daily
+
+Weekly
+
+Monthly
+
+User can:
+
+Drag meals
+
+Swap meals
+
+Generate plans
+
+Auto-generate plans based on:
+
+Goals
+
+Budget
+
+Ingredients available
+
+Family size
+
+Nutrition targets
+
+---
+
+# PARTY PLANNER
+
+Inputs:
+
+Number of guests
+
+Budget
+
+Cuisine
+
+Event type
+
+Dietary restrictions
+
+Examples:
+
+Birthday
+
+Wedding
+
+BBQ
+
+Family Gathering
+
+Holiday Event
+
+Generate:
+
+Menu
+
+Ingredient quantities
+
+Shopping list
+
+Cooking timeline
+
+Preparation schedule
+
+Serving recommendations
+
+Estimated total cost
+
+---
+
+# SOCIAL NETWORK
+
+Create social platform.
+
+Features:
+
+Profiles
+
+Followers
+
+Following
+
+Likes
+
+Comments
+
+Shares
+
+Bookmarks
+
+Recipe uploads
+
+Food photos
+
+Cooking videos
+
+Recipe challenges
+
+Trending dishes
+
+Hashtags
+
+Cuisine communities
+
+---
+
+# FRIEND SYSTEM
+
+Allow:
+
+Add friend
+
+Accept request
+
+Share recipes
+
+Compare meal plans
+
+Share shopping lists
+
+Create cooking groups
+
+Group meal planning
+
+---
+
+# INGREDIENT SHARING NETWORK
+
+Users can optionally:
+
+List surplus ingredients.
+
+Example:
+
+Extra Parmesan
+
+Extra Milk
+
+Extra Eggs
+
+Nearby users can request ingredients.
+
+Must include:
+
+Location permissions
+
+Privacy settings
+
+Messaging system
+
+Approval flow
+
+---
+
+# NUTRITION ENGINE
+
+Track:
+
+Calories
+
+Protein
+
+Carbohydrates
+
+Fat
+
+Fiber
+
+Sugar
+
+Sodium
+
+Micronutrients
+
+User goals:
+
+Weight loss
+
+Muscle gain
+
+Maintenance
+
+High protein
+
+Low carb
+
+AI recommendations adapt automatically.
+
+---
+
+# HEALTH DASHBOARD
+
+Display:
+
+Daily calories
+
+Weekly calories
+
+Protein intake
+
+Weight trend
+
+Cooking frequency
+
+Money saved
+
+Food waste prevented
+
+Favorite cuisines
+
+Most used ingredients
+
+---
+
+# GAMIFICATION
+
+Achievement system.
+
+Examples:
+
+First Recipe
+
+7 Day Cooking Streak
+
+30 Day Streak
+
+100 Meals Cooked
+
+World Cuisine Explorer
+
+Waste Reduction Hero
+
+Meal Prep Master
+
+Reward XP.
+
+Level progression.
+
+Unlock badges.
+
+---
+
+# NOTIFICATIONS
+
+Push notifications.
+
+Examples:
+
+Milk expires tomorrow
+
+You have ingredients for pasta tonight
+
+Your saved recipe is trending
+
+Weekly meal plan ready
+
+Friend shared a recipe
+
+---
+
+# SEARCH SYSTEM
+
+Search by:
+
+Ingredient
+
+Recipe name
+
+Cuisine
+
+Country
+
+Diet
+
+Mood
+
+Calories
+
+Cooking time
+
+Difficulty
+
+Creator
+
+Hashtag
+
+---
+
+# MOOD COOKING
+
+Mood categories:
+
+Date Night
+
+Comfort Food
+
+Family Dinner
+
+Movie Night
+
+Quick Lunch
+
+Gym Meal
+
+Cheat Meal
+
+Celebration
+
+Holiday Feast
+
+Meal Prep
+
+Student Budget
+
+AI recommends accordingly.
+
+---
+
+# GLOBAL CUISINES
+
+Support:
+
+Singaporean
+
+Malaysian
+
+Indonesian
+
+Thai
+
+Vietnamese
+
+Chinese
+
+Japanese
+
+Korean
+
+Indian
+
+Italian
+
+French
+
+Mexican
+
+American
+
+Middle Eastern
+
+African
+
+Mediterranean
+
+South American
+
+Filter by region and culture.
+
+---
+
+# MONETIZATION
+
+Free Tier:
+
+Basic recipes
+
+Basic pantry
+
+Basic meal planning
+
+Premium Tier:
+
+Unlimited AI
+
+Advanced meal planning
+
+Family accounts
+
+Party planner
+
+Advanced analytics
+
+AI nutrition coach
+
+Inventory forecasting
+
+Revenue Streams:
+
+Subscriptions
+
+Grocery affiliate partnerships
+
+Sponsored recipes
+
+Creator marketplace
+
+Premium recipe packs
+
+Brand partnerships
+
+Cooking courses
+
+---
+
+# ADMIN DASHBOARD
+
+Manage:
+
+Users
+
+Recipes
+
+Reports
+
+Content moderation
+
+Analytics
+
+Revenue
+
+Subscriptions
+
+Creator payouts
+
+Ingredient database
+
+Cuisine database
+
+---
+
+# ANALYTICS
+
+Track:
+
+Daily Active Users
+
+Monthly Active Users
+
+Recipe Swipes
+
+Recipes Saved
+
+Recipes Cooked
+
+Ingredient Waste Reduction
+
+Retention Rate
+
+Subscription Conversion
+
+Most Popular Recipes
+
+Most Popular Ingredients
+
+---
+
+# DESIGN REQUIREMENTS
+
+Visual Style:
+
+Modern
+
+Premium
+
+Food-first
+
+Minimalistic
+
+Fast
+
+Clean
+
+High contrast
+
+Mobile-first
+
+Inspirations:
+
+TikTok
+
+Instagram
+
+Pinterest
+
+Spotify
+
+Duolingo
+
+Use:
+
+Large food photography
+
+Smooth animations
+
+Card-based layouts
+
+Swipe gestures
+
+Dark mode
+
+Light mode
+
+Responsive design
+
+Accessibility compliance
+
+---
+
+# LONG-TERM VISION
+
+PantrySwipe should evolve into the world's largest AI-powered cooking ecosystem where users can:
+
+Discover meals
+
+Track ingredients
+
+Reduce waste
+
+Save money
+
+Meet other cooks
+
+Plan events
+
+Improve health
+
+Learn cooking
+
+Share recipes
+
+Build communities
+
+The application should become the default platform people use whenever they wonder:
+
+"What should I cook today with what I already have?"

@@ -1,0 +1,1 @@
+- [Expo image require gotcha](expo-image-require.md) — static require() calls fail at Metro bundle time if image files don't exist; always create placeholders before starting workflow.
