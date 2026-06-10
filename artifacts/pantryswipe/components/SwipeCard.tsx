@@ -303,6 +303,7 @@ export default function SwipeCard({
 const styles = StyleSheet.create({
   card: {
     position: "absolute",
+    top: 0,
     borderRadius: 24,
     overflow: "hidden",
     shadowOffset: { width: 0, height: 8 },

@@ -487,10 +487,10 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
 ];
 
 export const BADGES = [
-  { id: "b1", name: "First Cook", icon: "flame", earned: true, description: "Cooked your first recipe" },
-  { id: "b2", name: "7-Day Streak", icon: "trophy", earned: true, description: "Cooked 7 days in a row" },
+  { id: "b1", name: "First Cook", icon: "zap", earned: true, description: "Cooked your first recipe" },
+  { id: "b2", name: "7-Day Streak", icon: "award", earned: true, description: "Cooked 7 days in a row" },
   { id: "b3", name: "World Traveler", icon: "globe", earned: false, description: "Cooked 10 different cuisines" },
-  { id: "b4", name: "Waste Warrior", icon: "leaf", earned: false, description: "Used 20 expiring ingredients" },
+  { id: "b4", name: "Waste Warrior", icon: "wind", earned: false, description: "Used 20 expiring ingredients" },
   { id: "b5", name: "Party Pro", icon: "star", earned: false, description: "Used party planner for 5+ guests" },
   { id: "b6", name: "Budget Chef", icon: "dollar-sign", earned: true, description: "Cooked 10 meals under budget" },
   { id: "b7", name: "Food Photographer", icon: "camera", earned: false, description: "Posted 10 food photos" },

@@ -1,1 +1,2 @@
 - [Expo image require gotcha](expo-image-require.md) — static require() calls fail at Metro bundle time if image files don't exist; always create placeholders before starting workflow.
+- [Expo web flex layout](expo-web-flex-layout.md) — `flex:1` on a container with only position:absolute children collapses on Expo web; use explicit Dimensions-based height + normal-flow wrapper instead.

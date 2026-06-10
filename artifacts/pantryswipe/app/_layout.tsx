@@ -32,6 +32,7 @@ function RootLayoutNav() {
       <Stack.Screen name="ai-chef" options={{ headerShown: false, animation: "slide_from_bottom" }} />
       <Stack.Screen name="party-planner" options={{ headerShown: false, animation: "slide_from_right" }} />
       <Stack.Screen name="notifications" options={{ headerShown: false, animation: "slide_from_right" }} />
+      <Stack.Screen name="settings" options={{ headerShown: false, animation: "slide_from_right" }} />
     </Stack>
   );
 }

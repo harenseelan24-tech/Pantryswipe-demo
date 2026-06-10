@@ -12,267 +12,258 @@ import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
 import { BADGES, MOCK_RECIPES } from "@/data/mockData";
+import { useRouter } from "expo-router";
 
 const PROFILE_TABS = ["Recipes", "Saved", "Stats", "Badges"] as const;
+const RECIPE_SUBTABS = ["Saved Later", "Made", "To Cook"] as const;
+
+const ALL_CUISINES = [
+  { name: "Italian", flag: "🇮🇹", count: 18 },
+  { name: "Japanese", flag: "🇯🇵", count: 14 },
+  { name: "Korean", flag: "🇰🇷", count: 11 },
+  { name: "American", flag: "🇺🇸", count: 9 },
+  { name: "Indian", flag: "🇮🇳", count: 7 },
+  { name: "Mediterranean", flag: "🌊", count: 5 },
+];
 
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { userProfile, stats, savedRecipes, cookedRecipes } = useApp();
   const [activeTab, setActiveTab] = useState<(typeof PROFILE_TABS)[number]>("Stats");
+  const [recipeSubtab, setRecipeSubtab] = useState<(typeof RECIPE_SUBTABS)[number]>("Saved Later");
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const savedRecipesList = MOCK_RECIPES.filter((r) => savedRecipes.includes(r.id));
   const cookedRecipesList = MOCK_RECIPES.filter((r) => cookedRecipes.includes(r.id));
-  const level = Math.floor(stats.xp / 200);
-  const xpInLevel = stats.xp % 200;
-  const xpProgress = xpInLevel / 200;
+  const toCookList = MOCK_RECIPES.filter((r) => !cookedRecipes.includes(r.id) && !savedRecipes.includes(r.id)).slice(0, 4);
 
-  const CUISINE_EMOJIS: Record<string, string> = {
-    Italian: "🇮🇹",
-    Japanese: "🇯🇵",
-    Korean: "🇰🇷",
-    American: "🇺🇸",
-    Indian: "🇮🇳",
-    Mediterranean: "🌊",
-  };
+  const recipesList = recipeSubtab === "Saved Later" ? savedRecipesList : recipeSubtab === "Made" ? cookedRecipesList : toCookList;
 
-  const topCuisines = ["Italian", "Japanese", "Korean"];
+  const CUISINE_EMOJI: Record<string, string> = { Italian: "🇮🇹", Japanese: "🇯🇵", Korean: "🇰🇷", American: "🇺🇸", Indian: "🇮🇳", Mediterranean: "🌊" };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]}>
-        {/* Header section */}
-        <View style={[styles.profileHeader, { paddingTop: topPadding + 8 }]}>
+        {/* Profile Header */}
+        <View style={[styles.profileHeader, { paddingTop: topPadding }]}>
           {/* Cover */}
-          <View style={[styles.coverPhoto, { backgroundColor: colors.saffron + "40" }]}>
-            <TouchableOpacity style={[styles.editCoverBtn, { backgroundColor: colors.card }]}>
-              <Feather name="camera" size={16} color={colors.foreground} />
-            </TouchableOpacity>
+          <View style={[styles.coverPhoto, { backgroundColor: colors.primary + "30" }]}>
+            <View style={styles.coverOverlay}>
+              {["🍝", "🥗", "🍣", "🥘", "🍜"].map((e, i) => (
+                <Text key={i} style={[styles.coverEmoji, { opacity: 0.4 + i * 0.1 }]}>{e}</Text>
+              ))}
+            </View>
+            <View style={styles.coverActions}>
+              <TouchableOpacity style={[styles.coverActionBtn, { backgroundColor: colors.card }]}>
+                <Feather name="camera" size={14} color={colors.foreground} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.coverActionBtn, { backgroundColor: colors.card }]} onPress={() => router.push("/settings")}>
+                <Feather name="settings" size={14} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Avatar */}
-          <View style={styles.avatarContainer}>
-            <View style={[styles.avatar, { backgroundColor: colors.saffron }]}>
-              <Text style={styles.avatarText}>{userProfile.name[0]?.toUpperCase()}</Text>
+          <View style={styles.avatarRow}>
+            <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.avatarText, { fontFamily: "Fraunces_700Bold" }]}>{userProfile.name[0]?.toUpperCase()}</Text>
             </View>
-            <View style={[styles.levelBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.levelText, { color: colors.saffron }]}>Lv.{level}</Text>
-            </View>
+            <TouchableOpacity style={[styles.editProfileBtn, { borderColor: colors.border }]}>
+              <Feather name="edit-2" size={13} color={colors.foreground} />
+              <Text style={[styles.editProfileText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Edit Profile</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Profile info */}
+          {/* Info */}
           <View style={styles.profileInfo}>
-            <Text style={[styles.displayName, { color: colors.foreground }]}>{userProfile.name}</Text>
-            <Text style={[styles.username, { color: colors.mutedForeground }]}>@{userProfile.name.toLowerCase().replace(/\s/g, "_")}</Text>
+            <Text style={[styles.displayName, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>{userProfile.name}</Text>
+            <Text style={[styles.username, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+              @{userProfile.name.toLowerCase().replace(/\s/g, "_")}
+            </Text>
 
-            {/* Diet tags */}
             <View style={styles.dietTags}>
               {userProfile.dietType.slice(0, 3).map((d) => (
-                <View key={d} style={[styles.dietTag, { backgroundColor: colors.secondary + "20" }]}>
-                  <Text style={[styles.dietTagText, { color: colors.secondary }]}>{d}</Text>
+                <View key={d} style={[styles.dietTag, { backgroundColor: colors.primary + "20" }]}>
+                  <Text style={[styles.dietTagText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>{d}</Text>
                 </View>
               ))}
             </View>
 
-            {/* Stats row */}
             <View style={styles.statsRow}>
+              <TouchableOpacity style={styles.statItem} onPress={() => { setActiveTab("Recipes"); setRecipeSubtab("Made"); }}>
+                <Text style={[styles.statValue, { color: colors.foreground, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{cookedRecipes.length}</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Cooked</Text>
+              </TouchableOpacity>
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.foreground }]}>{cookedRecipes.length}</Text>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Cooked</Text>
+                <Text style={[styles.statValue, { color: colors.foreground, fontFamily: "SpaceGrotesk_600SemiBold" }]}>48</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Followers</Text>
               </View>
               <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.foreground }]}>48</Text>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Followers</Text>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.foreground }]}>103</Text>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Following</Text>
+                <Text style={[styles.statValue, { color: colors.foreground, fontFamily: "SpaceGrotesk_600SemiBold" }]}>103</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Following</Text>
               </View>
             </View>
-
-            {/* XP bar */}
-            <View style={styles.xpContainer}>
-              <View style={styles.xpLabelRow}>
-                <Text style={[styles.xpLabel, { color: colors.mutedForeground }]}>
-                  {stats.xp} XP
-                </Text>
-                <Text style={[styles.xpLabel, { color: colors.mutedForeground }]}>
-                  Next: {(level + 1) * 200} XP
-                </Text>
-              </View>
-              <View style={[styles.xpBar, { backgroundColor: colors.muted }]}>
-                <View style={[styles.xpFill, { backgroundColor: colors.saffron, width: `${xpProgress * 100}%` }]} />
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.editProfileBtn, { borderColor: colors.border }]}
-            >
-              <Feather name="edit-2" size={14} color={colors.foreground} />
-              <Text style={[styles.editProfileText, { color: colors.foreground }]}>Edit Profile</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Tabs */}
+        {/* Tabs — sticky */}
         <View style={[styles.tabsContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           {PROFILE_TABS.map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              style={styles.tab}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  {
-                    color: activeTab === tab ? colors.foreground : colors.mutedForeground,
-                    fontWeight: activeTab === tab ? "700" : "500",
-                  },
-                ]}
-              >
-                {tab}
-              </Text>
-              {activeTab === tab && (
-                <View style={[styles.tabIndicator, { backgroundColor: colors.saffron }]} />
-              )}
+            <TouchableOpacity key={tab} style={styles.tab} onPress={() => setActiveTab(tab)}>
+              <Text style={[styles.tabText, { color: activeTab === tab ? colors.foreground : colors.textSecondary, fontFamily: activeTab === tab ? "Inter_700Bold" : "Inter_500Medium" }]}>{tab}</Text>
+              {activeTab === tab && <View style={[styles.tabIndicator, { backgroundColor: colors.primary }]} />}
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Tab content */}
         <View style={styles.tabContent}>
-          {/* Stats tab */}
+
+          {/* ── RECIPES TAB ── */}
+          {activeTab === "Recipes" && (
+            <View style={{ gap: 14 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subtabRow}>
+                {RECIPE_SUBTABS.map((sub) => (
+                  <TouchableOpacity
+                    key={sub}
+                    style={[styles.subtab, { backgroundColor: recipeSubtab === sub ? colors.primary : colors.card, borderColor: recipeSubtab === sub ? colors.primary : colors.border }]}
+                    onPress={() => setRecipeSubtab(sub)}
+                  >
+                    <Text style={[styles.subtabText, { color: recipeSubtab === sub ? colors.primaryForeground : colors.textSecondary, fontFamily: recipeSubtab === sub ? "Inter_600SemiBold" : "Inter_500Medium" }]}>{sub}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {recipesList.length === 0 ? (
+                <View style={styles.emptyTab}>
+                  <Text style={{ fontSize: 36 }}>🍽</Text>
+                  <Text style={[styles.emptyTabText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                    {recipeSubtab === "Saved Later" ? "Save recipes from the Discover tab" : recipeSubtab === "Made" ? "Cook recipes to see them here" : "No suggestions yet"}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.recipeGrid}>
+                  {recipesList.map((recipe) => (
+                    <TouchableOpacity key={recipe.id} style={[styles.recipeGridItem, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push(`/recipe/${recipe.id}`)}>
+                      <View style={[styles.recipeGridImage, { backgroundColor: colors.primary + "20" }]}>
+                        <Text style={{ fontSize: 32 }}>
+                          {recipe.cuisine === "Italian" ? "🍝" : recipe.cuisine === "Japanese" ? "🍜" : recipe.cuisine === "Korean" ? "🥘" : recipe.cuisine === "Indian" ? "🍛" : "🍽"}
+                        </Text>
+                      </View>
+                      <Text style={[styles.recipeGridTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>{recipe.title}</Text>
+                      <Text style={[styles.recipeGridMeta, { color: colors.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{recipe.calories} kcal · {recipe.prepTime + recipe.cookTime}m</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ── SAVED TAB ── */}
+          {activeTab === "Saved" && (
+            <View style={{ gap: 12 }}>
+              <Text style={[styles.sectionTitle, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>Posts you saved from Social</Text>
+              {savedRecipesList.length === 0 ? (
+                <View style={styles.emptyTab}>
+                  <Text style={{ fontSize: 36 }}>🔖</Text>
+                  <Text style={[styles.emptyTabText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Tap the bookmark icon on social posts to save them here</Text>
+                </View>
+              ) : (
+                <View style={styles.recipeGrid}>
+                  {savedRecipesList.map((recipe) => (
+                    <TouchableOpacity key={recipe.id} style={[styles.recipeGridItem, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push(`/recipe/${recipe.id}`)}>
+                      <View style={[styles.recipeGridImage, { backgroundColor: colors.saveBlue + "20" }]}>
+                        <Text style={{ fontSize: 32 }}>
+                          {recipe.cuisine === "Italian" ? "🍝" : recipe.cuisine === "Japanese" ? "🍜" : "🍽"}
+                        </Text>
+                      </View>
+                      <Text style={[styles.recipeGridTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>{recipe.title}</Text>
+                      <Text style={[styles.recipeGridMeta, { color: colors.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{recipe.calories} kcal</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ── STATS TAB ── */}
           {activeTab === "Stats" && (
             <View style={styles.statsContent}>
-              {/* Streak card */}
-              <View style={[styles.streakCard, { backgroundColor: colors.saffron + "15", borderColor: colors.saffron + "30" }]}>
+              {/* Streak */}
+              <View style={[styles.streakCard, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "35" }]}>
                 <View style={styles.streakLeft}>
                   <Text style={styles.streakEmoji}>🔥</Text>
                   <View>
-                    <Text style={[styles.streakNumber, { color: colors.foreground }]}>{stats.streak}</Text>
-                    <Text style={[styles.streakLabel, { color: colors.mutedForeground }]}>Day Streak</Text>
+                    <Text style={[styles.streakNumber, { color: colors.foreground, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{stats.streak}</Text>
+                    <Text style={[styles.streakLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Day Streak</Text>
                   </View>
                 </View>
-                <Text style={[styles.streakMotivation, { color: colors.saffron }]}>Keep it up!</Text>
+                <Text style={[styles.streakMotivation, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>Keep it up!</Text>
               </View>
 
-              {/* Stats grid */}
+              {/* Stats grid — no XP/Level */}
               <View style={styles.statsGrid}>
                 {[
-                  { label: "Meals Cooked", value: stats.mealsCoooked.toString(), icon: "coffee", color: colors.saffron },
-                  { label: "Money Saved", value: `$${stats.moneySaved}`, icon: "dollar-sign", color: colors.secondary },
-                  { label: "Waste Reduced", value: `${stats.wasteReduced}kg`, icon: "leaf", color: "#4CAF76" },
-                  { label: "Level", value: `Lv.${level}`, icon: "award", color: colors.saveBlue },
+                  { label: "Meals Cooked", value: stats.mealsCoooked.toString(), icon: "coffee", color: colors.primary },
+                  { label: "Money Saved", value: `$${stats.moneySaved}`, icon: "dollar-sign", color: "#00C9B1" },
+                  { label: "Waste Reduced", value: `${stats.wasteReduced}kg`, icon: "wind", color: "#4CAF76" },
+                  { label: "Ingredients", value: `${stats.mealsCoooked * 3}`, icon: "package", color: colors.saveBlue },
                 ].map((s) => (
                   <View key={s.label} style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Feather name={s.icon as any} size={22} color={s.color} />
-                    <Text style={[styles.statCardValue, { color: colors.foreground }]}>{s.value}</Text>
-                    <Text style={[styles.statCardLabel, { color: colors.mutedForeground }]}>{s.label}</Text>
+                    <Feather name={s.icon as any} size={20} color={s.color} />
+                    <Text style={[styles.statCardValue, { color: colors.foreground, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{s.value}</Text>
+                    <Text style={[styles.statCardLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{s.label}</Text>
                   </View>
                 ))}
               </View>
 
-              {/* Top cuisines */}
+              {/* Top Cuisines — scrollable */}
               <View style={[styles.topCuisinesCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Top Cuisines</Text>
-                {topCuisines.map((c, i) => (
-                  <View key={c} style={styles.cuisineRow}>
-                    <Text style={styles.cuisineRank}>#{i + 1}</Text>
-                    <Text style={styles.cuisineFlag}>{CUISINE_EMOJIS[c] || "🌍"}</Text>
-                    <Text style={[styles.cuisineName, { color: colors.foreground }]}>{c}</Text>
+                <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 12 }]}>Top Cuisines</Text>
+                {ALL_CUISINES.map((c, i) => (
+                  <View key={c.name} style={styles.cuisineRow}>
+                    <Text style={[styles.cuisineRank, { fontFamily: "SpaceGrotesk_600SemiBold" }]}>#{i + 1}</Text>
+                    <Text style={styles.cuisineFlag}>{c.flag}</Text>
+                    <Text style={[styles.cuisineName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{c.name}</Text>
                     <View style={[styles.cuisineBar, { backgroundColor: colors.muted }]}>
-                      <View
-                        style={[
-                          styles.cuisineBarFill,
-                          { backgroundColor: colors.saffron, width: `${(3 - i) * 30 + 20}%` },
-                        ]}
-                      />
+                      <View style={[styles.cuisineBarFill, { backgroundColor: colors.primary, width: `${Math.round((c.count / 18) * 100)}%` }]} />
                     </View>
+                    <Text style={[styles.cuisineCount, { color: colors.textMuted, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{c.count}</Text>
                   </View>
                 ))}
               </View>
             </View>
           )}
 
-          {/* Saved tab */}
-          {activeTab === "Saved" && (
-            <View style={styles.recipeGrid}>
-              {savedRecipesList.map((recipe) => (
-                <View key={recipe.id} style={[styles.recipeGridItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <View style={[styles.recipeGridImage, { backgroundColor: colors.muted }]}>
-                    <Text style={{ fontSize: 36 }}>
-                      {recipe.cuisine === "Italian" ? "🍝" : recipe.cuisine === "Japanese" ? "🍜" : "🍽"}
-                    </Text>
-                  </View>
-                  <Text style={[styles.recipeGridTitle, { color: colors.foreground }]} numberOfLines={2}>
-                    {recipe.title}
-                  </Text>
-                  <Text style={[styles.recipeGridMeta, { color: colors.mutedForeground }]}>
-                    {recipe.calories} kcal · {recipe.prepTime + recipe.cookTime}m
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Recipes tab */}
-          {activeTab === "Recipes" && (
-            <View style={styles.recipeGrid}>
-              {cookedRecipesList.map((recipe) => (
-                <View key={recipe.id} style={[styles.recipeGridItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <View style={[styles.recipeGridImage, { backgroundColor: colors.muted }]}>
-                    <Text style={{ fontSize: 36 }}>
-                      {recipe.cuisine === "Italian" ? "🍝" : recipe.cuisine === "Japanese" ? "🍜" : "🍽"}
-                    </Text>
-                  </View>
-                  <Text style={[styles.recipeGridTitle, { color: colors.foreground }]} numberOfLines={2}>
-                    {recipe.title}
-                  </Text>
-                  <Text style={[styles.recipeGridMeta, { color: colors.mutedForeground }]}>
-                    {recipe.calories} kcal · {recipe.prepTime + recipe.cookTime}m
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Badges tab */}
+          {/* ── BADGES TAB ── */}
           {activeTab === "Badges" && (
             <View style={styles.badgesGrid}>
               {BADGES.map((badge) => (
                 <View
                   key={badge.id}
-                  style={[
-                    styles.badgeCard,
-                    {
-                      backgroundColor: badge.earned ? colors.card : colors.muted,
-                      borderColor: badge.earned ? colors.saffron + "40" : colors.border,
-                      opacity: badge.earned ? 1 : 0.5,
-                    },
-                  ]}
+                  style={[styles.badgeCard, { backgroundColor: badge.earned ? colors.card : colors.muted, borderColor: badge.earned ? colors.primary + "50" : colors.border, opacity: badge.earned ? 1 : 0.55 }]}
                 >
-                  <View style={[styles.badgeIcon, { backgroundColor: badge.earned ? colors.saffron + "20" : colors.border }]}>
-                    <Feather name={badge.icon as any} size={24} color={badge.earned ? colors.saffron : colors.mutedForeground} />
+                  <View style={[styles.badgeIcon, { backgroundColor: badge.earned ? colors.primary + "20" : colors.border }]}>
+                    <Feather name={badge.icon === "flame" ? "zap" : badge.icon === "trophy" ? "award" : badge.icon === "leaf" ? "wind" : badge.icon as any} size={24} color={badge.earned ? colors.primary : colors.textMuted} />
                   </View>
-                  <Text style={[styles.badgeName, { color: colors.foreground }]}>{badge.name}</Text>
-                  <Text style={[styles.badgeDesc, { color: colors.mutedForeground }]} numberOfLines={2}>
-                    {badge.description}
-                  </Text>
+                  <Text style={[styles.badgeName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{badge.name}</Text>
+                  <Text style={[styles.badgeDesc, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={2}>{badge.description}</Text>
                   {badge.earned && (
-                    <View style={[styles.earnedBadge, { backgroundColor: colors.secondary + "20" }]}>
-                      <Feather name="check" size={10} color={colors.secondary} />
-                      <Text style={[styles.earnedText, { color: colors.secondary }]}>Earned</Text>
+                    <View style={[styles.earnedBadge, { backgroundColor: colors.primary + "20" }]}>
+                      <Feather name="check" size={10} color={colors.primary} />
+                      <Text style={[styles.earnedText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>Earned</Text>
                     </View>
                   )}
                 </View>
               ))}
             </View>
           )}
+
         </View>
       </ScrollView>
     </View>
@@ -282,188 +273,67 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   profileHeader: {},
-  coverPhoto: {
-    height: 120,
-    position: "relative",
-  },
-  editCoverBtn: {
-    position: "absolute",
-    bottom: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  avatarContainer: {
-    marginTop: -40,
-    marginLeft: 20,
-    position: "relative",
-    alignSelf: "flex-start",
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "#fff",
-  },
-  avatarText: { color: "#fff", fontSize: 32, fontWeight: "800" },
-  levelBadge: {
-    position: "absolute",
-    bottom: -4,
-    right: -4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 100,
-    borderWidth: 1,
-  },
-  levelText: { fontSize: 11, fontWeight: "700" },
-  profileInfo: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4, gap: 10 },
-  displayName: { fontSize: 22, fontWeight: "800", letterSpacing: -0.5 },
-  username: { fontSize: 14, marginTop: -6 },
-  dietTags: { flexDirection: "row", gap: 8 },
+  coverPhoto: { height: 130, position: "relative", overflow: "hidden" },
+  coverOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingHorizontal: 20 },
+  coverEmoji: { fontSize: 32 },
+  coverActions: { position: "absolute", top: 12, right: 12, flexDirection: "row", gap: 8 },
+  coverActionBtn: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  avatarRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 20, marginTop: -36 },
+  avatar: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#fff" },
+  avatarText: { color: "#fff", fontSize: 28 },
+  editProfileBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 100, borderWidth: 1.5, marginBottom: 4 },
+  editProfileText: { fontSize: 13 },
+  profileInfo: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4, gap: 8 },
+  displayName: { fontSize: 22, letterSpacing: -0.3 },
+  username: { fontSize: 14, marginTop: -4 },
+  dietTags: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   dietTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100 },
-  dietTagText: { fontSize: 12, fontWeight: "600" },
-  statsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 20,
-  },
+  dietTagText: { fontSize: 12 },
+  statsRow: { flexDirection: "row", alignItems: "center", gap: 20 },
   statItem: { alignItems: "center", gap: 2 },
-  statValue: { fontSize: 20, fontWeight: "800" },
+  statValue: { fontSize: 20 },
   statLabel: { fontSize: 12 },
-  statDivider: { width: 1, height: 30 },
-  xpContainer: { gap: 6 },
-  xpLabelRow: { flexDirection: "row", justifyContent: "space-between" },
-  xpLabel: { fontSize: 12 },
-  xpBar: { height: 6, borderRadius: 3, overflow: "hidden" },
-  xpFill: { height: "100%", borderRadius: 3 },
-  editProfileBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    alignSelf: "flex-start",
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 100,
-    borderWidth: 1.5,
-  },
-  editProfileText: { fontSize: 14, fontWeight: "600" },
-  tabsContainer: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-  },
-  tab: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 14,
-    position: "relative",
-  },
-  tabText: { fontSize: 14 },
-  tabIndicator: {
-    position: "absolute",
-    bottom: 0,
-    left: "20%",
-    right: "20%",
-    height: 2,
-    borderRadius: 1,
-  },
-  tabContent: { padding: 16 },
+  statDivider: { width: 1, height: 28 },
+  tabsContainer: { flexDirection: "row", borderBottomWidth: 1 },
+  tab: { flex: 1, alignItems: "center", paddingVertical: 13, position: "relative" },
+  tabText: { fontSize: 13 },
+  tabIndicator: { position: "absolute", bottom: 0, left: "20%", right: "20%", height: 2, borderRadius: 1 },
+  tabContent: { padding: 16, paddingBottom: 80 },
+  subtabRow: { gap: 8, paddingRight: 8, alignItems: "center", height: 42 },
+  subtab: { height: 32, paddingHorizontal: 16, borderRadius: 100, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  subtabText: { fontSize: 13 },
+  emptyTab: { alignItems: "center", paddingVertical: 40, gap: 10 },
+  emptyTabText: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  recipeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  recipeGridItem: { width: "47.5%", borderRadius: 14, borderWidth: 1, overflow: "hidden", paddingBottom: 12 },
+  recipeGridImage: { aspectRatio: 1, alignItems: "center", justifyContent: "center", marginBottom: 8 },
+  recipeGridTitle: { fontSize: 13, paddingHorizontal: 10 },
+  recipeGridMeta: { fontSize: 11, paddingHorizontal: 10, marginTop: 4 },
+  sectionTitle: { fontSize: 14 },
   statsContent: { gap: 14 },
-  streakCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 18,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
+  streakCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 18, borderRadius: 16, borderWidth: 1 },
   streakLeft: { flexDirection: "row", alignItems: "center", gap: 14 },
-  streakEmoji: { fontSize: 36 },
-  streakNumber: { fontSize: 36, fontWeight: "800" },
-  streakLabel: { fontSize: 14 },
-  streakMotivation: { fontSize: 16, fontWeight: "700" },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  statCard: {
-    width: "47.5%",
-    alignItems: "center",
-    paddingVertical: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 8,
-  },
-  statCardValue: { fontSize: 22, fontWeight: "800" },
-  statCardLabel: { fontSize: 13 },
-  topCuisinesCard: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 12,
-  },
-  sectionTitle: { fontSize: 16, fontWeight: "700" },
-  cuisineRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  cuisineRank: { fontSize: 13, fontWeight: "700", color: "#999", width: 24 },
-  cuisineFlag: { fontSize: 20 },
-  cuisineName: { fontSize: 14, fontWeight: "600", width: 80 },
+  streakEmoji: { fontSize: 32 },
+  streakNumber: { fontSize: 34 },
+  streakLabel: { fontSize: 13 },
+  streakMotivation: { fontSize: 15 },
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  statCard: { width: "47.5%", alignItems: "center", paddingVertical: 18, borderRadius: 16, borderWidth: 1, gap: 6 },
+  statCardValue: { fontSize: 20 },
+  statCardLabel: { fontSize: 12 },
+  topCuisinesCard: { padding: 16, borderRadius: 16, borderWidth: 1, gap: 10 },
+  cuisineRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  cuisineRank: { fontSize: 12, color: "#999", width: 22 },
+  cuisineFlag: { fontSize: 18 },
+  cuisineName: { fontSize: 13, width: 82 },
   cuisineBar: { flex: 1, height: 6, borderRadius: 3, overflow: "hidden" },
   cuisineBarFill: { height: "100%", borderRadius: 3 },
-  recipeGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  recipeGridItem: {
-    width: "47.5%",
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: "hidden",
-    paddingBottom: 12,
-  },
-  recipeGridImage: {
-    aspectRatio: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  recipeGridTitle: { fontSize: 13, fontWeight: "700", paddingHorizontal: 10 },
-  recipeGridMeta: { fontSize: 12, paddingHorizontal: 10, marginTop: 4 },
+  cuisineCount: { fontSize: 12, width: 22, textAlign: "right" },
   badgesGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  badgeCard: {
-    width: "47.5%",
-    alignItems: "center",
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 8,
-  },
-  badgeIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeName: { fontSize: 13, fontWeight: "700", textAlign: "center" },
-  badgeDesc: { fontSize: 11, textAlign: "center", lineHeight: 15 },
-  earnedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 100,
-  },
-  earnedText: { fontSize: 11, fontWeight: "700" },
+  badgeCard: { width: "47.5%", alignItems: "center", padding: 14, borderRadius: 16, borderWidth: 1, gap: 7 },
+  badgeIcon: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
+  badgeName: { fontSize: 12, textAlign: "center" },
+  badgeDesc: { fontSize: 10, textAlign: "center", lineHeight: 14 },
+  earnedBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 100 },
+  earnedText: { fontSize: 10 },
 });

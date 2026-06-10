@@ -2,10 +2,12 @@ import React, { useState } from "react";
 import {
   FlatList,
   Image,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -26,6 +28,21 @@ const RECIPE_IMAGES: Record<string, ReturnType<typeof require>> = {
   "recipe-bibimbap": require("@/assets/images/recipe-bibimbap.png"),
 };
 
+type Comment = { id: string; user: string; text: string; avatar: string; timeAgo: string };
+
+const SEED_COMMENTS: Record<string, Comment[]> = {
+  s1: [
+    { id: "c1", user: "pasta_lover", text: "This looks incredible! What brand of pancetta do you use?", avatar: "P", timeAgo: "1h ago" },
+    { id: "c2", user: "homecook22", text: "Made this last night, absolute perfection 🍝", avatar: "H", timeAgo: "45m ago" },
+  ],
+  s2: [
+    { id: "c1", user: "seafood_fan", text: "The garlic butter sauce really makes it!", avatar: "S", timeAgo: "2h ago" },
+  ],
+  s3: [],
+  s4: [{ id: "c1", user: "kfoodie", text: "Stone pot is a MUST, you're 100% right!", avatar: "K", timeAgo: "3h ago" }],
+  s5: [],
+};
+
 export default function SocialScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -33,106 +50,105 @@ export default function SocialScreen() {
   const [activeTab, setActiveTab] = useState("For You");
   const [activeCuisine, setActiveCuisine] = useState("All");
   const [posts, setPosts] = useState<SocialPost[]>(MOCK_SOCIAL_POSTS);
+  const [comments, setComments] = useState<Record<string, Comment[]>>(SEED_COMMENTS);
+  const [commentModalPost, setCommentModalPost] = useState<SocialPost | null>(null);
+  const [newComment, setNewComment] = useState("");
+  const [shareToast, setShareToast] = useState(false);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const toggleLike = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 }
-          : p
-      )
-    );
+    setPosts((prev) => prev.map((p) => p.id === id ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 } : p));
   };
 
   const toggleSave = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPosts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, saved: !p.saved } : p))
-    );
+    setPosts((prev) => prev.map((p) => p.id === id ? { ...p, saved: !p.saved } : p));
   };
 
-  const formatCount = (n: number) => {
-    if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-    return n.toString();
+  const handleShare = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setShareToast(true);
+    setTimeout(() => setShareToast(false), 2000);
   };
+
+  const handleAddComment = () => {
+    if (!newComment.trim() || !commentModalPost) return;
+    const c: Comment = {
+      id: Date.now().toString(),
+      user: "you",
+      text: newComment.trim(),
+      avatar: "Y",
+      timeAgo: "just now",
+    };
+    setComments((prev) => ({ ...prev, [commentModalPost.id]: [...(prev[commentModalPost.id] || []), c] }));
+    setPosts((prev) => prev.map((p) => p.id === commentModalPost.id ? { ...p, comments: p.comments + 1 } : p));
+    setNewComment("");
+  };
+
+  const formatCount = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString();
 
   const renderPost = ({ item }: { item: SocialPost }) => {
     const imageSource = item.image ? RECIPE_IMAGES[item.image] : null;
+    const postComments = comments[item.id] || [];
 
     return (
       <View style={[styles.postCard, { backgroundColor: colors.card }]}>
-        {/* Post header */}
+        {/* Header */}
         <View style={styles.postHeader}>
-          <View style={[styles.userAvatar, { backgroundColor: colors.saffron }]}>
-            <Text style={styles.userAvatarText}>{item.userAvatar}</Text>
+          <View style={[styles.userAvatar, { backgroundColor: colors.primary }]}>
+            <Text style={[styles.userAvatarText, { fontFamily: "Inter_700Bold" }]}>{item.userAvatar}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.username, { color: colors.foreground }]}>@{item.username}</Text>
-            <Text style={[styles.timeAgo, { color: colors.mutedForeground }]}>{item.timeAgo}</Text>
+            <Text style={[styles.username, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>@{item.username}</Text>
+            <Text style={[styles.timeAgo, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{item.timeAgo}</Text>
           </View>
-          <TouchableOpacity
-            style={[styles.followBtn, { borderColor: colors.saffron }]}
-          >
-            <Text style={[styles.followBtnText, { color: colors.saffron }]}>Follow</Text>
+          <TouchableOpacity style={[styles.followBtn, { borderColor: colors.primary }]}>
+            <Text style={[styles.followBtnText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>Follow</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Post image */}
+        {/* Image */}
         {imageSource ? (
           <Image source={imageSource} style={styles.postImage} resizeMode="cover" />
         ) : (
           <View style={[styles.postImagePlaceholder, { backgroundColor: colors.muted }]}>
-            <Feather name="image" size={40} color={colors.mutedForeground} />
+            <Feather name="image" size={40} color={colors.textMuted} />
           </View>
         )}
 
-        {/* Actions row */}
+        {/* Actions */}
         <View style={styles.actionsRow}>
           <TouchableOpacity style={styles.actionItem} onPress={() => toggleLike(item.id)}>
-            <Feather
-              name="heart"
-              size={22}
-              color={item.liked ? "#E84040" : colors.foreground}
-              fill={item.liked ? "#E84040" : "none"}
-            />
-            <Text style={[styles.actionCount, { color: colors.mutedForeground }]}>
-              {formatCount(item.likes)}
-            </Text>
+            <Feather name="heart" size={22} color={item.liked ? "#E84040" : colors.foreground} />
+            <Text style={[styles.actionCount, { color: colors.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{formatCount(item.likes)}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem}>
+          <TouchableOpacity style={styles.actionItem} onPress={() => { setCommentModalPost(item); }}>
             <Feather name="message-circle" size={22} color={colors.foreground} />
-            <Text style={[styles.actionCount, { color: colors.mutedForeground }]}>
-              {item.comments}
-            </Text>
+            <Text style={[styles.actionCount, { color: colors.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{(postComments.length || item.comments)}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem}>
+          <TouchableOpacity style={styles.actionItem} onPress={handleShare}>
             <Feather name="share-2" size={22} color={colors.foreground} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionItem} onPress={() => toggleSave(item.id)}>
-            <Feather
-              name="bookmark"
-              size={22}
-              color={item.saved ? colors.saveBlue : colors.foreground}
-            />
+            <Feather name="bookmark" size={22} color={item.saved ? colors.saveBlue : colors.foreground} fill={item.saved ? colors.saveBlue : undefined} />
           </TouchableOpacity>
         </View>
 
         {/* Caption */}
         <View style={styles.captionContainer}>
-          <Text style={[styles.caption, { color: colors.foreground }]}>
-            <Text style={styles.captionUsername}>@{item.username} </Text>
+          <Text style={[styles.caption, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+            <Text style={[styles.captionUsername, { fontFamily: "Inter_700Bold" }]}>@{item.username} </Text>
             {item.caption}
           </Text>
           {item.recipeName && (
             <TouchableOpacity
-              style={[styles.recipeChip, { backgroundColor: colors.saffron + "15", borderColor: colors.saffron + "30" }]}
+              style={[styles.recipeChip, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "35" }]}
               onPress={() => item.recipeId && router.push(`/recipe/${item.recipeId}`)}
             >
-              <Feather name="book-open" size={12} color={colors.saffron} />
-              <Text style={[styles.recipeChipText, { color: colors.saffron }]}>{item.recipeName}</Text>
+              <Feather name="book-open" size={12} color={colors.primary} />
+              <Text style={[styles.recipeChipText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>{item.recipeName}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -143,64 +159,33 @@ export default function SocialScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPadding + 8 }]}>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Social</Text>
-        <TouchableOpacity style={[styles.iconBtn, { backgroundColor: colors.card }]}>
-          <Feather name="send" size={20} color={colors.foreground} />
-        </TouchableOpacity>
+      <View style={[styles.header, { paddingTop: topPadding + 6, borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Social</Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="camera" size={18} color={colors.foreground} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Cuisine filter */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.cuisineFilters}
-      >
-        {CUISINE_FILTERS.map((c) => (
-          <TouchableOpacity
-            key={c}
-            style={[
-              styles.cuisineFilter,
-              {
-                backgroundColor: activeCuisine === c ? colors.saffron : colors.card,
-                borderColor: activeCuisine === c ? colors.saffron : colors.border,
-              },
-            ]}
-            onPress={() => setActiveCuisine(c)}
-          >
-            <Text style={[styles.cuisineFilterText, { color: activeCuisine === c ? "#fff" : colors.foreground }]}>
-              {c}
-            </Text>
+      {/* Discovery tabs */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.discoveryTabs}>
+        {DISCOVERY_TABS.map((tab) => (
+          <TouchableOpacity key={tab} style={[styles.discoveryTab, { borderBottomColor: activeTab === tab ? colors.primary : "transparent" }]} onPress={() => setActiveTab(tab)}>
+            <Text style={[styles.discoveryTabText, { color: activeTab === tab ? colors.foreground : colors.textSecondary, fontFamily: activeTab === tab ? "Inter_700Bold" : "Inter_500Medium" }]}>{tab}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
-      {/* Discovery tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.discoveryTabs}
-      >
-        {DISCOVERY_TABS.map((tab) => (
+      {/* Cuisine filter */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cuisineFilters}>
+        {CUISINE_FILTERS.map((c) => (
           <TouchableOpacity
-            key={tab}
-            style={styles.discoveryTab}
-            onPress={() => setActiveTab(tab)}
+            key={c}
+            style={[styles.cuisineFilter, { backgroundColor: activeCuisine === c ? colors.primary : colors.card, borderColor: activeCuisine === c ? colors.primary : colors.border }]}
+            onPress={() => setActiveCuisine(c)}
           >
-            <Text
-              style={[
-                styles.discoveryTabText,
-                {
-                  color: activeTab === tab ? colors.foreground : colors.mutedForeground,
-                  fontWeight: activeTab === tab ? "700" : "500",
-                },
-              ]}
-            >
-              {tab}
-            </Text>
-            {activeTab === tab && (
-              <View style={[styles.discoveryTabIndicator, { backgroundColor: colors.saffron }]} />
-            )}
+            <Text style={[styles.cuisineFilterText, { color: activeCuisine === c ? colors.primaryForeground : colors.foreground, fontFamily: "Inter_500Medium" }]}>{c}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -211,96 +196,116 @@ export default function SocialScreen() {
         renderItem={renderPost}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.feedContent}
-        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border }} />}
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
       />
+
+      {/* Share toast */}
+      {shareToast && (
+        <View style={[styles.shareToast, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Feather name="check" size={16} color={colors.primary} />
+          <Text style={[styles.shareToastText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Link copied to clipboard!</Text>
+        </View>
+      )}
+
+      {/* Comment Modal */}
+      <Modal visible={!!commentModalPost} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setCommentModalPost(null)}>
+        <View style={[styles.commentModal, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+          <Text style={[styles.commentModalTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Comments</Text>
+
+          <FlatList
+            data={comments[commentModalPost?.id || ""] || []}
+            keyExtractor={(c) => c.id}
+            contentContainerStyle={{ gap: 14, paddingBottom: 20 }}
+            ListEmptyComponent={
+              <View style={styles.noComments}>
+                <Text style={{ fontSize: 32 }}>💬</Text>
+                <Text style={[styles.noCommentsText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>No comments yet. Be first!</Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <View style={styles.commentRow}>
+                <View style={[styles.commentAvatar, { backgroundColor: colors.primary }]}>
+                  <Text style={[styles.commentAvatarText, { fontFamily: "Inter_700Bold" }]}>{item.avatar}</Text>
+                </View>
+                <View style={[styles.commentBubble, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.commentUser, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>@{item.user}</Text>
+                  <Text style={[styles.commentText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>{item.text}</Text>
+                  <Text style={[styles.commentTime, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>{item.timeAgo}</Text>
+                </View>
+              </View>
+            )}
+          />
+
+          <View style={[styles.commentInput, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TextInput
+              style={[styles.commentInputText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+              placeholder="Add a comment…"
+              placeholderTextColor={colors.textMuted}
+              value={newComment}
+              onChangeText={setNewComment}
+              multiline
+            />
+            <TouchableOpacity
+              style={[styles.commentSendBtn, { backgroundColor: newComment.trim() ? colors.primary : colors.muted }]}
+              onPress={handleAddComment}
+              disabled={!newComment.trim()}
+            >
+              <Feather name="send" size={16} color={newComment.trim() ? colors.primaryForeground : colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-  },
-  headerTitle: { fontSize: 28, fontWeight: "800", letterSpacing: -0.5 },
-  iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  cuisineFilters: { paddingHorizontal: 20, gap: 8, paddingBottom: 10 },
-  cuisineFilter: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 100,
-    borderWidth: 1,
-  },
-  cuisineFilterText: { fontSize: 13, fontWeight: "600" },
-  discoveryTabs: { paddingHorizontal: 20, gap: 24, paddingBottom: 4 },
-  discoveryTab: { paddingBottom: 10, alignItems: "center", position: "relative" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1 },
+  headerTitle: { fontSize: 26, letterSpacing: -0.3 },
+  headerRight: { flexDirection: "row", gap: 10 },
+  iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  discoveryTabs: { paddingHorizontal: 20, paddingBottom: 0, borderBottomWidth: 1, borderBottomColor: "transparent" },
+  discoveryTab: { paddingVertical: 12, paddingHorizontal: 4, marginRight: 24, borderBottomWidth: 2 },
   discoveryTabText: { fontSize: 15 },
-  discoveryTabIndicator: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-    borderRadius: 1,
-  },
+  cuisineFilters: { paddingHorizontal: 20, gap: 8, paddingVertical: 10, alignItems: "center", height: 50 },
+  cuisineFilter: { height: 30, paddingHorizontal: 14, borderRadius: 100, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  cuisineFilterText: { fontSize: 12 },
   feedContent: { paddingBottom: 100 },
-  postCard: { paddingBottom: 4 },
-  postHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  userAvatarText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  username: { fontSize: 15, fontWeight: "700" },
-  timeAgo: { fontSize: 13 },
-  followBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 100,
-    borderWidth: 1.5,
-  },
-  followBtnText: { fontSize: 13, fontWeight: "700" },
+  postCard: { borderRadius: 0 },
+  postHeader: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  userAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  userAvatarText: { color: "#fff", fontSize: 15 },
+  username: { fontSize: 14 },
+  timeAgo: { fontSize: 12 },
+  followBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 100, borderWidth: 1.5 },
+  followBtnText: { fontSize: 13 },
   postImage: { width: "100%", aspectRatio: 1 },
-  postImagePlaceholder: {
-    width: "100%",
-    aspectRatio: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 20,
-  },
-  actionItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  actionCount: { fontSize: 14, fontWeight: "600" },
-  captionContainer: { paddingHorizontal: 16, paddingBottom: 16, gap: 8 },
+  postImagePlaceholder: { width: "100%", aspectRatio: 1, alignItems: "center", justifyContent: "center" },
+  actionsRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, gap: 18 },
+  actionItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  actionCount: { fontSize: 14 },
+  captionContainer: { paddingHorizontal: 16, paddingBottom: 14, gap: 8 },
   caption: { fontSize: 14, lineHeight: 20 },
-  captionUsername: { fontWeight: "700" },
-  recipeChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 100,
-    borderWidth: 1,
-  },
-  recipeChipText: { fontSize: 13, fontWeight: "600" },
+  captionUsername: { fontSize: 14 },
+  recipeChip: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, borderWidth: 1 },
+  recipeChipText: { fontSize: 12 },
+  shareToast: { position: "absolute", bottom: 100, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 100, borderWidth: 1 },
+  shareToastText: { fontSize: 14 },
+  commentModal: { flex: 1, padding: 20 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 16 },
+  commentModalTitle: { fontSize: 20, marginBottom: 16 },
+  commentRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  commentAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  commentAvatarText: { color: "#fff", fontSize: 13 },
+  commentBubble: { flex: 1, padding: 12, borderRadius: 14, borderWidth: 1, gap: 4 },
+  commentUser: { fontSize: 13 },
+  commentText: { fontSize: 14, lineHeight: 19 },
+  commentTime: { fontSize: 11 },
+  noComments: { alignItems: "center", paddingVertical: 40, gap: 10 },
+  noCommentsText: { fontSize: 15 },
+  commentInput: { flexDirection: "row", alignItems: "flex-end", gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, marginTop: 8 },
+  commentInputText: { flex: 1, fontSize: 15, maxHeight: 80 },
+  commentSendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
 });
