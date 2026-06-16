@@ -1,0 +1,129 @@
+Heading: "Let's stock your pantry" — 24px Playfair Display Bold
+Subtext: "The more you add, the better your recipe suggestions." — 14px Inter, --ob-muted
+
+4 LARGE OPTION CARDS (vertical stack, tappable):
+
+Each card: full-width .select-card with:
+  Left: large icon in 56x56px coloured circle
+  Center: title (16px Inter Bold) + description (13px Inter, --ob-muted)
+  Right: Lucide ChevronRight, --ob-muted
+  No radio button — these are actions, not selections
+
+── OPTION 1: SCAN FRIDGE ──
+  🤳 "Scan Fridge / Pantry"
+  "Point your camera at your food — AI will detect it instantly"
+  Background circle: blue (#EBF3FF)
+
+  ON TAP:
+    1. Request camera permission via browser getUserMedia API
+       Permission prompt uses custom in-app overlay BEFORE triggering browser permission:
+         Modal: "📷 Camera Access Needed"
+         "PantrySwipe needs your camera to identify food items. We don't store any camera footage."
+         Two buttons: "Allow Camera" (blue) | "Not Now" (ghost)
+         If "Allow Camera" → triggers browser getUserMedia({ video: { facingMode: 'environment' } })
+         If browser denies → show instructions: "Go to Settings → Browser → Camera → Allow"
+
+    2. Camera view opens (full screen):
+       Live camera feed with white rounded-rect targeting overlay
+       Instructions text: "Point at food items one by one — hold steady for 2 seconds"
+       Subtle animated scan line (top to bottom, repeating, blue glow)
+       
+       Bottom panel (semi-transparent):
+         Counter: "Items detected: 3" — updates as AI detects items
+         "Done Scanning" button (blue, full width)
+         "Switch to Receipt Scan" link
+
+    3. AI Detection (send frame to Claude Vision API every 2 seconds):
+       System prompt: "You are a pantry inventory AI. Identify food items visible in this image. For each item provide: name, estimated quantity, unit (pieces/g/ml/pack), and category (dairy/produce/meat/seafood/grains/condiments/sauces/spices/frozen/drinks/snacks/baking). Return only JSON array."
+       
+       As items are detected, they appear as small animated pills at the bottom of camera view:
+         "🥦 Broccoli · 1 head · Produce" (slides up with spring animation)
+         "🥛 Milk · 1 carton · Dairy" (slides up)
+         "🧀 Cheddar · 200g · Dairy" (slides up)
+
+    4. User taps "Done Scanning" → Review Screen:
+       Title: "Here's what we found 👀"
+       Subtext: "Edit anything that looks wrong, then add to your pantry."
+
+       List of detected items, each as an editable row:
+         Emoji icon + Name (editable text field) + Quantity (editable number) + Unit (dropdown) + Category (dropdown pill)
+         Trash icon to remove item from list
+         "Looks wrong? Fix it" — tap row to expand and edit all fields
+
+       Bottom: "+ Add another item manually" link
+
+       "Add X Items to Pantry →" button (blue, shows count)
+
+    5. On confirm → items are added to pantry_items table with:
+         user_id, name, quantity, unit, category, purchase_date: today, expiry_date: AI estimated or null
+         source: 'camera_scan'
+       Items appear in Pantry screen immediately, grouped by category
+
+── OPTION 2: SCAN RECEIPT ──
+  🧾 "Scan Receipt"
+  "Take a photo of your grocery receipt — we'll read it for you"
+  Background circle: teal (#E6FAF5)
+
+  ON TAP:
+    1. Same camera permission flow as above (if not already granted)
+
+    2. Static photo capture (not live scan):
+       Shutter button centered at bottom
+       "Or upload from gallery" link below shutter
+       Frame guide overlay: white rectangle outline with corner marks
+       Instruction: "Fit your receipt in the frame"
+
+    3. On photo taken → Loading state:
+       "Reading your receipt..." with animated receipt icon (lines appearing one by one)
+
+    4. Claude Vision API call:
+       System prompt: "You are a grocery receipt parser. Extract every food/grocery item from this receipt image. For each item return: name (clean product name, not the barcode string), quantity (default 1 if not specified), estimated unit (pieces/g/ml/pack), category (dairy/produce/meat/seafood/grains/condiments/sauces/spices/frozen/drinks/snacks/baking), estimated_price (from receipt if visible). Return only JSON array."
+
+    5. Review Screen (same as camera scan review — same component):
+       Title: "Items from your receipt 🧾"
+       Same editable list UI
+       Note at top: "We've matched [X] items. Check quantities and categories."
+
+    6. Confirm → add to pantry (source: 'receipt_scan')
+
+── OPTION 3: TYPE IT IN ──
+  ✏️ "Type It In"
+  "Add ingredients manually at your own pace"
+  Background circle: amber (#FFF8EB)
+
+  ON TAP:
+    Opens a streamlined manual entry bottom sheet:
+
+    Search field at top: "Search for an ingredient..." (auto-suggest from Open Food Facts + common pantry items)
+
+    As user types, dropdown shows matching items with:
+      Emoji · Name · Common unit
+      Tap to select → pre-fills the form below
+
+    Form fields:
+      Name (text, required)
+      Quantity (number input)
+      Unit (dropdown: pieces / g / kg / ml / L / pack / can / bunch / tbsp / cup)
+      Category (dropdown with emoji: see categories above)
+      Location (dropdown: Fridge / Freezer / Pantry shelf / Spice rack)
+      Expiry date (optional date picker)
+
+    "Add Item" button → adds to list at bottom of sheet
+    Added items shown as a growing list with edit/remove options
+    "Done — Add to Pantry" at bottom
+
+── OPTION 4: I'LL ADD LATER ──
+  ⏭️ "I'll Add Later"
+  "Skip for now — you can always add ingredients from the Pantry tab"
+  Background circle: grey (#F1F5F9)
+
+  ON TAP:
+    Small confirmation bottom sheet slides up:
+      "You sure? 🤔"
+      "No worries! Head to the Pantry tab anytime to add ingredients. Your recipe suggestions will improve as you add more."
+      Two buttons:
+        "Yes, skip for now" → proceeds to Step 10 (account creation animation)
+        "Actually, let me add some" → dismisses sheet, stays on Step 9
+
+CTA at bottom of Step 9 (only shown after scan/type option completes or after "I'll Add Later"):
+  "Let's Go! →" (blue, full width)

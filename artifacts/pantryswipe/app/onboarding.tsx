@@ -1,5 +1,6 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import {
+  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -14,11 +15,34 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
-const { width } = Dimensions.get("window");
+const { width, height: screenHeight } = Dimensions.get("window");
 const TOTAL_STEPS = 9;
+
+type ScanItem = { id: string; emoji: string; name: string; qty: string; unit: string; category: string };
+type PantryFlow = "fridge" | "receipt" | "manual" | null;
+type UnitOption = "pieces" | "g" | "kg" | "ml" | "L" | "pack" | "can" | "bunch" | "tbsp" | "cup";
+const UNITS: UnitOption[] = ["pieces", "g", "kg", "ml", "L", "pack", "can", "bunch", "tbsp", "cup"];
+const CATEGORIES = ["Produce", "Dairy", "Meat", "Grains", "Condiments", "Sauces", "Spices", "Beverages", "Snacks", "Frozen"];
+
+const MOCK_FRIDGE_ITEMS: ScanItem[] = [
+  { id: "f1", emoji: "🥦", name: "Broccoli", qty: "1", unit: "head", category: "Produce" },
+  { id: "f2", emoji: "🥛", name: "Milk", qty: "1", unit: "carton", category: "Dairy" },
+  { id: "f3", emoji: "🧀", name: "Cheddar", qty: "200", unit: "g", category: "Dairy" },
+  { id: "f4", emoji: "🥚", name: "Eggs", qty: "6", unit: "pieces", category: "Produce" },
+  { id: "f5", emoji: "🍅", name: "Tomatoes", qty: "4", unit: "pieces", category: "Produce" },
+];
+const MOCK_RECEIPT_ITEMS: ScanItem[] = [
+  { id: "r1", emoji: "🥛", name: "Full Cream Milk 2L", qty: "1", unit: "pack", category: "Dairy" },
+  { id: "r2", emoji: "🍞", name: "Sourdough Bread", qty: "1", unit: "pack", category: "Grains" },
+  { id: "r3", emoji: "🧈", name: "Unsalted Butter", qty: "250", unit: "g", category: "Dairy" },
+  { id: "r4", emoji: "🍗", name: "Chicken Breast", qty: "500", unit: "g", category: "Meat" },
+  { id: "r5", emoji: "🫘", name: "Black Beans (can)", qty: "1", unit: "can", category: "Grains" },
+];
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 const PROFANITY_LIST = [
@@ -115,7 +139,7 @@ function isValidName(n: string) { return /^[a-zA-Z\s\-]+$/.test(n.trim()) && n.t
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { updateProfile, completeSetup } = useApp();
+  const { updateProfile, completeSetup, addToPantry } = useApp();
   const appColors = useColors();
 
   const OB = useMemo(() => ({
@@ -136,6 +160,67 @@ export default function OnboardingScreen() {
   }), [appColors]);
 
   const styles = useMemo(() => makeStyles(OB), [OB]);
+
+  // Modal-specific stylesheets (depend on OB theme tokens)
+  const pm = useMemo(() => StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: "#00000088", alignItems: "center", justifyContent: "center", padding: 32 },
+    card: { width: "100%", borderRadius: 20, borderWidth: 1, padding: 28, alignItems: "center", gap: 8 },
+    title: { fontSize: 20, fontWeight: "700", textAlign: "center" },
+    body: { fontSize: 14, textAlign: "center", lineHeight: 20, marginBottom: 8 },
+    allowBtn: { width: "100%", paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 4 },
+    allowTxt: { color: "#fff", fontSize: 16, fontWeight: "700" },
+    notNowBtn: { paddingVertical: 12, alignItems: "center", width: "100%" },
+    notNowTxt: { fontSize: 14, fontWeight: "500" },
+  }), [OB]);
+
+  const cs = useMemo(() => StyleSheet.create({
+    targetBox: { position: "absolute", top: "15%", left: "10%", right: "10%", height: "55%", borderWidth: 2, borderColor: "#ffffff99", borderRadius: 16, overflow: "hidden" },
+    scanLine: { width: "100%", height: 2, backgroundColor: "#5B8EF5BB" },
+    scanInstruction: { position: "absolute", top: "72%", left: 0, right: 0, color: "#fff", textAlign: "center", fontSize: 13, paddingHorizontal: 20 },
+    pillsWrap: { position: "absolute", top: 80, left: 16, right: 16, gap: 6 },
+    pill: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, alignSelf: "flex-start" },
+    pillTxt: { color: "#fff", fontSize: 13, fontWeight: "600" },
+    bottomPanel: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 48, gap: 12 },
+    itemCount: { fontSize: 13, fontWeight: "500", textAlign: "center" },
+    doneBtn: { paddingVertical: 14, borderRadius: 12, alignItems: "center" },
+    doneTxt: { color: "#fff", fontSize: 16, fontWeight: "700" },
+    switchTxt: { fontSize: 13, textAlign: "center" },
+    receiptFrame: { position: "absolute", top: "15%", left: "10%", right: "10%", height: "55%", borderRadius: 4 },
+    corner: { position: "absolute", width: 24, height: 24, borderColor: "#fff" },
+    shutter: { width: 70, height: 70, borderRadius: 35, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+    shutterInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: "#E84040" },
+    closeBtn: { position: "absolute", top: 52, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "#00000066", alignItems: "center", justifyContent: "center" },
+  }), [OB]);
+
+  const rv = useMemo(() => StyleSheet.create({
+    container: { flex: 1 },
+    header: { padding: 20, borderBottomWidth: 1 },
+    title: { fontSize: 22, fontWeight: "700", marginBottom: 4 },
+    sub: { fontSize: 13 },
+    row: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: 12, borderWidth: 1 },
+    itemName: { fontSize: 15, fontWeight: "600" },
+    itemMeta: { fontSize: 12, marginTop: 2 },
+    footer: { padding: 20, borderTopWidth: 1 },
+    addBtn: { paddingVertical: 15, borderRadius: 12, alignItems: "center" },
+    addTxt: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  }), [OB]);
+
+  const me = useMemo(() => StyleSheet.create({
+    container: { flex: 1 },
+    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderBottomWidth: 1 },
+    title: { fontSize: 20, fontWeight: "700" },
+    input: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 15 },
+    chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, marginRight: 6 },
+    chipTxt: { fontSize: 13, fontWeight: "500" },
+    addItemBtn: { paddingVertical: 13, borderRadius: 10, alignItems: "center" },
+    addItemTxt: { color: "#fff", fontSize: 15, fontWeight: "700" },
+    listHeader: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
+    addedRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 10, borderWidth: 1 },
+    addedName: { fontSize: 14 },
+    footer: { padding: 20, borderTopWidth: 1 },
+    doneBtn: { paddingVertical: 15, borderRadius: 12, alignItems: "center" },
+    doneTxt: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  }), [OB]);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const loadingProgress = useRef(new Animated.Value(0)).current;
@@ -166,6 +251,160 @@ export default function OnboardingScreen() {
   const [goal, setGoal] = useState("");
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   const [cuisineError, setCuisineError] = useState(false);
+
+  // ── Camera / Pantry-flow state ──────────────────────────────────────────────
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [showPermModal, setShowPermModal] = useState(false);
+  const [pendingFlow, setPendingFlow] = useState<PantryFlow>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [activeFlow, setActiveFlow] = useState<PantryFlow>(null);
+  const [scanItems, setScanItems] = useState<ScanItem[]>([]);
+  const [scanReading, setScanReading] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+  const [reviewTitle, setReviewTitle] = useState("");
+  const [reviewItems, setReviewItems] = useState<ScanItem[]>([]);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualName, setManualName] = useState("");
+  const [manualQty, setManualQty] = useState("1");
+  const [manualUnit, setManualUnit] = useState("pieces");
+  const [manualCategory, setManualCategory] = useState("Produce");
+  const [manualAdded, setManualAdded] = useState<ScanItem[]>([]);
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scanIndexRef = useRef(0);
+
+  // Scan line animation (react-native-reanimated, avoids conflict with RN Animated)
+  const scanLineAnim = useRef(new Animated.Value(0)).current;
+  const scanLineStyle = { transform: [{ translateY: scanLineAnim.interpolate({ inputRange: [0, 1], outputRange: [0, screenHeight * 0.55] }) }] };
+
+  const stopScanTimer = useCallback(() => {
+    if (scanTimerRef.current) { clearInterval(scanTimerRef.current); scanTimerRef.current = null; }
+  }, []);
+
+  useEffect(() => {
+    if (showCamera && activeFlow === "fridge") {
+      scanLineAnim.setValue(0);
+      Animated.loop(Animated.timing(scanLineAnim, { toValue: 1, duration: 2000, useNativeDriver: true })).start();
+      scanIndexRef.current = 0;
+      setScanItems([]);
+      scanTimerRef.current = setInterval(() => {
+        setScanItems((prev) => {
+          if (scanIndexRef.current < MOCK_FRIDGE_ITEMS.length) {
+            const next = MOCK_FRIDGE_ITEMS[scanIndexRef.current];
+            scanIndexRef.current++;
+            return [...prev, next];
+          }
+          return prev;
+        });
+      }, 2500);
+    } else {
+      stopScanTimer();
+    }
+    return () => stopScanTimer();
+  }, [showCamera, activeFlow]);
+
+  const openCameraFlow = useCallback((flow: "fridge" | "receipt") => {
+    setActiveFlow(flow); setScanItems([]); setScanReading(false); setShowCamera(true);
+  }, []);
+
+  const handlePantryOption = useCallback((id: string) => {
+    if (id === "scan" || id === "receipt") {
+      const flow = id === "scan" ? "fridge" : "receipt";
+      if (cameraPermission?.granted) { openCameraFlow(flow); }
+      else { setPendingFlow(flow); setShowPermModal(true); }
+    } else if (id === "type") {
+      setManualAdded([]); setManualName(""); setManualQty("1"); setShowManualEntry(true);
+    } else if (id === "skip") {
+      setShowSkipConfirm(true);
+    }
+  }, [cameraPermission, openCameraFlow]);
+
+  const handleAllowCamera = useCallback(async () => {
+    setShowPermModal(false);
+    if (Platform.OS === "web") {
+      try {
+        await (navigator as Navigator & { mediaDevices: MediaDevices }).mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        if (pendingFlow && pendingFlow !== "manual") openCameraFlow(pendingFlow);
+      } catch {
+        Alert.alert("Camera Denied", "Please allow camera access in your browser settings.");
+      }
+    } else {
+      const result = await requestCameraPermission();
+      if (result.granted && pendingFlow && pendingFlow !== "manual") { openCameraFlow(pendingFlow); }
+      else if (!result.granted && !result.canAskAgain) {
+        Alert.alert("Camera Access Required", "Go to Settings → PantrySwipe → Camera → Allow.");
+      }
+    }
+  }, [pendingFlow, openCameraFlow, requestCameraPermission]);
+
+  const handleDoneScan = useCallback(() => {
+    stopScanTimer(); setShowCamera(false);
+    setReviewTitle("Here's what we found 👀");
+    setReviewItems([...scanItems]);
+    setShowReview(true);
+  }, [scanItems, stopScanTimer]);
+
+  const handleReceiptCapture = useCallback(() => {
+    setScanReading(true);
+    setTimeout(() => {
+      setScanReading(false); setShowCamera(false);
+      setReviewTitle("Items from your receipt 🧾");
+      setReviewItems([...MOCK_RECEIPT_ITEMS]);
+      setShowReview(true);
+    }, 2000);
+  }, []);
+
+  const handleReceiptGallery = useCallback(async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+    if (!result.canceled) {
+      setShowCamera(false); setScanReading(true);
+      setTimeout(() => {
+        setScanReading(false);
+        setReviewTitle("Items from your receipt 🧾");
+        setReviewItems([...MOCK_RECEIPT_ITEMS]);
+        setShowReview(true);
+      }, 2000);
+    }
+  }, []);
+
+  const confirmReview = useCallback(() => {
+    reviewItems.forEach((item) => {
+      addToPantry({
+        id: `${Date.now()}${Math.random().toString(36).substr(2, 5)}`,
+        name: item.name,
+        quantity: parseFloat(item.qty) || 1,
+        unit: item.unit,
+        category: (["Fridge","Freezer","Pantry","Spices","Sauces","Beverages","Produce"].includes(item.category) ? item.category : "Produce") as "Fridge"|"Freezer"|"Pantry"|"Spices"|"Sauces"|"Beverages"|"Produce",
+        status: "Fresh",
+        emoji: item.emoji,
+      });
+    });
+    setShowReview(false);
+    goNext();
+  }, [reviewItems, addToPantry]);
+
+  const addManualItem = useCallback(() => {
+    if (!manualName.trim()) return;
+    const emojis: Record<string, string> = { Produce: "🥦", Dairy: "🥛", Meat: "🍗", Grains: "🍞", Condiments: "🫙", Sauces: "🍶", Spices: "🧂", Beverages: "🥤", Snacks: "🍿", Frozen: "🧊" };
+    setManualAdded((prev) => [...prev, {
+      id: `m${Date.now()}`, emoji: emojis[manualCategory] || "🍽️",
+      name: manualName.trim(), qty: manualQty, unit: manualUnit, category: manualCategory,
+    }]);
+    setManualName(""); setManualQty("1");
+  }, [manualName, manualQty, manualUnit, manualCategory]);
+
+  const confirmManual = useCallback(() => {
+    manualAdded.forEach((item) => {
+      addToPantry({
+        id: `${Date.now()}${Math.random().toString(36).substr(2, 5)}`,
+        name: item.name, quantity: parseFloat(item.qty) || 1, unit: item.unit,
+        category: (["Fridge","Freezer","Pantry","Spices","Sauces","Beverages","Produce"].includes(item.category) ? item.category : "Produce") as "Fridge"|"Freezer"|"Pantry"|"Spices"|"Sauces"|"Beverages"|"Produce",
+        status: "Fresh", emoji: item.emoji,
+      });
+    });
+    setShowManualEntry(false);
+    goNext();
+  }, [manualAdded, addToPantry]);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom;
@@ -252,7 +491,7 @@ export default function OnboardingScreen() {
     if (dietTypes.filter((d) => d !== id).length === 0) setDietTypes(["Omnivore"]);
   };
 
-  const pct = `${Math.round(((step + 1) / TOTAL_STEPS) * 100)}%`;
+  const pct: `${number}%` = `${Math.round(((step + 1) / TOTAL_STEPS) * 100)}%`;
   const ctaLabel = step === TOTAL_STEPS - 1 ? "Let's Go! 🍳" : step === 5 && allergies.length === 0 ? "Skip — No Allergies" : "Continue";
   const ctaEnabled = isStepValid(step) || step === 5 || step === 8;
 
@@ -545,7 +784,7 @@ export default function OnboardingScreen() {
               { id: "type", emoji: "✏️", bg: OB.amberLight, title: "Type It In", desc: "Add ingredients manually at your own pace" },
               { id: "skip", emoji: "⏭️", bg: "#F1F5F9", title: "I'll Add Later", desc: "Skip for now — add from the Pantry tab anytime" },
             ].map((opt) => (
-              <TouchableOpacity key={opt.id} style={styles.pantryOption} onPress={goNext}>
+              <TouchableOpacity key={opt.id} style={styles.pantryOption} onPress={() => handlePantryOption(opt.id)}>
                 <View style={[styles.pantryIconBox, { backgroundColor: opt.bg }]}>
                   <Text style={{ fontSize: 26 }}>{opt.emoji}</Text>
                 </View>
@@ -599,6 +838,219 @@ export default function OnboardingScreen() {
           )}
         </View>
       </Modal>
+
+      {/* ── 1. CAMERA PERMISSION MODAL ── */}
+      <Modal visible={showPermModal} transparent animationType="fade" statusBarTranslucent>
+        <View style={pm.overlay}>
+          <View style={[pm.card, { backgroundColor: OB.card, borderColor: OB.border }]}>
+            <Text style={{ fontSize: 40, marginBottom: 12 }}>📷</Text>
+            <Text style={[pm.title, { color: OB.text }]}>Camera Access Needed</Text>
+            <Text style={[pm.body, { color: OB.muted }]}>PantrySwipe needs your camera to identify food items. We don't store any camera footage.</Text>
+            <TouchableOpacity style={[pm.allowBtn, { backgroundColor: OB.blue }]} onPress={handleAllowCamera}>
+              <Text style={pm.allowTxt}>Allow Camera</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={pm.notNowBtn} onPress={() => setShowPermModal(false)}>
+              <Text style={[pm.notNowTxt, { color: OB.muted }]}>Not Now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── 2. CAMERA SCAN MODAL ── */}
+      <Modal visible={showCamera} animationType="slide" statusBarTranslucent>
+        <View style={{ flex: 1, backgroundColor: "#000" }}>
+          {Platform.OS !== "web" ? (
+            <CameraView style={{ flex: 1 }} facing="back">
+              {activeFlow === "fridge" ? (
+                <>
+                  {/* Targeting overlay */}
+                  <View style={cs.targetBox} pointerEvents="none">
+                    <Animated.View style={[cs.scanLine, scanLineStyle]} />
+                  </View>
+                  <Text style={cs.scanInstruction}>Point at food items one by one — hold steady for 2 seconds</Text>
+                  {/* Detected pills */}
+                  <View style={cs.pillsWrap}>
+                    {scanItems.map((item) => (
+                      <View key={item.id} style={[cs.pill, { backgroundColor: OB.blue + "CC" }]}>
+                        <Text style={cs.pillTxt}>{item.emoji} {item.name} · {item.qty} {item.unit}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  {/* Bottom panel */}
+                  <View style={[cs.bottomPanel, { backgroundColor: "#000000BB" }]}>
+                    <Text style={[cs.itemCount, { color: "#fff" }]}>Items detected: {scanItems.length}</Text>
+                    <TouchableOpacity style={[cs.doneBtn, { backgroundColor: OB.blue }]} onPress={handleDoneScan}>
+                      <Text style={cs.doneTxt}>Done Scanning</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => { stopScanTimer(); setActiveFlow("receipt"); }}>
+                      <Text style={[cs.switchTxt, { color: OB.muted }]}>Switch to Receipt Scan</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <>
+                  {/* Receipt frame guide */}
+                  <View style={cs.receiptFrame} pointerEvents="none">
+                    {["tl","tr","bl","br"].map((c) => (
+                      <View key={c} style={[cs.corner, {
+                        top: c.startsWith("t") ? 0 : undefined, bottom: c.startsWith("b") ? 0 : undefined,
+                        left: c.endsWith("l") ? 0 : undefined, right: c.endsWith("r") ? 0 : undefined,
+                        borderTopWidth: c.startsWith("t") ? 3 : 0, borderBottomWidth: c.startsWith("b") ? 3 : 0,
+                        borderLeftWidth: c.endsWith("l") ? 3 : 0, borderRightWidth: c.endsWith("r") ? 3 : 0,
+                      }]} />
+                    ))}
+                  </View>
+                  <Text style={cs.scanInstruction}>Fit your receipt in the frame</Text>
+                  {scanReading ? (
+                    <View style={[cs.bottomPanel, { backgroundColor: "#000000BB", alignItems: "center", gap: 12 }]}>
+                      <Text style={{ fontSize: 32 }}>🧾</Text>
+                      <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>Reading your receipt...</Text>
+                    </View>
+                  ) : (
+                    <View style={[cs.bottomPanel, { backgroundColor: "#000000BB", alignItems: "center", gap: 14 }]}>
+                      <TouchableOpacity style={cs.shutter} onPress={handleReceiptCapture}>
+                        <View style={cs.shutterInner} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={handleReceiptGallery}>
+                        <Text style={[cs.switchTxt, { color: OB.muted }]}>Or upload from gallery</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </>
+              )}
+            </CameraView>
+          ) : (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 16 }}>
+              <Text style={{ fontSize: 48 }}>{activeFlow === "fridge" ? "📷" : "🧾"}</Text>
+              <Text style={{ color: "#fff", fontSize: 16, textAlign: "center", paddingHorizontal: 40 }}>Camera is only available on a real device.{"\n"}Tap Done to add mock items.</Text>
+              <TouchableOpacity style={[cs.doneBtn, { backgroundColor: OB.blue }]} onPress={activeFlow === "fridge" ? handleDoneScan : handleReceiptCapture}>
+                <Text style={cs.doneTxt}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {/* Close button */}
+          <TouchableOpacity style={cs.closeBtn} onPress={() => { stopScanTimer(); setShowCamera(false); }}>
+            <Feather name="x" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* ── 3. REVIEW MODAL ── */}
+      <Modal visible={showReview} animationType="slide" statusBarTranslucent>
+        <View style={[rv.container, { backgroundColor: OB.bg }]}>
+          <View style={[rv.header, { borderBottomColor: OB.border, paddingTop: insets.top + 16 }]}>
+            <Text style={[rv.title, { color: OB.text }]}>{reviewTitle}</Text>
+            <Text style={[rv.sub, { color: OB.muted }]}>Edit anything that looks wrong, then add to your pantry.</Text>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 10 }}>
+            {reviewItems.map((item, i) => (
+              <View key={item.id} style={[rv.row, { backgroundColor: OB.card, borderColor: OB.border }]}>
+                <Text style={{ fontSize: 28, marginRight: 10 }}>{item.emoji}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[rv.itemName, { color: OB.text }]}>{item.name}</Text>
+                  <Text style={[rv.itemMeta, { color: OB.muted }]}>{item.qty} {item.unit} · {item.category}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setReviewItems((prev) => prev.filter((_, idx) => idx !== i))}>
+                  <Feather name="trash-2" size={18} color={OB.error} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+          <View style={[rv.footer, { borderTopColor: OB.border, paddingBottom: insets.bottom + 16 }]}>
+            <TouchableOpacity
+              style={[rv.addBtn, { backgroundColor: reviewItems.length === 0 ? OB.border : OB.blue }]}
+              onPress={confirmReview}
+              disabled={reviewItems.length === 0}
+            >
+              <Text style={rv.addTxt}>Add {reviewItems.length} Item{reviewItems.length !== 1 ? "s" : ""} to Pantry →</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── 4. MANUAL ENTRY MODAL ── */}
+      <Modal visible={showManualEntry} animationType="slide" statusBarTranslucent>
+        <View style={[me.container, { backgroundColor: OB.bg }]}>
+          <View style={[me.header, { borderBottomColor: OB.border, paddingTop: insets.top + 16 }]}>
+            <Text style={[me.title, { color: OB.text }]}>✏️  Type It In</Text>
+            <TouchableOpacity onPress={() => setShowManualEntry(false)}>
+              <Feather name="x" size={22} color={OB.muted} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 14 }}>
+            <TextInput
+              style={[me.input, { backgroundColor: OB.card, borderColor: OB.border, color: OB.text }]}
+              placeholder="Ingredient name" placeholderTextColor={OB.muted}
+              value={manualName} onChangeText={setManualName}
+            />
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TextInput
+                style={[me.input, { flex: 1, backgroundColor: OB.card, borderColor: OB.border, color: OB.text }]}
+                placeholder="Qty" placeholderTextColor={OB.muted} keyboardType="numeric"
+                value={manualQty} onChangeText={setManualQty}
+              />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 2 }} contentContainerStyle={{ gap: 6, alignItems: "center" }}>
+                {UNITS.map((u) => (
+                  <TouchableOpacity key={u} style={[me.chip, { backgroundColor: manualUnit === u ? OB.blue : OB.card, borderColor: manualUnit === u ? OB.blue : OB.border }]} onPress={() => setManualUnit(u)}>
+                    <Text style={[me.chipTxt, { color: manualUnit === u ? "#fff" : OB.text }]}>{u}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              {CATEGORIES.map((c) => (
+                <TouchableOpacity key={c} style={[me.chip, { backgroundColor: manualCategory === c ? OB.blue : OB.card, borderColor: manualCategory === c ? OB.blue : OB.border }]} onPress={() => setManualCategory(c)}>
+                  <Text style={[me.chipTxt, { color: manualCategory === c ? "#fff" : OB.text }]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={[me.addItemBtn, { backgroundColor: manualName.trim() ? OB.blue : OB.border }]} onPress={addManualItem} disabled={!manualName.trim()}>
+              <Text style={me.addItemTxt}>+ Add Item</Text>
+            </TouchableOpacity>
+            {manualAdded.length > 0 && (
+              <View style={{ gap: 8, marginTop: 8 }}>
+                <Text style={[me.listHeader, { color: OB.muted }]}>Added items ({manualAdded.length})</Text>
+                {manualAdded.map((item, i) => (
+                  <View key={item.id} style={[me.addedRow, { backgroundColor: OB.card, borderColor: OB.border }]}>
+                    <Text style={{ fontSize: 20 }}>{item.emoji}</Text>
+                    <Text style={[me.addedName, { color: OB.text, flex: 1 }]}>{item.name} · {item.qty} {item.unit}</Text>
+                    <TouchableOpacity onPress={() => setManualAdded((prev) => prev.filter((_, idx) => idx !== i))}>
+                      <Feather name="x" size={16} color={OB.error} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+          <View style={[me.footer, { borderTopColor: OB.border, paddingBottom: insets.bottom + 16 }]}>
+            <TouchableOpacity
+              style={[me.doneBtn, { backgroundColor: manualAdded.length === 0 ? OB.border : OB.blue }]}
+              onPress={confirmManual}
+              disabled={manualAdded.length === 0}
+            >
+              <Text style={me.doneTxt}>Done — Add {manualAdded.length} Item{manualAdded.length !== 1 ? "s" : ""} to Pantry</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── 5. SKIP CONFIRM MODAL ── */}
+      <Modal visible={showSkipConfirm} transparent animationType="slide" statusBarTranslucent>
+        <View style={pm.overlay}>
+          <View style={[pm.card, { backgroundColor: OB.card, borderColor: OB.border }]}>
+            <Text style={{ fontSize: 36, marginBottom: 8 }}>🤔</Text>
+            <Text style={[pm.title, { color: OB.text }]}>You sure?</Text>
+            <Text style={[pm.body, { color: OB.muted }]}>No worries! Head to the Pantry tab anytime to add ingredients. Your recipe suggestions will improve as you add more.</Text>
+            <TouchableOpacity style={[pm.allowBtn, { backgroundColor: OB.blue }]} onPress={() => { setShowSkipConfirm(false); goNext(); }}>
+              <Text style={pm.allowTxt}>Yes, skip for now</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={pm.notNowBtn} onPress={() => setShowSkipConfirm(false)}>
+              <Text style={[pm.notNowTxt, { color: OB.blue }]}>Actually, let me add some</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
