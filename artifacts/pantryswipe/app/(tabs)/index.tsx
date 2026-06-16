@@ -312,14 +312,6 @@ export default function HomeScreen() {
             <Feather name="bell" size={18} color={colors.primary} />
             <View style={[styles.notifDot, { backgroundColor: "#EF4444" }]} />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.avatar, { backgroundColor: colors.primary }]}
-            onPress={() => router.push("/(tabs)/profile")}
-          >
-            <Text style={[styles.avatarText, { fontFamily: "Inter_700Bold" }]}>
-              {userProfile.name[0]?.toUpperCase()}
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
 
