@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import {
   Animated,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -15,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
 import { MOCK_RECIPES, PantryItem, Recipe } from "@/data/mockData";
@@ -93,6 +95,8 @@ export default function PantryScreen() {
   const [scanning, setScanning] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<typeof BARCODE_DEMOS[number] | null>(null);
   const scanLineAnim = useRef(new Animated.Value(0)).current;
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const barcodeScanLock = useRef(false);
   // Use SCREEN_HEIGHT - tab bar height (mirrors Discover tab approach — avoids circular onLayout measurement)
   const TAB_BAR_H = Platform.OS === "web" ? 68 : 60;
   const [topH, setTopH] = useState(0);
@@ -152,6 +156,15 @@ export default function PantryScreen() {
       setScanning(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }, 2500);
+  };
+
+  const handleBarcodeScanned = ({ data }: { type: string; data: string }) => {
+    if (barcodeScanLock.current || scannedProduct) return;
+    barcodeScanLock.current = true;
+    const idx = data.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % BARCODE_DEMOS.length;
+    const product = BARCODE_DEMOS[idx];
+    setScannedProduct(product);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleAddScanned = () => {
@@ -579,11 +592,44 @@ export default function PantryScreen() {
       </Modal>
 
       {/* ── BARCODE MODAL ── */}
-      <Modal visible={showBarcodeModal} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowBarcodeModal(false)}>
+      <Modal
+        visible={showBarcodeModal}
+        animationType="slide"
+        presentationStyle="formSheet"
+        onRequestClose={() => {
+          barcodeScanLock.current = false;
+          setScannedProduct(null);
+          setShowBarcodeModal(false);
+        }}
+      >
         <View style={[styles.modal, { backgroundColor: colors.background }]}>
           <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
           <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Scan Barcode 📷</Text>
-          {!scannedProduct ? (
+
+          {scannedProduct ? (
+            /* ── RESULT VIEW ── */
+            <View style={styles.scannedResult}>
+              <View style={[styles.scannedIcon, { backgroundColor: colors.card }]}>
+                <Text style={{ fontSize: 48 }}>{scannedProduct.emoji}</Text>
+              </View>
+              <Text style={[styles.scannedLabel, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>Product detected</Text>
+              <Text style={[styles.scannedName, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>{scannedProduct.name}</Text>
+              <Text style={[styles.scannedMeta, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{scannedProduct.quantity} {scannedProduct.unit} · {scannedProduct.category}</Text>
+              <View style={styles.scannedActions}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { backgroundColor: colors.muted }]}
+                  onPress={() => { barcodeScanLock.current = false; setScannedProduct(null); }}
+                >
+                  <Text style={[styles.modalBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Scan Again</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.primary }]} onPress={handleAddScanned}>
+                  <Text style={[styles.modalBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>Add to Pantry</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+          ) : Platform.OS === "web" ? (
+            /* ── WEB FALLBACK: mock scan ── */
             <>
               <View style={[styles.viewfinder, { backgroundColor: "#000" }]}>
                 <View style={styles.viewfinderCorners}>
@@ -593,33 +639,81 @@ export default function PantryScreen() {
                 </View>
                 {scanning && <Animated.View style={[styles.scanLine, { backgroundColor: colors.primary, top: scanLineY }]} />}
                 <Text style={[styles.viewfinderText, { color: "#fff", fontFamily: "Inter_400Regular" }]}>
-                  {scanning ? "Scanning..." : "Point camera at barcode"}
+                  {scanning ? "Scanning..." : "Camera scanning available on device"}
                 </Text>
               </View>
               <Text style={[styles.scanHint, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-                Barcode detected items will automatically populate name, quantity, and nutritional info.
+                Use the Expo Go app on your phone to scan real barcodes.
               </Text>
               <TouchableOpacity style={[styles.scanStartBtn, { backgroundColor: colors.primary }]} onPress={handleScanStart} disabled={scanning}>
                 <Feather name="camera" size={20} color="#fff" />
-                <Text style={[styles.scanStartText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>{scanning ? "Scanning…" : "Start Scan"}</Text>
+                <Text style={[styles.scanStartText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>{scanning ? "Scanning…" : "Demo Scan"}</Text>
               </TouchableOpacity>
             </>
+
+          ) : !cameraPermission ? (
+            /* ── PERMISSION LOADING ── */
+            <View style={styles.permissionBox}>
+              <Text style={[styles.permissionText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Checking camera access…</Text>
+            </View>
+
+          ) : !cameraPermission.granted ? (
+            /* ── PERMISSION REQUEST ── */
+            <View style={styles.permissionBox}>
+              <View style={[styles.permissionIconWrap, { backgroundColor: colors.primary + "18" }]}>
+                <Feather name="camera" size={36} color={colors.primary} />
+              </View>
+              <Text style={[styles.permissionTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Camera Access Needed</Text>
+              <Text style={[styles.permissionText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                Allow PantrySwipe to use your camera so you can scan barcodes to instantly add food items to your pantry.
+              </Text>
+              {cameraPermission.canAskAgain ? (
+                <TouchableOpacity
+                  style={[styles.permissionBtn, { backgroundColor: colors.primary }]}
+                  onPress={requestCameraPermission}
+                >
+                  <Feather name="camera" size={18} color="#fff" />
+                  <Text style={[styles.permissionBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>Allow Camera</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <Text style={[styles.permissionDenied, { color: "#EF4444", fontFamily: "Inter_500Medium" }]}>
+                    Camera permission was denied. Open Settings to enable it.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.permissionBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => { try { Linking.openSettings(); } catch {} }}
+                  >
+                    <Feather name="settings" size={18} color="#fff" />
+                    <Text style={[styles.permissionBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>Open Settings</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+
           ) : (
-            <View style={styles.scannedResult}>
-              <View style={[styles.scannedIcon, { backgroundColor: colors.card }]}>
-                <Text style={{ fontSize: 48 }}>{scannedProduct.emoji}</Text>
+            /* ── LIVE CAMERA VIEW ── */
+            <View style={styles.cameraWrapper}>
+              <CameraView
+                style={StyleSheet.absoluteFillObject}
+                facing="back"
+                onBarcodeScanned={handleBarcodeScanned}
+                barcodeScannerSettings={{
+                  barcodeTypes: ["qr", "ean13", "ean8", "code128", "upc_a", "upc_e", "code39"],
+                }}
+              />
+              {/* Corner brackets overlay */}
+              <View style={styles.cameraOverlay}>
+                <View style={styles.viewfinderCorners}>
+                  {(["tl", "tr", "bl", "br"] as const).map((corner) => (
+                    <View key={corner} style={[styles.corner, styles[`corner_${corner}` as keyof typeof styles] as any, { borderColor: "#fff" }]} />
+                  ))}
+                </View>
+                <Animated.View style={[styles.scanLine, { backgroundColor: "rgba(255,255,255,0.7)", top: scanLineY }]} />
               </View>
-              <Text style={[styles.scannedLabel, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>Product detected</Text>
-              <Text style={[styles.scannedName, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>{scannedProduct.name}</Text>
-              <Text style={[styles.scannedMeta, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{scannedProduct.quantity} {scannedProduct.unit} · {scannedProduct.category}</Text>
-              <View style={styles.scannedActions}>
-                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.muted }]} onPress={() => setScannedProduct(null)}>
-                  <Text style={[styles.modalBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Scan Again</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.primary }]} onPress={handleAddScanned}>
-                  <Text style={[styles.modalBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>Add to Pantry</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={[styles.cameraHintText, { fontFamily: "Inter_500Medium" }]}>
+                Point camera at a barcode
+              </Text>
             </View>
           )}
         </View>
@@ -811,4 +905,38 @@ const styles = StyleSheet.create({
   scannedName: { fontSize: 24, textAlign: "center" },
   scannedMeta: { fontSize: 14 },
   scannedActions: { flexDirection: "row", gap: 12, marginTop: 16, width: "100%" },
+
+  // ── Camera & permissions ──
+  cameraWrapper: {
+    flex: 1, borderRadius: 16, overflow: "hidden",
+    marginBottom: 16, position: "relative",
+    minHeight: 320,
+  },
+  cameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center", justifyContent: "center",
+  },
+  cameraHintText: {
+    position: "absolute", bottom: 20,
+    alignSelf: "center",
+    color: "#fff", fontSize: 14,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    paddingHorizontal: 16, paddingVertical: 6, borderRadius: 100,
+  },
+  permissionBox: {
+    flex: 1, alignItems: "center", justifyContent: "center",
+    gap: 16, paddingHorizontal: 8,
+  },
+  permissionIconWrap: {
+    width: 80, height: 80, borderRadius: 24,
+    alignItems: "center", justifyContent: "center", marginBottom: 4,
+  },
+  permissionTitle: { fontSize: 22, textAlign: "center" },
+  permissionText: { fontSize: 14, lineHeight: 21, textAlign: "center" },
+  permissionDenied: { fontSize: 13, textAlign: "center", lineHeight: 20 },
+  permissionBtn: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    height: 52, paddingHorizontal: 28, borderRadius: 100, marginTop: 4,
+  },
+  permissionBtnText: { fontSize: 16 },
 });

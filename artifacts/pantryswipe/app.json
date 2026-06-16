@@ -15,13 +15,17 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.pantryswipe.app"
+      "bundleIdentifier": "com.pantryswipe.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "PantrySwipe uses your camera to scan barcodes and automatically add food items to your pantry."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#141210"
-      }
+      },
+      "permissions": ["android.permission.CAMERA"]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -34,7 +38,13 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "PantrySwipe uses your camera to scan barcodes and automatically add food items to your pantry."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
