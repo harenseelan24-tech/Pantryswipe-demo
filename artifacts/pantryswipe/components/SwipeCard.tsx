@@ -61,6 +61,16 @@ export default function SwipeCard({
   const pan = useRef(new Animated.ValueXY()).current;
   const cardHeight = containerHeight > 0 ? containerHeight - 8 : SCREEN_HEIGHT * 0.62;
 
+  // Mirror dynamic props into refs so the frozen PanResponder closure always reads live values
+  const isTopRef = useRef(isTop);
+  isTopRef.current = isTop;
+  const onSwipeLeftRef = useRef(onSwipeLeft);
+  onSwipeLeftRef.current = onSwipeLeft;
+  const onSwipeRightRef = useRef(onSwipeRight);
+  onSwipeRightRef.current = onSwipeRight;
+  const onSwipeUpRef = useRef(onSwipeUp);
+  onSwipeUpRef.current = onSwipeUp;
+
   // Image section = top 58%, info section = bottom 42%
   const imageSectionH = cardHeight * 0.58;
 
@@ -89,9 +99,9 @@ export default function SwipeCard({
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => isTop,
+      onStartShouldSetPanResponder: () => isTopRef.current,
       onMoveShouldSetPanResponder: (_, gs) =>
-        isTop && (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5),
+        isTopRef.current && (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5),
       onPanResponderGrant: () => {
         pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
         pan.setValue({ x: 0, y: 0 });
@@ -107,19 +117,19 @@ export default function SwipeCard({
             toValue: { x: SCREEN_WIDTH * 1.5, y: gs.dy * 1.2 },
             duration: 240,
             useNativeDriver: false,
-          }).start(onSwipeRight);
+          }).start(() => onSwipeRightRef.current());
         } else if (gs.vx < -0.5 || gs.dx < -SWIPE_THRESHOLD) {
           Animated.timing(pan, {
             toValue: { x: -SCREEN_WIDTH * 1.5, y: gs.dy * 1.2 },
             duration: 240,
             useNativeDriver: false,
-          }).start(onSwipeLeft);
+          }).start(() => onSwipeLeftRef.current());
         } else if (gs.vy < -0.5 || gs.dy < SWIPE_UP_THRESHOLD) {
           Animated.timing(pan, {
             toValue: { x: gs.dx, y: -SCREEN_HEIGHT },
             duration: 260,
             useNativeDriver: false,
-          }).start(onSwipeUp);
+          }).start(() => onSwipeUpRef.current());
         } else {
           Animated.spring(pan, {
             toValue: { x: 0, y: 0 },
