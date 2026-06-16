@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import {
   Animated,
   Dimensions,
@@ -15,27 +15,10 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useApp } from "@/context/AppContext";
+import { useColors } from "@/hooks/useColors";
 
 const { width } = Dimensions.get("window");
 const TOTAL_STEPS = 9;
-
-// ─── Design tokens ────────────────────────────────────────────────────────────
-const OB = {
-  bg: "#FFFFFF",
-  card: "#F0F6FF",
-  blue: "#2B7FFF",
-  blueLight: "#EBF3FF",
-  text: "#0F1C2E",
-  muted: "#94A3B8",
-  border: "#E2EAFF",
-  error: "#EF4444",
-  success: "#10B981",
-  amber: "#F59E0B",
-  amberLight: "#FFF8EB",
-  red: "#DC2626",
-  redLight: "#FEF2F2",
-  redBorder: "#FECACA",
-};
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 const PROFANITY_LIST = [
@@ -133,6 +116,26 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { updateProfile, completeSetup } = useApp();
+  const appColors = useColors();
+
+  const OB = useMemo(() => ({
+    bg: appColors.background,
+    card: appColors.card,
+    blue: appColors.primary,
+    blueLight: appColors.cardElevated,
+    text: appColors.text,
+    muted: appColors.textSecondary,
+    border: appColors.border,
+    error: appColors.destructive,
+    success: appColors.herbGreen,
+    amber: appColors.saffron,
+    amberLight: appColors.background === "#07101E" ? "#1C1200" : "#FFF8EB",
+    red: "#DC2626",
+    redLight: "#FEF2F2",
+    redBorder: "#FECACA",
+  }), [appColors]);
+
+  const styles = useMemo(() => makeStyles(OB), [OB]);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const loadingProgress = useRef(new Animated.Value(0)).current;
@@ -600,7 +603,14 @@ export default function OnboardingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+type OBType = {
+  bg: string; card: string; blue: string; blueLight: string; text: string;
+  muted: string; border: string; error: string; success: string; amber: string;
+  amberLight: string; red: string; redLight: string; redBorder: string;
+};
+
+function makeStyles(OB: OBType) {
+  return StyleSheet.create({
   container: { flex: 1 },
   header: { paddingBottom: 12 },
   headerRow: { flexDirection: "row", alignItems: "center" },
@@ -689,7 +699,7 @@ const styles = StyleSheet.create({
   ctaText: { color: "#fff", fontSize: 17, fontWeight: "700" },
   ctaTextOff: { color: OB.muted },
 
-  loadScreen: { flex: 1, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+  loadScreen: { flex: 1, backgroundColor: OB.bg, alignItems: "center", justifyContent: "center" },
   loadContent: { width: "100%", paddingHorizontal: 40, alignItems: "center" },
   loadTitle: { fontSize: 24, fontWeight: "800", color: OB.text, letterSpacing: -0.5, marginBottom: 28 },
   foodRow: { flexDirection: "row", gap: 14, marginBottom: 0 },
@@ -701,4 +711,5 @@ const styles = StyleSheet.create({
   doneWrap: { alignItems: "center", gap: 16 },
   doneEmoji: { fontSize: 72 },
   doneText: { fontSize: 26, fontWeight: "800", color: OB.text, letterSpacing: -0.5 },
-});
+  });
+}
