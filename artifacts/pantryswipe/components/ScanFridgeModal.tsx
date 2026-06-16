@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   View, Text, TouchableOpacity, Modal, StyleSheet,
-  Platform, ScrollView, Animated,
+  Platform, ScrollView, Animated, ActivityIndicator,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useCameraStream } from "@/hooks/useCameraStream";
@@ -23,9 +24,26 @@ function generateId() {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 }
 
+function mergeItems(prev: DetectedItem[], newItems: DetectedItem[]): DetectedItem[] {
+  let updated = [...prev];
+  for (const ni of newItems) {
+    const existing = updated.find((e) => e.name.toLowerCase() === ni.name.toLowerCase());
+    if (existing) {
+      updated = updated.map((e) =>
+        e.name.toLowerCase() === ni.name.toLowerCase()
+          ? { ...e, quantity: e.quantity + ni.quantity }
+          : e
+      );
+    } else {
+      updated.push({ ...ni, id: generateId(), emoji: CATEGORY_EMOJIS[ni.category?.toLowerCase()] ?? "🍽️" });
+    }
+  }
+  return updated;
+}
+
 export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
   const colors = useColors();
-  const { videoRef, isLoading, error, startStream, captureFrame, stopStream } = useCameraStream("environment");
+  const { videoRef, isLoading: webLoading, error, startStream, captureFrame, stopStream } = useCameraStream("environment");
 
   const [detectedItems, setDetectedItems] = useState<DetectedItem[]>([]);
   const [noItemsCount, setNoItemsCount] = useState(0);
@@ -33,6 +51,11 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
   const [offlineError, setOfflineError] = useState(false);
   const [permDenied, setPermDenied] = useState(false);
   const [scanning, setScanning] = useState(false);
+
+  // Native-only state
+  const [nativePhase, setNativePhase] = useState<"idle" | "scanning" | "error-perm" | "error-offline" | "error-unknown">("idle");
+  const [nativeLoading, setNativeLoading] = useState(false);
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pillAnims = useRef<Record<string, Animated.Value>>({});
 
@@ -42,14 +65,17 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
 
   const handleClose = useCallback(() => {
     stopScanning();
-    stopStream();
+    if (Platform.OS === "web") stopStream();
     setDetectedItems([]);
     setPermDenied(false);
     setOfflineError(false);
     setSlowWarning(false);
+    setNativePhase("idle");
+    setNativeLoading(false);
     onClose();
   }, [stopScanning, stopStream, onClose]);
 
+  // ── Web: start stream on open ──────────────────────────────────────────────
   useEffect(() => {
     if (!visible || Platform.OS !== "web") return;
     (async () => {
@@ -59,6 +85,7 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
     return () => { stopScanning(); stopStream(); };
   }, [visible]);
 
+  // ── Web: polling scan loop ─────────────────────────────────────────────────
   useEffect(() => {
     if (!visible || !scanning || Platform.OS !== "web") return;
 
@@ -89,23 +116,14 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
         } else {
           setNoItemsCount(0);
           setDetectedItems((prev) => {
-            let updated = [...prev];
-            for (const ni of newItems) {
-              const existing = updated.find((e) => e.name.toLowerCase() === ni.name.toLowerCase());
-              if (existing) {
-                updated = updated.map((e) =>
-                  e.name.toLowerCase() === ni.name.toLowerCase()
-                    ? { ...e, quantity: e.quantity + ni.quantity }
-                    : e
-                );
-              } else {
-                const id = generateId();
-                pillAnims.current[id] = new Animated.Value(30);
-                Animated.spring(pillAnims.current[id], { toValue: 0, useNativeDriver: true, tension: 80 }).start();
-                updated.push({ ...ni, id, emoji: CATEGORY_EMOJIS[ni.category?.toLowerCase()] ?? "🍽️" });
+            const merged = mergeItems(prev, newItems);
+            for (const item of merged) {
+              if (!pillAnims.current[item.id]) {
+                pillAnims.current[item.id] = new Animated.Value(30);
+                Animated.spring(pillAnims.current[item.id], { toValue: 0, useNativeDriver: true, tension: 80 }).start();
               }
             }
-            return updated;
+            return merged;
           });
         }
       } catch {
@@ -116,11 +134,67 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
     return () => stopScanning();
   }, [visible, scanning]);
 
-  const handleDone = useCallback(() => {
+  const handleWebDone = useCallback(() => {
     stopScanning();
     stopStream();
     onDone(detectedItems);
   }, [detectedItems, stopScanning, stopStream, onDone]);
+
+  // ── Native: take a photo and scan it ──────────────────────────────────────
+  const handleNativeScan = useCallback(async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      setNativePhase("error-perm");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: "images",
+      base64: true,
+      quality: 0.7,
+      allowsEditing: false,
+    });
+
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+
+    const base64 = result.assets[0].base64;
+    setNativeLoading(true);
+    setNativePhase("scanning");
+
+    try {
+      const res = await fetch(`${API_BASE}/vision/scan-pantry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64 }),
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!res.ok) throw new Error("api-error");
+      const data = (await res.json()) as { items?: DetectedItem[] };
+      const newItems = data.items ?? [];
+
+      setDetectedItems((prev) => {
+        const merged = mergeItems(prev, newItems);
+        for (const item of merged) {
+          if (!pillAnims.current[item.id]) {
+            pillAnims.current[item.id] = new Animated.Value(30);
+            Animated.spring(pillAnims.current[item.id], { toValue: 0, useNativeDriver: true, tension: 80 }).start();
+          }
+        }
+        return merged;
+      });
+      setNativePhase("idle");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.name : "";
+      if (msg === "NetworkError" || msg === "AbortError") {
+        setNativePhase("error-offline");
+      } else {
+        setNativePhase("error-unknown");
+      }
+    } finally {
+      setNativeLoading(false);
+    }
+  }, []);
 
   const s = styles(colors);
 
@@ -129,26 +203,22 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={handleClose}>
       <View style={s.root}>
+
+        {/* ── WEB ─────────────────────────────────────────────────────── */}
         {Platform.OS === "web" ? (
           <>
-            {/* Live video */}
             <video
               ref={videoRef as React.RefObject<HTMLVideoElement>}
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" } as React.CSSProperties}
-              autoPlay
-              playsInline
-              muted
+              autoPlay playsInline muted
             />
 
-            {/* Scan frame guide */}
             <View style={s.frameGuide} pointerEvents="none">
               <Animated.View style={s.scanLine} />
             </View>
 
-            {/* Overlay instruction */}
             <Text style={s.instruction}>Point at food items — hold steady</Text>
 
-            {/* State overlays */}
             {permDenied && (
               <View style={s.stateCard}>
                 <Text style={s.stateTitle}>📷 Camera access denied</Text>
@@ -171,18 +241,15 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
               </View>
             )}
 
-            {isLoading && !permDenied && (
+            {webLoading && !permDenied && (
               <View style={s.stateCard}>
                 <Text style={s.stateTitle}>📷 Starting camera...</Text>
               </View>
             )}
 
-            {/* Bottom tray */}
-            {!permDenied && !offlineError && !isLoading && (
+            {!permDenied && !offlineError && !webLoading && (
               <View style={s.bottomTray}>
-                {slowWarning && (
-                  <Text style={s.slowTxt}>⏳ Taking longer than usual...</Text>
-                )}
+                {slowWarning && <Text style={s.slowTxt}>⏳ Taking longer than usual...</Text>}
                 {noItemsCount >= 3 && detectedItems.length === 0 && (
                   <Text style={s.slowTxt}>🔍 Nothing detected yet — move closer and ensure good lighting</Text>
                 )}
@@ -204,7 +271,7 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
                 ) : (
                   <TouchableOpacity
                     style={[s.actionBtn, { backgroundColor: detectedItems.length > 0 ? colors.primary : colors.border }]}
-                    onPress={handleDone}
+                    onPress={handleWebDone}
                     disabled={detectedItems.length === 0}
                   >
                     <Text style={s.actionBtnTxt}>Done → {detectedItems.length} item{detectedItems.length !== 1 ? "s" : ""}</Text>
@@ -214,18 +281,85 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
             )}
           </>
         ) : (
-          /* Native fallback — tells user to use web or use existing expo-camera flow */
-          <View style={s.nativeFallback}>
-            <Text style={{ fontSize: 48 }}>📷</Text>
-            <Text style={s.stateTitle}>Real-time AI scanning is available on the web version.</Text>
-            <Text style={s.stateBody}>On a physical device, use the app's built-in camera scan instead.</Text>
-            <TouchableOpacity style={[s.stateBtn, { backgroundColor: colors.primary }]} onPress={handleClose}>
-              <Text style={s.stateBtnTxt}>Go Back</Text>
-            </TouchableOpacity>
+          /* ── NATIVE ─────────────────────────────────────────────────── */
+          <View style={s.nativeRoot}>
+            <Text style={s.nativeTitle}>📸 Scan Your Fridge or Pantry</Text>
+            <Text style={s.nativeSubtitle}>
+              Take a photo of your fridge shelf, pantry cupboard, or any food items. Claude AI will identify everything.
+            </Text>
+
+            {/* Detected items */}
+            {detectedItems.length > 0 && (
+              <View style={s.nativePillsBox}>
+                <Text style={s.nativePillsHeader}>
+                  {detectedItems.length} item{detectedItems.length !== 1 ? "s" : ""} detected
+                </Text>
+                <ScrollView style={s.nativePillScroll} showsVerticalScrollIndicator={false}>
+                  {detectedItems.map((item) => (
+                    <Animated.View
+                      key={item.id}
+                      style={[s.nativePill, { transform: [{ translateY: pillAnims.current[item.id] ?? new Animated.Value(0) }] }]}
+                    >
+                      <Text style={s.nativePillTxt}>{item.emoji} {item.name} · {item.quantity} {item.unit}</Text>
+                    </Animated.View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Error states */}
+            {nativePhase === "error-perm" && (
+              <View style={s.nativeError}>
+                <Text style={s.nativeErrorTxt}>📷 Camera permission denied. Go to Settings → PantrySwipe → Camera and enable access.</Text>
+              </View>
+            )}
+            {nativePhase === "error-offline" && (
+              <View style={s.nativeError}>
+                <Text style={s.nativeErrorTxt}>📡 No internet connection. Connect to Wi-Fi or mobile data and try again.</Text>
+              </View>
+            )}
+            {nativePhase === "error-unknown" && (
+              <View style={s.nativeError}>
+                <Text style={s.nativeErrorTxt}>⚠️ Scan failed — please try again.</Text>
+              </View>
+            )}
+
+            {/* Loading overlay */}
+            {nativeLoading && (
+              <View style={s.nativeLoadingBox}>
+                <ActivityIndicator color={colors.primary} size="large" />
+                <Text style={s.nativeLoadingTxt}>AI is identifying your food items...</Text>
+              </View>
+            )}
+
+            {/* Action buttons */}
+            <View style={s.nativeActions}>
+              <TouchableOpacity
+                style={[s.nativePrimaryBtn, { backgroundColor: colors.primary, opacity: nativeLoading ? 0.6 : 1 }]}
+                onPress={handleNativeScan}
+                disabled={nativeLoading}
+              >
+                <Feather name="camera" size={20} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={s.nativePrimaryBtnTxt}>
+                  {detectedItems.length === 0 ? "Take a Photo" : "Scan Another Shelf"}
+                </Text>
+              </TouchableOpacity>
+
+              {detectedItems.length > 0 && (
+                <TouchableOpacity
+                  style={[s.nativeSecondaryBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => { stopScanning(); onDone(detectedItems); }}
+                >
+                  <Text style={s.nativeSecondaryBtnTxt}>
+                    Done — Add {detectedItems.length} Item{detectedItems.length !== 1 ? "s" : ""} →
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
 
-        {/* Close */}
+        {/* Close button */}
         <TouchableOpacity style={s.closeBtn} onPress={handleClose}>
           <Feather name="x" size={22} color="#fff" />
         </TouchableOpacity>
@@ -237,6 +371,8 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
 function styles(c: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: "#000" },
+
+    // Web styles
     frameGuide: {
       position: "absolute", top: "15%", left: "10%", right: "10%", height: "55%",
       borderWidth: 2, borderColor: "rgba(255,255,255,0.5)", borderRadius: 16, overflow: "hidden",
@@ -274,6 +410,48 @@ function styles(c: ReturnType<typeof useColors>) {
       width: 40, height: 40, borderRadius: 20,
       backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center",
     },
-    nativeFallback: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16, padding: 40 },
+
+    // Native styles
+    nativeRoot: {
+      flex: 1, backgroundColor: "#111", paddingTop: 100, paddingHorizontal: 24,
+      paddingBottom: 40, gap: 20,
+    },
+    nativeTitle: {
+      color: "#fff", fontSize: 24, fontWeight: "800", textAlign: "center",
+    },
+    nativeSubtitle: {
+      color: "rgba(255,255,255,0.65)", fontSize: 14, textAlign: "center", lineHeight: 20,
+    },
+    nativePillsBox: {
+      backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 16, padding: 16, gap: 8,
+    },
+    nativePillsHeader: {
+      color: "rgba(255,255,255,0.5)", fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5,
+    },
+    nativePillScroll: { maxHeight: 180 },
+    nativePill: {
+      backgroundColor: "rgba(91,142,245,0.85)", borderRadius: 20,
+      paddingHorizontal: 14, paddingVertical: 7, alignSelf: "flex-start", marginBottom: 6,
+    },
+    nativePillTxt: { color: "#fff", fontSize: 14, fontWeight: "600" },
+    nativeError: {
+      backgroundColor: "rgba(232,64,64,0.15)", borderRadius: 12,
+      padding: 14, borderWidth: 1, borderColor: "rgba(232,64,64,0.3)",
+    },
+    nativeErrorTxt: { color: "#FF8080", fontSize: 13, textAlign: "center", lineHeight: 18 },
+    nativeLoadingBox: {
+      alignItems: "center", gap: 12, paddingVertical: 8,
+    },
+    nativeLoadingTxt: { color: "rgba(255,255,255,0.7)", fontSize: 14 },
+    nativeActions: { gap: 12, marginTop: "auto" },
+    nativePrimaryBtn: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      paddingVertical: 16, borderRadius: 14,
+    },
+    nativePrimaryBtnTxt: { color: "#fff", fontSize: 17, fontWeight: "700" },
+    nativeSecondaryBtn: {
+      paddingVertical: 15, borderRadius: 14, alignItems: "center",
+    },
+    nativeSecondaryBtnTxt: { color: "#fff", fontSize: 16, fontWeight: "700" },
   });
 }

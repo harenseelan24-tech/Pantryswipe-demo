@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, Modal, StyleSheet,
   Platform, ActivityIndicator,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useCameraStream } from "@/hooks/useCameraStream";
@@ -23,37 +24,44 @@ function generateId() {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 }
 
-type Phase = "preview" | "reading" | "error-unclear" | "error-offline" | "error-denied";
+type WebPhase = "preview" | "reading" | "error-unclear" | "error-offline" | "error-denied";
+type NativePhase = "idle" | "reading" | "error-unclear" | "error-offline" | "error-perm" | "error-unknown";
 
 export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
   const colors = useColors();
-  const { videoRef, isLoading, error, startStream, captureFrame, stopStream } = useCameraStream("environment");
+  const { videoRef, isLoading, startStream, captureFrame, stopStream } = useCameraStream("environment");
 
-  const [phase, setPhase] = useState<Phase>("preview");
+  // Web state
+  const [webPhase, setWebPhase] = useState<WebPhase>("preview");
   const [torchOn, setTorchOn] = useState(false);
-  const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Native state
+  const [nativePhase, setNativePhase] = useState<NativePhase>("idle");
+
   const handleClose = useCallback(() => {
-    stopStream();
-    setPhase("preview");
+    if (Platform.OS === "web") stopStream();
+    setWebPhase("preview");
+    setNativePhase("idle");
     setTorchOn(false);
     onClose();
   }, [stopStream, onClose]);
 
+  // ── Web: start stream on open ──────────────────────────────────────────────
   useEffect(() => {
     if (!visible || Platform.OS !== "web") return;
     (async () => {
       const ok = await startStream();
-      if (!ok) setPhase("error-denied");
+      if (!ok) setWebPhase("error-denied");
     })();
     return () => stopStream();
   }, [visible]);
 
-  const sendImage = useCallback(async (base64: string) => {
-    setPhase("reading");
+  // ── Web: send captured frame to API ───────────────────────────────────────
+  const sendImageWeb = useCallback(async (base64: string) => {
+    setWebPhase("reading");
 
-    if (!navigator.onLine) { setPhase("error-offline"); return; }
+    if (!navigator.onLine) { setWebPhase("error-offline"); return; }
 
     const attemptScan = async (): Promise<DetectedItem[] | null> => {
       try {
@@ -74,7 +82,7 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
     let items = await attemptScan();
     if (items === null) items = await attemptScan();
     if (items === null || items.length < 2) {
-      setPhase("error-unclear");
+      setWebPhase("error-unclear");
       return;
     }
 
@@ -87,13 +95,13 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
     onDone(enriched);
   }, [stopStream, onDone]);
 
-  const handleShutter = useCallback(() => {
+  const handleWebShutter = useCallback(() => {
     const frame = captureFrame();
     if (!frame) return;
-    sendImage(frame);
-  }, [captureFrame, sendImage]);
+    sendImageWeb(frame);
+  }, [captureFrame, sendImageWeb]);
 
-  const handleGallery = useCallback(() => {
+  const handleWebGallery = useCallback(() => {
     if (fileInputRef.current) fileInputRef.current.click();
   }, []);
 
@@ -104,10 +112,10 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
     reader.onload = (ev) => {
       const result = ev.target?.result as string;
       const base64 = result.replace(/^data:image\/[a-z]+;base64,/, "");
-      sendImage(base64);
+      sendImageWeb(base64);
     };
     reader.readAsDataURL(file);
-  }, [sendImage]);
+  }, [sendImageWeb]);
 
   const toggleTorch = useCallback(async () => {
     try {
@@ -121,6 +129,111 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
     }
   }, [torchOn, videoRef]);
 
+  // ── Native: launch camera and send to API ─────────────────────────────────
+  const handleNativeCapture = useCallback(async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      setNativePhase("error-perm");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: "images",
+      base64: true,
+      quality: 0.8,
+      allowsEditing: false,
+    });
+
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+
+    const base64 = result.assets[0].base64;
+    setNativePhase("reading");
+
+    const attemptScan = async (): Promise<DetectedItem[] | null> => {
+      try {
+        const res = await fetch(`${API_BASE}/vision/scan-receipt`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: base64 }),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!res.ok) return null;
+        const data = (await res.json()) as { items?: DetectedItem[] };
+        return data.items ?? [];
+      } catch (err: unknown) {
+        const name = err instanceof Error ? err.name : "";
+        if (name === "AbortError" || name === "NetworkError") throw err;
+        return null;
+      }
+    };
+
+    try {
+      let items = await attemptScan();
+      if (items === null) items = await attemptScan();
+
+      if (items === null || items.length < 2) {
+        setNativePhase("error-unclear");
+        return;
+      }
+
+      const enriched = items.map((item) => ({
+        ...item,
+        id: generateId(),
+        emoji: CATEGORY_EMOJIS[item.category?.toLowerCase()] ?? "🍽️",
+      }));
+      onDone(enriched);
+    } catch (err: unknown) {
+      const name = err instanceof Error ? err.name : "";
+      if (name === "AbortError" || name === "NetworkError") {
+        setNativePhase("error-offline");
+      } else {
+        setNativePhase("error-unknown");
+      }
+    }
+  }, [onDone]);
+
+  const handleNativeGallery = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      setNativePhase("error-perm");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      base64: true,
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+
+    const base64 = result.assets[0].base64;
+    setNativePhase("reading");
+
+    try {
+      const res = await fetch(`${API_BASE}/vision/scan-receipt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64 }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) throw new Error("api-error");
+      const data = (await res.json()) as { items?: DetectedItem[] };
+      const items = data.items ?? [];
+
+      if (items.length < 2) { setNativePhase("error-unclear"); return; }
+
+      const enriched = items.map((item) => ({
+        ...item,
+        id: generateId(),
+        emoji: CATEGORY_EMOJIS[item.category?.toLowerCase()] ?? "🍽️",
+      }));
+      onDone(enriched);
+    } catch {
+      setNativePhase("error-offline");
+    }
+  }, [onDone]);
+
   const s = styles(colors);
 
   if (!visible) return null;
@@ -128,6 +241,8 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={handleClose}>
       <View style={s.root}>
+
+        {/* ── WEB ─────────────────────────────────────────────────────── */}
         {Platform.OS === "web" ? (
           <>
             <video
@@ -136,11 +251,10 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
               autoPlay playsInline muted
             />
 
-            {/* Receipt frame guide */}
-            {phase === "preview" && (
+            {webPhase === "preview" && (
               <>
                 <View style={s.receiptFrame} pointerEvents="none">
-                  {(["tl","tr","bl","br"] as const).map((c) => (
+                  {(["tl", "tr", "bl", "br"] as const).map((c) => (
                     <View key={c} style={[s.corner, {
                       top: c[0] === "t" ? 0 : undefined, bottom: c[0] === "b" ? 0 : undefined,
                       left: c[1] === "l" ? 0 : undefined, right: c[1] === "r" ? 0 : undefined,
@@ -151,23 +265,20 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
                 </View>
                 <Text style={s.instruction}>Align receipt in the frame — tap shutter to capture</Text>
                 <View style={s.bottomTray}>
-                  <TouchableOpacity style={s.shutter} onPress={handleShutter}>
+                  <TouchableOpacity style={s.shutter} onPress={handleWebShutter}>
                     <View style={s.shutterInner} />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={handleGallery}>
+                  <TouchableOpacity onPress={handleWebGallery}>
                     <Text style={s.galleryTxt}>Upload from gallery</Text>
                   </TouchableOpacity>
                 </View>
-
-                {/* Torch toggle */}
                 <TouchableOpacity style={s.torchBtn} onPress={toggleTorch}>
                   <Feather name={torchOn ? "zap" : "zap-off"} size={22} color="#fff" />
                 </TouchableOpacity>
               </>
             )}
 
-            {/* Reading overlay */}
-            {phase === "reading" && (
+            {webPhase === "reading" && (
               <View style={s.overlay}>
                 <Text style={{ fontSize: 48 }}>🧾</Text>
                 <ActivityIndicator color="#fff" size="large" style={{ marginTop: 16 }} />
@@ -175,15 +286,12 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
               </View>
             )}
 
-            {/* Error states */}
-            {phase === "error-unclear" && (
+            {webPhase === "error-unclear" && (
               <View style={s.overlay}>
                 <Text style={{ fontSize: 40 }}>📄</Text>
                 <Text style={s.errorTitle}>Receipt unclear</Text>
-                <Text style={s.errorBody}>
-                  Try better lighting, flatten the receipt, or move closer.
-                </Text>
-                <TouchableOpacity style={[s.errorBtn, { backgroundColor: colors.primary }]} onPress={() => setPhase("preview")}>
+                <Text style={s.errorBody}>Try better lighting, flatten the receipt, or move closer.</Text>
+                <TouchableOpacity style={[s.errorBtn, { backgroundColor: colors.primary }]} onPress={() => setWebPhase("preview")}>
                   <Text style={s.errorBtnTxt}>Try Again</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleClose}>
@@ -192,36 +300,33 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
               </View>
             )}
 
-            {phase === "error-offline" && (
+            {webPhase === "error-offline" && (
               <View style={s.overlay}>
                 <Text style={s.errorTitle}>📡 You're offline</Text>
-                <Text style={s.errorBody}>Camera scanning needs an internet connection. Try manual entry instead.</Text>
+                <Text style={s.errorBody}>Camera scanning needs an internet connection.</Text>
                 <TouchableOpacity style={[s.errorBtn, { backgroundColor: colors.primary }]} onPress={handleClose}>
                   <Text style={s.errorBtnTxt}>Go Back</Text>
                 </TouchableOpacity>
               </View>
             )}
 
-            {phase === "error-denied" && (
+            {webPhase === "error-denied" && (
               <View style={s.overlay}>
                 <Text style={s.errorTitle}>📷 Camera access denied</Text>
-                <Text style={s.errorBody}>
-                  Go to your browser settings → Site Settings → Camera → Allow for this site.
-                </Text>
+                <Text style={s.errorBody}>Go to your browser settings → Site Settings → Camera → Allow for this site.</Text>
                 <TouchableOpacity style={[s.errorBtn, { backgroundColor: colors.primary }]} onPress={handleClose}>
                   <Text style={s.errorBtnTxt}>Go Back</Text>
                 </TouchableOpacity>
               </View>
             )}
 
-            {isLoading && phase === "preview" && (
+            {isLoading && webPhase === "preview" && (
               <View style={s.overlay}>
                 <ActivityIndicator color="#fff" size="large" />
                 <Text style={s.overlayTxt}>Starting camera...</Text>
               </View>
             )}
 
-            {/* Hidden file input for gallery */}
             {typeof document !== "undefined" && (
               <input
                 ref={fileInputRef as React.RefObject<HTMLInputElement>}
@@ -234,13 +339,94 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
             )}
           </>
         ) : (
-          <View style={s.nativeFallback}>
-            <Text style={{ fontSize: 48 }}>🧾</Text>
-            <Text style={s.errorTitle}>Real-time receipt scanning is available on the web version.</Text>
-            <Text style={s.errorBody}>On a physical device, use the app's built-in camera scan instead.</Text>
-            <TouchableOpacity style={[s.errorBtn, { backgroundColor: colors.primary }]} onPress={handleClose}>
-              <Text style={s.errorBtnTxt}>Go Back</Text>
-            </TouchableOpacity>
+          /* ── NATIVE ─────────────────────────────────────────────────── */
+          <View style={s.nativeRoot}>
+            <Text style={s.nativeTitle}>🧾 Scan Your Receipt</Text>
+            <Text style={s.nativeSubtitle}>
+              Take a photo of your grocery receipt and Claude AI will extract all the food items automatically.
+            </Text>
+
+            {/* Reading overlay */}
+            {nativePhase === "reading" && (
+              <View style={s.nativeLoadingBox}>
+                <Text style={{ fontSize: 56, textAlign: "center" }}>🧾</Text>
+                <ActivityIndicator color={colors.primary} size="large" style={{ marginTop: 8 }} />
+                <Text style={s.nativeLoadingTxt}>Reading your receipt...</Text>
+                <Text style={s.nativeLoadingHint}>This usually takes 5–10 seconds</Text>
+              </View>
+            )}
+
+            {/* Error states */}
+            {nativePhase === "error-unclear" && (
+              <View style={s.nativeError}>
+                <Text style={s.nativeErrorTitle}>📄 Receipt unclear</Text>
+                <Text style={s.nativeErrorTxt}>
+                  Try better lighting, flatten the receipt fully, or move closer. Make sure the whole receipt is in frame.
+                </Text>
+                <TouchableOpacity
+                  style={[s.nativeRetryBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => setNativePhase("idle")}
+                >
+                  <Text style={s.nativeRetryBtnTxt}>Try Again</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {nativePhase === "error-perm" && (
+              <View style={s.nativeError}>
+                <Text style={s.nativeErrorTitle}>📷 Permission denied</Text>
+                <Text style={s.nativeErrorTxt}>
+                  Go to Settings → PantrySwipe → Camera and enable camera access, then come back.
+                </Text>
+              </View>
+            )}
+
+            {nativePhase === "error-offline" && (
+              <View style={s.nativeError}>
+                <Text style={s.nativeErrorTitle}>📡 No connection</Text>
+                <Text style={s.nativeErrorTxt}>Connect to Wi-Fi or mobile data and try again.</Text>
+                <TouchableOpacity
+                  style={[s.nativeRetryBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => setNativePhase("idle")}
+                >
+                  <Text style={s.nativeRetryBtnTxt}>Try Again</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {nativePhase === "error-unknown" && (
+              <View style={s.nativeError}>
+                <Text style={s.nativeErrorTitle}>⚠️ Scan failed</Text>
+                <Text style={s.nativeErrorTxt}>Something went wrong. Please try again.</Text>
+                <TouchableOpacity
+                  style={[s.nativeRetryBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => setNativePhase("idle")}
+                >
+                  <Text style={s.nativeRetryBtnTxt}>Try Again</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Buttons — shown when not loading */}
+            {nativePhase !== "reading" && (
+              <View style={s.nativeActions}>
+                <TouchableOpacity
+                  style={[s.nativePrimaryBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleNativeCapture}
+                >
+                  <Feather name="camera" size={20} color="#fff" style={{ marginRight: 8 }} />
+                  <Text style={s.nativePrimaryBtnTxt}>Take a Photo</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[s.nativeSecondaryBtn, { borderColor: "rgba(255,255,255,0.2)" }]}
+                  onPress={handleNativeGallery}
+                >
+                  <Feather name="image" size={18} color="rgba(255,255,255,0.7)" style={{ marginRight: 8 }} />
+                  <Text style={s.nativeSecondaryBtnTxt}>Choose from Gallery</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
@@ -255,6 +441,8 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
 function styles(c: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: "#000" },
+
+    // Web styles
     receiptFrame: {
       position: "absolute", top: "12%", left: "8%", right: "8%", height: "60%", borderRadius: 4,
     },
@@ -296,6 +484,43 @@ function styles(c: ReturnType<typeof useColors>) {
       width: 40, height: 40, borderRadius: 20,
       backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center",
     },
-    nativeFallback: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16, padding: 40 },
+
+    // Native styles
+    nativeRoot: {
+      flex: 1, backgroundColor: "#111", paddingTop: 100, paddingHorizontal: 24,
+      paddingBottom: 56, gap: 24,
+    },
+    nativeTitle: {
+      color: "#fff", fontSize: 26, fontWeight: "800", textAlign: "center",
+    },
+    nativeSubtitle: {
+      color: "rgba(255,255,255,0.6)", fontSize: 14, textAlign: "center", lineHeight: 20,
+    },
+    nativeLoadingBox: {
+      flex: 1, alignItems: "center", justifyContent: "center", gap: 12,
+    },
+    nativeLoadingTxt: { color: "#fff", fontSize: 18, fontWeight: "600" },
+    nativeLoadingHint: { color: "rgba(255,255,255,0.5)", fontSize: 13 },
+    nativeError: {
+      backgroundColor: "rgba(232,64,64,0.12)", borderRadius: 14,
+      padding: 18, gap: 10, borderWidth: 1, borderColor: "rgba(232,64,64,0.25)",
+    },
+    nativeErrorTitle: { color: "#FF8080", fontSize: 16, fontWeight: "700", textAlign: "center" },
+    nativeErrorTxt: { color: "rgba(255,255,255,0.65)", fontSize: 13, textAlign: "center", lineHeight: 18 },
+    nativeRetryBtn: {
+      marginTop: 4, paddingVertical: 12, paddingHorizontal: 28, borderRadius: 10, alignSelf: "center",
+    },
+    nativeRetryBtnTxt: { color: "#fff", fontSize: 14, fontWeight: "700" },
+    nativeActions: { gap: 12, marginTop: "auto" },
+    nativePrimaryBtn: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      paddingVertical: 17, borderRadius: 14,
+    },
+    nativePrimaryBtnTxt: { color: "#fff", fontSize: 17, fontWeight: "700" },
+    nativeSecondaryBtn: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      paddingVertical: 15, borderRadius: 14, borderWidth: 1,
+    },
+    nativeSecondaryBtnTxt: { color: "rgba(255,255,255,0.7)", fontSize: 15, fontWeight: "600" },
   });
 }
