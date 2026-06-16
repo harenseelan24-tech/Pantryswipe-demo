@@ -110,13 +110,13 @@ export default function SocialScreen() {
         </View>
 
         {/* Image */}
-        {imageSource ? (
-          <Image source={imageSource} style={styles.postImage} resizeMode="cover" />
-        ) : (
-          <View style={[styles.postImagePlaceholder, { backgroundColor: colors.muted }]}>
+        <View style={[styles.postImageContainer, { backgroundColor: colors.muted }]}>
+          {imageSource ? (
+            <Image source={imageSource} style={styles.postImage} resizeMode="contain" />
+          ) : (
             <Feather name="image" size={40} color={colors.textMuted} />
-          </View>
-        )}
+          )}
+        </View>
 
         {/* Actions */}
         <View style={styles.actionsRow}>
@@ -280,8 +280,8 @@ const styles = StyleSheet.create({
   timeAgo: { fontSize: 12 },
   followBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 100, borderWidth: 1.5 },
   followBtnText: { fontSize: 13 },
-  postImage: { width: "100%", aspectRatio: 4 / 5 },
-  postImagePlaceholder: { width: "100%", aspectRatio: 4 / 5, alignItems: "center", justifyContent: "center" },
+  postImageContainer: { width: "100%", aspectRatio: 4 / 5, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  postImage: { width: "100%", height: "100%" },
   actionsRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, gap: 18 },
   actionItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   actionCount: { fontSize: 14 },
