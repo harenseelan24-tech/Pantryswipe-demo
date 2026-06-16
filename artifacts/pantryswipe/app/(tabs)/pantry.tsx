@@ -41,7 +41,8 @@ const BARCODE_DEMOS: { name: string; quantity: number; unit: string; category: t
 export default function PantryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { pantryItems, addToPantry, removeFromPantry } = useApp();
+  const { pantryItems, addToPantry, removeFromPantry, getPantryMatchScore } = useApp();
+  const [showWhatCanIMake, setShowWhatCanIMake] = useState(false);
 
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [search, setSearch] = useState("");
@@ -68,6 +69,11 @@ export default function PantryScreen() {
   const completeRecipes = MOCK_RECIPES.filter((r) => r.ingredients.every((i) => i.inPantry)).length;
   const oneIngredientAway = MOCK_RECIPES.filter((r) => r.ingredients.filter((i) => !i.inPantry).length === 1).length;
   const pantryValue = pantryItems.reduce((acc, item) => acc + item.quantity * 0.5, 0).toFixed(0);
+  const matchableRecipes = MOCK_RECIPES
+    .map((r) => ({ recipe: r, score: getPantryMatchScore(r) }))
+    .filter(({ score }) => score >= 50)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20);
 
   const handleAddItem = () => {
     if (!newItemName.trim()) return;
@@ -246,35 +252,89 @@ export default function PantryScreen() {
           </View>
         )}
         ListFooterComponent={
-          <View style={[styles.intelligencePanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.intelligenceTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Pantry Intelligence</Text>
-            <View style={styles.intelligenceRows}>
-              <View style={styles.intelligenceRow}>
-                <View style={[styles.intelligenceIcon, { backgroundColor: colors.primary + "20" }]}>
-                  <Feather name="check-circle" size={14} color={colors.primary} />
+          <>
+            {/* ── What Can I Make? ── */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={[styles.whatPanel, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => {
+                setShowWhatCanIMake((p) => !p);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+            >
+              <View style={styles.whatPanelHeader}>
+                <Text style={{ fontSize: 22 }}>🍳</Text>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={[styles.whatPanelTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                    What Can I Make?
+                  </Text>
+                  <Text style={[styles.whatPanelSub, { color: colors.primary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
+                    {matchableRecipes.length} dishes with 50%+ match
+                  </Text>
                 </View>
-                <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                  <Text style={{ fontFamily: "Inter_700Bold", color: colors.primary }}>{completeRecipes} complete recipes</Text> you can cook right now
-                </Text>
+                <Feather
+                  name={showWhatCanIMake ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color={colors.textMuted}
+                />
               </View>
-              <View style={styles.intelligenceRow}>
-                <View style={[styles.intelligenceIcon, { backgroundColor: "#F5A623" + "20" }]}>
-                  <Feather name="plus-circle" size={14} color="#F5A623" />
+              {showWhatCanIMake && (
+                <View style={styles.whatPanelList}>
+                  {matchableRecipes.map(({ recipe, score }, index) => (
+                    <View
+                      key={recipe.id}
+                      style={[styles.whatPanelRow, index > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.whatPanelName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
+                          {recipe.title}
+                        </Text>
+                        <Text style={[styles.whatPanelMeta, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                          {recipe.cuisine} · {recipe.prepTime + recipe.cookTime} min · {recipe.calories} kcal
+                        </Text>
+                      </View>
+                      <View style={[styles.whatPanelScore, { backgroundColor: score >= 80 ? colors.primary + "20" : "#F5A62320" }]}>
+                        <Text style={[styles.whatPanelScoreText, { color: score >= 80 ? colors.primary : "#E09A00", fontFamily: "SpaceGrotesk_700Bold" }]}>
+                          {score}%
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
                 </View>
-                <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                  <Text style={{ fontFamily: "Inter_700Bold", color: "#F5A623" }}>1 ingredient away</Text> from {oneIngredientAway} more
-                </Text>
-              </View>
-              <View style={styles.intelligenceRow}>
-                <View style={[styles.intelligenceIcon, { backgroundColor: colors.saveBlue + "20" }]}>
-                  <Feather name="dollar-sign" size={14} color={colors.saveBlue} />
+              )}
+            </TouchableOpacity>
+
+            {/* ── Pantry Intelligence ── */}
+            <View style={[styles.intelligencePanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.intelligenceTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Pantry Intelligence</Text>
+              <View style={styles.intelligenceRows}>
+                <View style={styles.intelligenceRow}>
+                  <View style={[styles.intelligenceIcon, { backgroundColor: colors.primary + "20" }]}>
+                    <Feather name="check-circle" size={14} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                    <Text style={{ fontFamily: "Inter_700Bold", color: colors.primary }}>{completeRecipes} complete recipes</Text> you can cook right now
+                  </Text>
                 </View>
-                <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                  Estimated pantry value: <Text style={{ fontFamily: "SpaceGrotesk_600SemiBold", color: colors.saveBlue }}>${pantryValue}</Text>
-                </Text>
+                <View style={styles.intelligenceRow}>
+                  <View style={[styles.intelligenceIcon, { backgroundColor: "#F5A623" + "20" }]}>
+                    <Feather name="plus-circle" size={14} color="#F5A623" />
+                  </View>
+                  <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                    <Text style={{ fontFamily: "Inter_700Bold", color: "#F5A623" }}>1 ingredient away</Text> from {oneIngredientAway} more
+                  </Text>
+                </View>
+                <View style={styles.intelligenceRow}>
+                  <View style={[styles.intelligenceIcon, { backgroundColor: colors.saveBlue + "20" }]}>
+                    <Feather name="dollar-sign" size={14} color={colors.saveBlue} />
+                  </View>
+                  <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                    Estimated pantry value: <Text style={{ fontFamily: "SpaceGrotesk_600SemiBold", color: colors.saveBlue }}>${pantryValue}</Text>
+                  </Text>
+                </View>
               </View>
             </View>
-          </View>
+          </>
         }
       />
 
@@ -510,6 +570,38 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 15 },
   emptyBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 100, marginTop: 4 },
   emptyBtnText: { color: "#fff", fontSize: 15 },
+  whatPanel: {
+    marginTop: 8,
+    marginBottom: 2,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  whatPanelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+  },
+  whatPanelTitle: { fontSize: 15 },
+  whatPanelSub: { fontSize: 13, marginTop: 1 },
+  whatPanelList: { borderTopWidth: 1, borderTopColor: "transparent" },
+  whatPanelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  whatPanelName: { fontSize: 14 },
+  whatPanelMeta: { fontSize: 12, marginTop: 2 },
+  whatPanelScore: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 100,
+    minWidth: 46,
+    alignItems: "center",
+  },
+  whatPanelScoreText: { fontSize: 13 },
   intelligencePanel: { marginTop: 8, padding: 16, borderRadius: 16, borderWidth: 1, gap: 12 },
   intelligenceTitle: { fontSize: 15, marginBottom: 4 },
   intelligenceRows: { gap: 12 },

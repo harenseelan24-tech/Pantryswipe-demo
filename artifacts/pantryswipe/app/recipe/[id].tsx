@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
+  Animated,
   Image,
   Platform,
   ScrollView,
@@ -43,6 +44,58 @@ export default function RecipeDetailScreen() {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [cookMode, setCookMode] = useState(false);
   const [cookModeStep, setCookModeStep] = useState(0);
+  const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerLabel, setTimerLabel] = useState("");
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerPillAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (timerRunning && timerSeconds !== null && timerSeconds > 0) {
+      timerRef.current = setInterval(() => {
+        setTimerSeconds((prev) => {
+          if (prev === null || prev <= 1) {
+            clearInterval(timerRef.current!);
+            setTimerRunning(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [timerRunning]);
+
+  useEffect(() => {
+    if (timerSeconds !== null) {
+      Animated.spring(timerPillAnim, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }).start();
+    } else {
+      Animated.timing(timerPillAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [timerSeconds !== null]);
+
+  const startTimer = (minutes: number, label: string) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setTimerSeconds(minutes * 60);
+    setTimerLabel(label);
+    setTimerRunning(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const cancelTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setTimerRunning(false);
+    setTimerSeconds(null);
+    setTimerLabel("");
+  };
+
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom;
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -98,16 +151,39 @@ export default function RecipeDetailScreen() {
             {cookModeStep + 1}/{recipe.steps.length}
           </Text>
         </View>
+        {/* Live timer pill */}
+        {timerSeconds !== null && (
+          <Animated.View style={[styles.cookModeTimerPill, { opacity: timerPillAnim, transform: [{ scale: timerPillAnim }] }]}>
+            <Feather name="clock" size={15} color={timerSeconds === 0 ? "#fff" : colors.saffron} />
+            <Text style={[styles.cookModeTimerPillLabel, { color: timerSeconds === 0 ? "#fff" : "#F0EDE8" }]} numberOfLines={1}>
+              {timerLabel}
+            </Text>
+            <Text style={[styles.cookModeTimerPillTime, { color: timerSeconds === 0 ? "#00BFA5" : colors.saffron }]}>
+              {timerSeconds === 0 ? "Done! 🎉" : formatTime(timerSeconds)}
+            </Text>
+            <TouchableOpacity onPress={() => setTimerRunning((r) => !r)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Feather name={timerRunning ? "pause" : "play"} size={15} color="#9E9E9E" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={cancelTimer} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Feather name="x" size={15} color="#666" />
+            </TouchableOpacity>
+          </Animated.View>
+        )}
         <View style={styles.cookModeContent}>
           <View style={[styles.cookModeStepNum, { backgroundColor: colors.saffron }]}>
             <Text style={styles.cookModeStepNumText}>{currentStep.step}</Text>
           </View>
           <Text style={styles.cookModeInstruction}>{currentStep.instruction}</Text>
           {currentStep.timerMinutes && (
-            <TouchableOpacity style={[styles.cookModeTimer, { backgroundColor: "#1E1B18" }]}>
+            <TouchableOpacity
+              style={[styles.cookModeTimer, { backgroundColor: timerRunning && timerLabel === `Step ${currentStep.step}` ? colors.saffron + "25" : "#1E1B18" }]}
+              onPress={() => startTimer(currentStep.timerMinutes!, `Step ${currentStep.step}`)}
+            >
               <Feather name="clock" size={20} color={colors.saffron} />
               <Text style={[styles.cookModeTimerText, { color: colors.saffron }]}>
-                Start {currentStep.timerMinutes} min Timer
+                {timerRunning && timerLabel === `Step ${currentStep.step}`
+                  ? `Running: ${formatTime(timerSeconds ?? 0)}`
+                  : `Start ${currentStep.timerMinutes} min Timer`}
               </Text>
             </TouchableOpacity>
           )}
@@ -315,10 +391,13 @@ export default function RecipeDetailScreen() {
                       {step.instruction}
                     </Text>
                     {step.timerMinutes && !done && (
-                      <TouchableOpacity style={[styles.timerBtn, { backgroundColor: colors.saffron + "15" }]}>
+                      <TouchableOpacity
+                        style={[styles.timerBtn, { backgroundColor: colors.saffron + "15" }]}
+                        onPress={() => startTimer(step.timerMinutes!, `Step ${step.step}`)}
+                      >
                         <Feather name="clock" size={12} color={colors.saffron} />
                         <Text style={[styles.timerBtnText, { color: colors.saffron }]}>
-                          {step.timerMinutes} min timer
+                          ▶ {step.timerMinutes} min timer
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -355,6 +434,23 @@ export default function RecipeDetailScreen() {
           <View style={{ height: 120 }} />
         </View>
       </ScrollView>
+
+      {/* Floating timer pill — appears when a timer is active */}
+      {timerSeconds !== null && (
+        <Animated.View style={[styles.floatingTimerPill, { top: topPadding + 8, opacity: timerPillAnim, transform: [{ scale: timerPillAnim }] }]}>
+          <Feather name="clock" size={14} color={timerSeconds === 0 ? "#00BFA5" : colors.saffron} />
+          <Text style={styles.floatingTimerLabel} numberOfLines={1}>{timerLabel}</Text>
+          <Text style={[styles.floatingTimerTime, { color: timerSeconds === 0 ? "#00BFA5" : colors.saffron }]}>
+            {timerSeconds === 0 ? "Done! 🎉" : formatTime(timerSeconds)}
+          </Text>
+          <TouchableOpacity onPress={() => setTimerRunning((r) => !r)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Feather name={timerRunning ? "pause" : "play"} size={14} color="#9E9E9E" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={cancelTimer} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Feather name="x" size={14} color="#9E9E9E" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
       {/* Sticky bottom bar */}
       <View style={[styles.stickyBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: bottomPadding + 8 }]}>
@@ -551,6 +647,43 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   stickyBarCookText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  floatingTimerPill: {
+    position: "absolute",
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(20, 18, 16, 0.95)",
+    borderRadius: 100,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    zIndex: 9999,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    maxWidth: 300,
+  },
+  floatingTimerLabel: { color: "#E0DDD8", fontSize: 12, fontWeight: "600", flex: 1 },
+  floatingTimerTime: { fontSize: 14, fontWeight: "700" },
+  cookModeTimerPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 24,
+    marginBottom: 8,
+    backgroundColor: "#1E1B18",
+    borderRadius: 100,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#2A2520",
+  },
+  cookModeTimerPillLabel: { fontSize: 13, flex: 1 },
+  cookModeTimerPillTime: { fontSize: 15, fontWeight: "700" },
   cookMode: { flex: 1 },
   cookModeHeader: {
     flexDirection: "row",

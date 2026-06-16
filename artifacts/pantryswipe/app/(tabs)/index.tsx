@@ -26,14 +26,18 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH - 16;
 
 const MOODS = [
-  { label: "✦ Date Night", filter: (r: Recipe) => r.rating >= 4.8 && r.difficulty !== "Easy" },
-  { label: "Family Dinner", filter: (r: Recipe) => r.servings >= 2 && r.difficulty !== "Hard" },
-  { label: "Quick Meal", filter: (r: Recipe) => r.prepTime + r.cookTime <= 30 },
-  { label: "Gym Fuel", filter: (r: Recipe) => r.nutrition.protein >= 30 },
-  { label: "Cheat Meal", filter: (r: Recipe) => r.calories >= 600 },
-  { label: "Party Mode", filter: (r: Recipe) => r.servings >= 4 },
-  { label: "Meal Prep", filter: (r: Recipe) => r.tags.includes("meal-prep") },
-  { label: "Surprise Me", filter: (_r: Recipe) => Math.random() > 0.5 },
+  { label: "🍽️ Just Me", filter: (r: Recipe) => r.eventTypes?.includes("just-me") || r.prepTime + r.cookTime <= 25 },
+  { label: "💑 Date Night", filter: (r: Recipe) => r.eventTypes?.includes("date-night") || (r.rating >= 4.8 && r.difficulty !== "Easy") },
+  { label: "👨‍👩‍👧 Family", filter: (r: Recipe) => r.eventTypes?.includes("family-dinner") || r.servings >= 3 },
+  { label: "👯 Friends", filter: (r: Recipe) => r.eventTypes?.includes("friends") || r.servings >= 4 },
+  { label: "🎬 Movie Night", filter: (r: Recipe) => r.eventTypes?.includes("movie-night") || r.prepTime + r.cookTime <= 20 },
+  { label: "🏈 Watch Party", filter: (r: Recipe) => r.eventTypes?.includes("watch-party") || r.tags.includes("party") },
+  { label: "🎂 Birthday", filter: (r: Recipe) => r.eventTypes?.includes("birthday") || r.rating >= 4.9 },
+  { label: "🥗 Meal Prep", filter: (r: Recipe) => r.eventTypes?.includes("meal-prep") || r.tags.includes("meal-prep") },
+  { label: "🌅 Brunch", filter: (r: Recipe) => r.eventTypes?.includes("brunch") || r.tags.includes("breakfast") },
+  { label: "💪 Gym Fuel", filter: (r: Recipe) => r.nutrition.protein >= 30 },
+  { label: "⚡ Quick", filter: (r: Recipe) => r.prepTime + r.cookTime <= 20 },
+  { label: "🎲 Surprise", filter: (_r: Recipe) => Math.random() > 0.4 },
 ];
 
 const SEARCH_VARIANTS: { label: string; subtitle: string; recipeId: string }[] = [
@@ -92,6 +96,7 @@ export default function HomeScreen() {
 
   const visibleRecipes = filteredRecipes.slice(currentIndex, currentIndex + 3);
   const matchCount = filteredRecipes.filter((r) => getPantryMatchScore(r) >= 60).length;
+  const expiringItems = pantryItems.filter((i) => i.status === "Expiring" || i.status === "Expired");
   const noMoreCards = currentIndex >= filteredRecipes.length;
 
   useEffect(() => {
@@ -252,8 +257,16 @@ export default function HomeScreen() {
         })}
       </ScrollView>
 
-      {/* Pantry match banner */}
-      {hasBanner && (
+      {/* Smart banner — expiry warning takes priority over pantry match */}
+      {expiringItems.length > 0 ? (
+        <View style={[styles.matchBanner, { backgroundColor: "#F5A62315", borderColor: "#F5A62340" }]}>
+          <Text style={{ fontSize: 15 }}>⚠️</Text>
+          <Text style={[styles.matchBannerText, { color: "#A06800", fontFamily: "Inter_500Medium" }]} numberOfLines={1}>
+            <Text style={{ fontFamily: "SpaceGrotesk_600SemiBold", color: "#F5A623" }}>{expiringItems[0].name}</Text>
+            {expiringItems.length > 1 ? ` +${expiringItems.length - 1} more` : ""} expiring soon — cook it up!
+          </Text>
+        </View>
+      ) : hasBanner ? (
         <View style={[styles.matchBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.matchDot, { backgroundColor: colors.primary }]} />
           <Text style={[styles.matchBannerText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
@@ -263,7 +276,7 @@ export default function HomeScreen() {
             recipes match your pantry right now
           </Text>
         </View>
-      )}
+      ) : null}
 
       {/* ── SWIPE DECK ── explicit height, normal-flow wrapper */}
       <View style={styles.deckWrapper}>
