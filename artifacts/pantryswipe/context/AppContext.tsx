@@ -4,6 +4,7 @@ import { INITIAL_PANTRY, MOCK_RECIPES, PantryItem, Recipe } from "@/data/mockDat
 
 interface UserProfile {
   name: string;
+  email: string;
   country: string;
   skillLevel: string;
   dietType: string[];
@@ -46,6 +47,7 @@ interface AppContextType {
 
 const defaultProfile: UserProfile = {
   name: "Alex",
+  email: "",
   country: "United States",
   skillLevel: "Home Cook",
   dietType: ["Omnivore"],

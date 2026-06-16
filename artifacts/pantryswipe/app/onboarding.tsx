@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import {
   Animated,
   Dimensions,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -13,642 +14,691 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
 
 const { width } = Dimensions.get("window");
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 9;
 
-const SKILL_LEVELS = ["Beginner", "Home Cook", "Confident", "Advanced"];
-const DIET_TYPES = ["Omnivore", "Vegetarian", "Vegan", "Pescatarian", "Halal", "Kosher", "Keto", "Paleo"];
-const ALLERGIES = ["Nuts", "Dairy", "Gluten", "Shellfish", "Eggs", "Soy"];
-const GOALS = ["Eat Healthier", "Build Muscle", "Save Money", "Cook Faster", "Explore Cuisines", "Cook for Others"];
-const CUISINES = [
-  { name: "Italian", flag: "🇮🇹" },
-  { name: "Japanese", flag: "🇯🇵" },
-  { name: "Korean", flag: "🇰🇷" },
-  { name: "Indian", flag: "🇮🇳" },
-  { name: "Chinese", flag: "🇨🇳" },
-  { name: "Thai", flag: "🇹🇭" },
-  { name: "Mexican", flag: "🇲🇽" },
-  { name: "American", flag: "🇺🇸" },
-  { name: "French", flag: "🇫🇷" },
-  { name: "Vietnamese", flag: "🇻🇳" },
-  { name: "Singaporean", flag: "🇸🇬" },
-  { name: "Malaysian", flag: "🇲🇾" },
-];
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const OB = {
+  bg: "#FFFFFF",
+  card: "#F0F6FF",
+  blue: "#2B7FFF",
+  blueLight: "#EBF3FF",
+  text: "#0F1C2E",
+  muted: "#94A3B8",
+  border: "#E2EAFF",
+  error: "#EF4444",
+  success: "#10B981",
+  amber: "#F59E0B",
+  amberLight: "#FFF8EB",
+  red: "#DC2626",
+  redLight: "#FEF2F2",
+  redBorder: "#FECACA",
+};
 
+// ─── Data ─────────────────────────────────────────────────────────────────────
 const PROFANITY_LIST = [
   "fuck", "shit", "ass", "bitch", "bastard", "crap", "piss", "cock", "dick",
   "cunt", "whore", "slut", "nigger", "nigga", "faggot", "fag", "retard",
-  "asshole", "motherfucker", "bullshit", "dumbass", "jackass", "dipshit",
-  "wanker", "twat", "arsehole", "tosser", "bollocks",
+  "asshole", "motherfucker", "bullshit", "dumbass", "jackass", "wanker", "twat", "tosser",
 ];
 
-function containsProfanity(text: string): boolean {
-  const lower = text.toLowerCase().replace(/[^a-z]/g, "");
-  return PROFANITY_LIST.some((word) => lower.includes(word));
-}
+const HOUSEHOLD_LABELS: Record<number, string> = {
+  1: "🧍 Just You — solo portions, minimal waste",
+  2: "👫 Couple — intimate meals, perfect for two",
+  3: "👨‍👩‍👦 Small Family — easy weeknight dinners",
+  4: "👨‍👩‍👧‍👦 Family of Four — crowd-pleasing recipes",
+  5: "🏠 Big Household — batch cooking friendly",
+  6: "🎉 Large Group — meal prep & sharing meals",
+};
 
+const SKILL_LEVELS = [
+  { id: "Beginner", icon: "🥄", title: "Beginner", desc: "I follow recipes step by step and keep it simple" },
+  { id: "Home Cook", icon: "🍳", title: "Home Cook", desc: "I'm comfortable in the kitchen with most techniques" },
+  { id: "Confident", icon: "👨‍🍳", title: "Confident Cook", desc: "I experiment and enjoy a challenge" },
+  { id: "Advanced", icon: "⭐", title: "Advanced", desc: "I know my way around a professional kitchen" },
+];
+
+const BUDGETS = [
+  { id: 50, label: "Under $50/week", desc: "Budget-friendly meals, pantry staples, minimal waste", color: "#10B981" },
+  { id: 75, label: "$50–$75/week", desc: "Smart spending with variety", color: "#14B8A6" },
+  { id: 100, label: "$75–$100/week", desc: "Balanced meals with quality ingredients", color: "#2B7FFF" },
+  { id: 150, label: "$100–$150/week", desc: "More variety, premium cuts, diverse cuisines", color: "#6366F1" },
+  { id: 200, label: "$150–$200+/week", desc: "No compromise — quality-first cooking", color: "#8B5CF6" },
+];
+
+const DIET_OPTIONS = [
+  { id: "Omnivore", emoji: "🥩", label: "Omnivore", desc: "I eat everything — no restrictions", exclusive: true },
+  { id: "Vegetarian", emoji: "🥗", label: "Vegetarian", desc: "No meat or fish, but dairy & eggs are fine" },
+  { id: "Vegan", emoji: "🌿", label: "Vegan", desc: "No animal products at all" },
+  { id: "Pescatarian", emoji: "🐟", label: "Pescatarian", desc: "No meat, but fish and seafood are fine" },
+  { id: "Halal", emoji: "☪️", label: "Halal", desc: "No pork, lard, or non-halal slaughtered meat" },
+  { id: "Kosher", emoji: "✡️", label: "Kosher", desc: "Jewish dietary laws" },
+  { id: "Keto", emoji: "🥑", label: "Keto", desc: "High fat, very low carb (under 20g net carbs)" },
+  { id: "Paleo", emoji: "🍖", label: "Paleo", desc: "Whole foods — no grains, legumes, dairy" },
+];
+
+const ALLERGY_OPTIONS = [
+  { id: "Peanuts", emoji: "🥜" }, { id: "Tree Nuts", emoji: "🌰" }, { id: "Dairy", emoji: "🥛" },
+  { id: "Gluten", emoji: "🌾" }, { id: "Eggs", emoji: "🥚" }, { id: "Shellfish", emoji: "🦐" },
+  { id: "Fish", emoji: "🐟" }, { id: "Soy", emoji: "🫘" }, { id: "Sesame", emoji: "🌻" },
+  { id: "Sulphites", emoji: "🐝" }, { id: "Corn", emoji: "🌽" }, { id: "Fruit", emoji: "🍓" },
+];
+
+const ALLERGY_SWAPS: Record<string, { title: string; swaps: string[] }> = {
+  Peanuts: { title: "🥜 Peanuts — common swaps we'll suggest:", swaps: ["Peanut butter → Sunflower seed butter (SunButter)", "Peanuts in stir-fry → Toasted pumpkin seeds", "Satay sauce → Tahini-based sauce"] },
+  Dairy: { title: "🥛 Dairy — swaps we'll use:", swaps: ["Milk → Oat milk, almond milk, coconut milk", "Butter → Vegan butter, coconut oil, olive oil", "Cream → Full-fat coconut cream", "Greek yogurt → Coconut yogurt"] },
+  Gluten: { title: "🌾 Gluten — swaps we'll use:", swaps: ["Flour → Almond flour, rice flour, tapioca starch", "Soy sauce → Tamari (GF) or coconut aminos", "Pasta → Rice noodles, zucchini noodles, chickpea pasta"] },
+  Eggs: { title: "🥚 Eggs — swaps we'll use:", swaps: ["1 egg → 1 tbsp ground flaxseed + 3 tbsp water", "Egg wash → Brushed olive oil or plant milk", "Scrambled eggs → Silken tofu scramble"] },
+};
+
+const GOALS = [
+  { id: "Eat Healthier", emoji: "🥦", title: "Eat Healthier", desc: "Better nutrients, less processed food, more balance" },
+  { id: "Build Muscle", emoji: "💪", title: "Build Muscle", desc: "High protein meals to support training and gains" },
+  { id: "Save Money", emoji: "💰", title: "Save Money", desc: "Cook well without breaking the bank" },
+  { id: "Cook Faster", emoji: "⚡", title: "Cook Faster", desc: "Weeknight-friendly meals, minimal time" },
+  { id: "Explore Cuisines", emoji: "🌍", title: "Explore Cuisines", desc: "Discover new flavours and culinary traditions" },
+  { id: "Cook for Others", emoji: "👨‍👩‍👧", title: "Cook for Others", desc: "Impress guests, cook for family, host with confidence" },
+];
+
+const CUISINES = [
+  { id: "Italian", flag: "🇮🇹" }, { id: "Japanese", flag: "🇯🇵" }, { id: "Korean", flag: "🇰🇷" },
+  { id: "Indian", flag: "🇮🇳" }, { id: "Thai", flag: "🇹🇭" }, { id: "Mexican", flag: "🇲🇽" },
+  { id: "American", flag: "🇺🇸" }, { id: "French", flag: "🇫🇷" }, { id: "Vietnamese", flag: "🇻🇳" },
+  { id: "Singaporean", flag: "🇸🇬" }, { id: "Malaysian", flag: "🇲🇾" },
+];
+
+const LOADING_MESSAGES = [
+  "Setting up your profile...",
+  "Learning your taste preferences...",
+  "Stocking your recipe engine...",
+  "Filtering for your dietary needs...",
+  "Personalising your swipe deck...",
+  "Almost ready to cook! 🍳",
+];
+
+const FOOD_EMOJIS = ["🥦", "🧄", "🍅", "🧀", "🥕"];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function containsProfanity(t: string) {
+  const l = t.toLowerCase().replace(/[^a-z]/g, "");
+  return PROFANITY_LIST.some((w) => l.includes(w));
+}
+function isValidEmail(e: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim()); }
+function isValidName(n: string) { return /^[a-zA-Z\s\-]+$/.test(n.trim()) && n.trim().length >= 2; }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function OnboardingScreen() {
-  const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { updateProfile, completeSetup } = useApp();
+
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const loadingProgress = useRef(new Animated.Value(0)).current;
+  const loadingWidth = loadingProgress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+  const foodAnims = useRef(FOOD_EMOJIS.map(() => new Animated.Value(0))).current;
 
   const [step, setStep] = useState(0);
+  const [showCreating, setShowCreating] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState(LOADING_MESSAGES[0]);
+  const [loadingDone, setLoadingDone] = useState(false);
+
+  // Step 0
   const [name, setName] = useState("");
-  const [nameError, setNameError] = useState("");
-  const [skillLevel, setSkillLevel] = useState("Home Cook");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [showConfPw, setShowConfPw] = useState(false);
+  const [termsChecked, setTermsChecked] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
+
+  // Steps 1-8
+  const [householdSize, setHouseholdSize] = useState(2);
+  const [skillLevel, setSkillLevel] = useState("");
+  const [weeklyBudget, setWeeklyBudget] = useState(0);
   const [dietTypes, setDietTypes] = useState<string[]>(["Omnivore"]);
   const [allergies, setAllergies] = useState<string[]>([]);
-  const [goal, setGoal] = useState("Eat Healthier");
-  const [selectedCuisines, setSelectedCuisines] = useState<string[]>(["Italian", "Japanese"]);
-  const [householdSize, setHouseholdSize] = useState(2);
-  const [weeklyBudget, setWeeklyBudget] = useState(100);
+  const [goal, setGoal] = useState("");
+  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
+  const [cuisineError, setCuisineError] = useState(false);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const goNext = () => {
-    // Validate name on step 0
-    if (step === 0) {
-      const trimmed = name.trim();
-      if (trimmed && containsProfanity(trimmed)) {
-        setNameError("Please choose an appropriate name 🙂");
-        return;
-      }
-      setNameError("");
-    }
+  const pwRules = [
+    { label: "At least 8 characters", met: password.length >= 8 },
+    { label: "At least 1 uppercase letter", met: /[A-Z]/.test(password) },
+    { label: "At least 1 number", met: /[0-9]/.test(password) },
+    { label: "At least 1 special character (!@#$%^&*)", met: /[!@#$%^&*]/.test(password) },
+  ];
+  const allPwRulesMet = pwRules.every((r) => r.met);
 
-    if (step < TOTAL_STEPS - 1) {
-      Animated.timing(slideAnim, {
-        toValue: -(step + 1) * width,
-        duration: 320,
-        useNativeDriver: true,
-      }).start();
-      setStep(step + 1);
-    } else {
-      updateProfile({
-        name: name.trim() || "Alex",
-        skillLevel,
-        dietType: dietTypes,
-        allergies,
-        goal,
-        cuisinePreferences: selectedCuisines,
-        householdSize,
-        weeklyBudget,
-      });
-      completeSetup();
-      router.replace("/(tabs)");
+  const nameOk = name.trim().length >= 2 && isValidName(name) && !containsProfanity(name);
+  const emailOk = isValidEmail(email);
+  const pwMatch = confirmPw === password && confirmPw.length > 0;
+
+  const isStepValid = (s: number) => {
+    switch (s) {
+      case 0: return nameOk && emailOk && allPwRulesMet && pwMatch && termsChecked;
+      case 1: return true;
+      case 2: return !!skillLevel;
+      case 3: return !!weeklyBudget;
+      case 4: return dietTypes.length > 0;
+      case 5: return true;
+      case 6: return !!goal;
+      case 7: return selectedCuisines.length > 0;
+      case 8: return true;
+      default: return true;
     }
+  };
+
+  const goNext = () => {
+    if (step === 7 && selectedCuisines.length === 0) { setCuisineError(true); return; }
+    if (!isStepValid(step)) { setShowErrors(true); return; }
+    setCuisineError(false);
+    setShowErrors(false);
+    if (step === TOTAL_STEPS - 1) { startCreating(); return; }
+    Animated.timing(slideAnim, { toValue: -(step + 1) * width, duration: 320, useNativeDriver: true }).start();
+    setStep(step + 1);
   };
 
   const goBack = () => {
     if (step > 0) {
-      Animated.timing(slideAnim, {
-        toValue: -(step - 1) * width,
-        duration: 320,
-        useNativeDriver: true,
-      }).start();
+      Animated.timing(slideAnim, { toValue: -(step - 1) * width, duration: 320, useNativeDriver: true }).start();
       setStep(step - 1);
     }
   };
 
-  const toggleItem = (item: string, list: string[], setList: (v: string[]) => void) => {
-    if (list.includes(item)) {
-      setList(list.filter((i) => i !== item));
-    } else {
-      setList([...list, item]);
-    }
+  const startCreating = () => {
+    setShowCreating(true);
+    foodAnims.forEach((anim, i) => {
+      setTimeout(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(anim, { toValue: -80, duration: 380, useNativeDriver: true }),
+            Animated.timing(anim, { toValue: 0, duration: 380, useNativeDriver: true }),
+            Animated.delay(500),
+          ])
+        ).start();
+      }, i * 130);
+    });
+    Animated.timing(loadingProgress, { toValue: 1, duration: 3400, useNativeDriver: false }).start();
+    let i = 0;
+    const interval = setInterval(() => {
+      i++;
+      if (i < LOADING_MESSAGES.length) setLoadingMsg(LOADING_MESSAGES[i]);
+      else clearInterval(interval);
+    }, 580);
+    setTimeout(() => {
+      clearInterval(interval);
+      setLoadingDone(true);
+      setTimeout(() => {
+        updateProfile({ name: name.trim(), email: email.trim(), skillLevel, dietType: dietTypes, allergies, goal, cuisinePreferences: selectedCuisines, householdSize, weeklyBudget });
+        completeSetup();
+        router.replace("/(tabs)");
+      }, 700);
+    }, 3500);
   };
 
+  const toggleDiet = (id: string) => {
+    if (id === "Omnivore") { setDietTypes(["Omnivore"]); return; }
+    const without = dietTypes.filter((d) => d !== "Omnivore");
+    setDietTypes(without.includes(id) ? without.filter((d) => d !== id) || ["Omnivore"] : [...without, id]);
+    if (dietTypes.filter((d) => d !== id).length === 0) setDietTypes(["Omnivore"]);
+  };
+
+  const pct = `${Math.round(((step + 1) / TOTAL_STEPS) * 100)}%`;
+  const ctaLabel = step === TOTAL_STEPS - 1 ? "Let's Go! 🍳" : step === 5 && allergies.length === 0 ? "Skip — No Allergies →" : "Continue →";
+  const ctaEnabled = isStepValid(step) || step === 5 || step === 8;
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
+    <View style={[styles.container, { backgroundColor: OB.bg }]}>
+      {/* ── Header ── */}
       <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
-        {step > 0 && (
-          <TouchableOpacity style={styles.backBtn} onPress={goBack}>
-            <Feather name="arrow-left" size={22} color={colors.foreground} />
-          </TouchableOpacity>
-        )}
-        <View style={styles.progressDots}>
-          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.dot,
-                {
-                  backgroundColor: i <= step ? colors.saffron : colors.border,
-                  width: i === step ? 24 : 8,
-                },
-              ]}
-            />
-          ))}
+        <View style={styles.headerRow}>
+          {step > 0 && (
+            <TouchableOpacity style={styles.backBtn} onPress={goBack}>
+              <Feather name="arrow-left" size={22} color={OB.text} />
+            </TouchableOpacity>
+          )}
+          <View style={[styles.progressTrack, { marginLeft: step === 0 ? 20 : 8 }]}>
+            <View style={[styles.progressFill, { width: pct }]} />
+          </View>
+          {step > 0 && step < TOTAL_STEPS - 1 && (
+            <TouchableOpacity onPress={goNext} style={{ paddingRight: 20 }}>
+              <Text style={[styles.skipText, { color: OB.muted }]}>Skip</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        {step > 0 && step < TOTAL_STEPS - 1 && (
-          <TouchableOpacity onPress={goNext}>
-            <Text style={[styles.skipText, { color: colors.mutedForeground }]}>Skip</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
-      {/* Slides */}
-      <Animated.View
-        style={[styles.slidesContainer, { transform: [{ translateX: slideAnim }] }]}
-      >
-        {/* Step 0 — Who are you? */}
-        <View style={styles.slide}>
-          <Text style={[styles.stepTitle, { color: colors.foreground }]}>
-            Welcome!{"\n"}What's your name?
-          </Text>
-          <Text style={[styles.stepSubtitle, { color: colors.mutedForeground }]}>
-            We'll personalize your experience
-          </Text>
-          <TextInput
-            style={[
-              styles.nameInput,
-              {
-                color: colors.foreground,
-                borderColor: nameError ? colors.destructive : colors.border,
-                backgroundColor: colors.card,
-              },
-            ]}
-            placeholder="Your first name"
-            placeholderTextColor={colors.mutedForeground}
-            value={name}
-            onChangeText={(text) => {
-              setName(text);
-              if (nameError) setNameError("");
-            }}
-            autoCapitalize="words"
-            returnKeyType="done"
-          />
-          {nameError ? (
-            <View style={styles.errorRow}>
-              <Feather name="alert-circle" size={14} color={colors.destructive} />
-              <Text style={[styles.errorText, { color: colors.destructive }]}>{nameError}</Text>
-            </View>
-          ) : null}
-          <Text style={[styles.label, { color: colors.foreground }]}>Household size</Text>
-          <View style={styles.stepper}>
-            <TouchableOpacity
-              style={[styles.stepperBtn, { borderColor: colors.border }]}
-              onPress={() => setHouseholdSize(Math.max(1, householdSize - 1))}
-            >
-              <Feather name="minus" size={20} color={colors.foreground} />
-            </TouchableOpacity>
-            <Text style={[styles.stepperValue, { color: colors.foreground }]}>{householdSize}</Text>
-            <TouchableOpacity
-              style={[styles.stepperBtn, { borderColor: colors.border }]}
-              onPress={() => setHouseholdSize(Math.min(10, householdSize + 1))}
-            >
-              <Feather name="plus" size={20} color={colors.foreground} />
+      {/* ── Slides ── */}
+      <Animated.View style={[styles.slidesWrap, { transform: [{ translateX: slideAnim }] }]}>
+
+        {/* ── STEP 0: Account ── */}
+        <ScrollView style={styles.slide} showsVerticalScrollIndicator={false} contentContainerStyle={styles.slideContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.bigEmoji}>👋</Text>
+          <Text style={styles.stepTitle}>Welcome to{"\n"}PantrySwipe!</Text>
+          <Text style={styles.stepSub}>Let's set up your account. This takes about 2 minutes.</Text>
+
+          <Text style={styles.fieldLabel}>Your Name</Text>
+          <View style={[styles.inputRow, showErrors && !nameOk && styles.inputRowError]}>
+            <TextInput style={styles.inputField} placeholder="e.g. Alex Chen" placeholderTextColor={OB.muted} value={name} onChangeText={(t) => { setName(t); setShowErrors(false); }} autoCapitalize="words" />
+            {nameOk && <Feather name="check-circle" size={18} color={OB.success} />}
+          </View>
+          {showErrors && name.trim().length < 2 && <Text style={styles.errMsg}>Name must be at least 2 characters</Text>}
+          {showErrors && name.trim().length >= 2 && !isValidName(name) && <Text style={styles.errMsg}>Only letters, spaces, and hyphens allowed</Text>}
+          {showErrors && containsProfanity(name) && <Text style={styles.errMsg}>Please choose an appropriate name 🙂</Text>}
+
+          <Text style={styles.fieldLabel}>Email Address</Text>
+          <View style={[styles.inputRow, showErrors && !emailOk && styles.inputRowError]}>
+            <TextInput style={styles.inputField} placeholder="you@example.com" placeholderTextColor={OB.muted} value={email} onChangeText={(t) => { setEmail(t); setShowErrors(false); }} keyboardType="email-address" autoCapitalize="none" />
+            {emailOk && <Feather name="check-circle" size={18} color={OB.success} />}
+          </View>
+          {showErrors && !emailOk && <Text style={styles.errMsg}>Please enter a valid email address</Text>}
+
+          <Text style={styles.fieldLabel}>Password</Text>
+          <View style={[styles.inputRow, showErrors && !allPwRulesMet && styles.inputRowError]}>
+            <TextInput style={styles.inputField} placeholder="Create a password" placeholderTextColor={OB.muted} value={password} onChangeText={(t) => { setPassword(t); setShowErrors(false); }} secureTextEntry={!showPw} />
+            <TouchableOpacity onPress={() => setShowPw(!showPw)}>
+              <Feather name={showPw ? "eye-off" : "eye"} size={18} color={OB.muted} />
             </TouchableOpacity>
           </View>
-        </View>
-
-        {/* Step 1 — Cooking style */}
-        <View style={styles.slide}>
-          <Text style={[styles.stepTitle, { color: colors.foreground }]}>Your cooking style</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.mutedForeground }]}>
-            We'll match recipe difficulty to your level
-          </Text>
-          <Text style={[styles.label, { color: colors.foreground }]}>Skill level</Text>
-          <View style={styles.chipGrid}>
-            {SKILL_LEVELS.map((level) => (
-              <TouchableOpacity
-                key={level}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: skillLevel === level ? colors.saffron : colors.card,
-                    borderColor: skillLevel === level ? colors.saffron : colors.border,
-                  },
-                ]}
-                onPress={() => setSkillLevel(level)}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    { color: skillLevel === level ? "#fff" : colors.foreground },
-                  ]}
-                >
-                  {level}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={[styles.label, { color: colors.foreground }]}>Weekly budget</Text>
-          <View style={styles.budgetRow}>
-            <Text style={[styles.budgetValue, { color: colors.saffron }]}>${weeklyBudget}</Text>
-            <Text style={[styles.budgetLabel, { color: colors.mutedForeground }]}>/week</Text>
-          </View>
-          <View style={styles.budgetButtons}>
-            {[50, 75, 100, 150, 200].map((v) => (
-              <TouchableOpacity
-                key={v}
-                style={[
-                  styles.budgetBtn,
-                  {
-                    backgroundColor: weeklyBudget === v ? colors.saffron : colors.card,
-                    borderColor: weeklyBudget === v ? colors.saffron : colors.border,
-                  },
-                ]}
-                onPress={() => setWeeklyBudget(v)}
-              >
-                <Text style={{ color: weeklyBudget === v ? "#fff" : colors.foreground, fontWeight: "600" }}>
-                  ${v}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Step 2 — Dietary profile */}
-        <View style={styles.slide}>
-          <Text style={[styles.stepTitle, { color: colors.foreground }]}>Dietary profile</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.mutedForeground }]}>
-            Select all that apply
-          </Text>
-          <Text style={[styles.label, { color: colors.foreground }]}>Diet type</Text>
-          <View style={styles.chipGrid}>
-            {DIET_TYPES.map((d) => (
-              <TouchableOpacity
-                key={d}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: dietTypes.includes(d) ? colors.saffron : colors.card,
-                    borderColor: dietTypes.includes(d) ? colors.saffron : colors.border,
-                  },
-                ]}
-                onPress={() => toggleItem(d, dietTypes, setDietTypes)}
-              >
-                <Text style={{ color: dietTypes.includes(d) ? "#fff" : colors.foreground, fontWeight: "500", fontSize: 13 }}>
-                  {d}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={[styles.label, { color: colors.foreground }]}>Allergies</Text>
-          <View style={styles.chipGrid}>
-            {ALLERGIES.map((a) => (
-              <TouchableOpacity
-                key={a}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: allergies.includes(a) ? colors.destructive : colors.card,
-                    borderColor: allergies.includes(a) ? colors.destructive : colors.border,
-                  },
-                ]}
-                onPress={() => toggleItem(a, allergies, setAllergies)}
-              >
-                <Text style={{ color: allergies.includes(a) ? "#fff" : colors.foreground, fontWeight: "500", fontSize: 13 }}>
-                  {a}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Step 3 — Goals */}
-        <View style={styles.slide}>
-          <Text style={[styles.stepTitle, { color: colors.foreground }]}>Your goal</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.mutedForeground }]}>
-            We'll tailor your recipe recommendations
-          </Text>
-          <View style={styles.goalGrid}>
-            {GOALS.map((g) => (
-              <TouchableOpacity
-                key={g}
-                style={[
-                  styles.goalCard,
-                  {
-                    backgroundColor: goal === g ? colors.saffron + "18" : colors.card,
-                    borderColor: goal === g ? colors.saffron : colors.border,
-                    borderWidth: goal === g ? 2 : 1,
-                  },
-                ]}
-                onPress={() => setGoal(g)}
-              >
-                <Text style={[styles.goalText, { color: goal === g ? colors.saffron : colors.foreground }]}>
-                  {g}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Step 4 — Cuisines */}
-        <View style={styles.slide}>
-          <Text style={[styles.stepTitle, { color: colors.foreground }]}>
-            Which cuisines excite you?
-          </Text>
-          <Text style={[styles.stepSubtitle, { color: colors.mutedForeground }]}>
-            Pick at least one
-          </Text>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={styles.cuisineGrid}>
-              {CUISINES.map((c) => (
-                <TouchableOpacity
-                  key={c.name}
-                  style={[
-                    styles.cuisineCard,
-                    {
-                      backgroundColor: selectedCuisines.includes(c.name) ? colors.saffron + "18" : colors.card,
-                      borderColor: selectedCuisines.includes(c.name) ? colors.saffron : colors.border,
-                      borderWidth: selectedCuisines.includes(c.name) ? 2 : 1,
-                    },
-                  ]}
-                  onPress={() => toggleItem(c.name, selectedCuisines, setSelectedCuisines)}
-                >
-                  <Text style={styles.cuisineFlag}>{c.flag}</Text>
-                  <Text style={[styles.cuisineName, { color: colors.foreground }]}>{c.name}</Text>
-                  {selectedCuisines.includes(c.name) && (
-                    <View style={[styles.cuisineCheck, { backgroundColor: colors.saffron }]}>
-                      <Feather name="check" size={10} color="#fff" />
-                    </View>
-                  )}
-                </TouchableOpacity>
+          {password.length > 0 && (
+            <View style={styles.pwChecklist}>
+              {pwRules.map((r) => (
+                <View key={r.label} style={styles.pwCheckRow}>
+                  <Feather name={r.met ? "check-circle" : "circle"} size={13} color={r.met ? OB.success : OB.muted} />
+                  <Text style={[styles.pwCheckText, { color: r.met ? OB.success : OB.muted }]}>{r.label}</Text>
+                </View>
               ))}
             </View>
-          </ScrollView>
-        </View>
+          )}
 
-        {/* Step 5 — Pantry start */}
-        <View style={styles.slide}>
-          <Text style={[styles.stepTitle, { color: colors.foreground }]}>
-            Your pantry starts here
-          </Text>
-          <Text style={[styles.stepSubtitle, { color: colors.mutedForeground }]}>
-            What's in your kitchen right now?
-          </Text>
-          <View style={styles.pantryOptions}>
-            <TouchableOpacity
-              style={[styles.pantryOption, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={goNext}
-            >
-              <View style={[styles.pantryIconBg, { backgroundColor: colors.saffron + "20" }]}>
-                <Feather name="camera" size={28} color={colors.saffron} />
-              </View>
-              <Text style={[styles.pantryOptionTitle, { color: colors.foreground }]}>Scan Fridge</Text>
-              <Text style={[styles.pantryOptionSub, { color: colors.mutedForeground }]}>Take a photo</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pantryOption, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={goNext}
-            >
-              <View style={[styles.pantryIconBg, { backgroundColor: colors.secondary + "20" }]}>
-                <Feather name="file-text" size={28} color={colors.secondary} />
-              </View>
-              <Text style={[styles.pantryOptionTitle, { color: colors.foreground }]}>Scan Receipt</Text>
-              <Text style={[styles.pantryOptionSub, { color: colors.mutedForeground }]}>Import groceries</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pantryOption, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={goNext}
-            >
-              <View style={[styles.pantryIconBg, { backgroundColor: colors.saveBlue + "20" }]}>
-                <Feather name="edit-3" size={28} color={colors.saveBlue} />
-              </View>
-              <Text style={[styles.pantryOptionTitle, { color: colors.foreground }]}>Type It In</Text>
-              <Text style={[styles.pantryOptionSub, { color: colors.mutedForeground }]}>Add manually</Text>
+          <Text style={styles.fieldLabel}>Confirm Password</Text>
+          <View style={[styles.inputRow, showErrors && !pwMatch && styles.inputRowError]}>
+            <TextInput style={styles.inputField} placeholder="Re-enter your password" placeholderTextColor={OB.muted} value={confirmPw} onChangeText={(t) => { setConfirmPw(t); setShowErrors(false); }} secureTextEntry={!showConfPw} />
+            <TouchableOpacity onPress={() => setShowConfPw(!showConfPw)}>
+              <Feather name={showConfPw ? "eye-off" : "eye"} size={18} color={OB.muted} />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.skipLink} onPress={goNext}>
-            <Text style={[styles.skipLinkText, { color: colors.mutedForeground }]}>
-              I'll add later
+          {confirmPw.length > 0 && !pwMatch && <Text style={styles.errMsg}>Passwords do not match</Text>}
+          {pwMatch && (
+            <View style={[styles.pwCheckRow, { marginBottom: 8 }]}>
+              <Feather name="check-circle" size={13} color={OB.success} />
+              <Text style={[styles.pwCheckText, { color: OB.success }]}>Passwords match</Text>
+            </View>
+          )}
+
+          <TouchableOpacity style={styles.termsRow} onPress={() => setTermsChecked(!termsChecked)}>
+            <View style={[styles.checkbox, termsChecked && styles.checkboxOn]}>
+              {termsChecked && <Feather name="check" size={12} color="#fff" />}
+            </View>
+            <Text style={styles.termsText}>
+              I agree to the{" "}
+              <Text style={{ color: OB.blue, fontWeight: "600" }}>Terms of Service</Text>
+              {" "}and{" "}
+              <Text style={{ color: OB.blue, fontWeight: "600" }}>Privacy Policy</Text>
             </Text>
           </TouchableOpacity>
-        </View>
+          {showErrors && !termsChecked && <Text style={styles.errMsg}>Please accept the terms to continue</Text>}
+          <View style={{ height: 32 }} />
+        </ScrollView>
+
+        {/* ── STEP 1: Household Size ── */}
+        <ScrollView style={styles.slide} showsVerticalScrollIndicator={false} contentContainerStyle={styles.slideContent}>
+          <Text style={styles.bigEmoji}>🏠</Text>
+          <Text style={styles.stepTitle}>Who are you{"\n"}cooking for?</Text>
+          <Text style={styles.stepSub}>This helps us suggest the right portion sizes.</Text>
+          <View style={styles.hhRow}>
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <TouchableOpacity key={n} style={[styles.hhPill, householdSize === n && styles.hhPillOn]} onPress={() => setHouseholdSize(n)}>
+                <Text style={[styles.hhPillText, householdSize === n && styles.hhPillTextOn]}>{n === 6 ? "6+" : n}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={styles.hhCard}>
+            <Text style={styles.hhCardText}>{HOUSEHOLD_LABELS[Math.min(householdSize, 6)]}</Text>
+          </View>
+          <View style={{ height: 32 }} />
+        </ScrollView>
+
+        {/* ── STEP 2: Skill Level ── */}
+        <ScrollView style={styles.slide} showsVerticalScrollIndicator={false} contentContainerStyle={styles.slideContent}>
+          <Text style={styles.bigEmoji}>🍳</Text>
+          <Text style={styles.stepTitle}>How confident are{"\n"}you in the kitchen?</Text>
+          <Text style={styles.stepSub}>Be honest — we'll tailor recipes to match.</Text>
+          <View style={styles.cardStack}>
+            {SKILL_LEVELS.map((s) => {
+              const on = skillLevel === s.id;
+              return (
+                <TouchableOpacity key={s.id} style={[styles.selectCard, on && styles.selectCardOn]} onPress={() => setSkillLevel(s.id)}>
+                  <View style={[styles.cardIcon, { backgroundColor: on ? OB.blue + "22" : OB.card }]}>
+                    <Text style={{ fontSize: 24 }}>{s.icon}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.cardTitle, { color: on ? OB.blue : OB.text }]}>{s.title}</Text>
+                    <Text style={styles.cardDesc}>{s.desc}</Text>
+                  </View>
+                  <View style={[styles.radio, on && styles.radioOn]}>{on && <View style={styles.radioDot} />}</View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {showErrors && !skillLevel && <Text style={styles.errMsg}>Please select your skill level</Text>}
+          <View style={{ height: 32 }} />
+        </ScrollView>
+
+        {/* ── STEP 3: Budget ── */}
+        <ScrollView style={styles.slide} showsVerticalScrollIndicator={false} contentContainerStyle={styles.slideContent}>
+          <Text style={styles.bigEmoji}>💰</Text>
+          <Text style={styles.stepTitle}>What's your weekly{"\n"}food budget?</Text>
+          <Text style={styles.stepSub}>We'll suggest recipes that fit your wallet.</Text>
+          <View style={styles.cardStack}>
+            {BUDGETS.map((b) => {
+              const on = weeklyBudget === b.id;
+              return (
+                <TouchableOpacity key={b.id} style={[styles.selectCard, on && { borderColor: b.color, backgroundColor: b.color + "12" }]} onPress={() => setWeeklyBudget(b.id)}>
+                  <View style={[styles.cardIcon, { backgroundColor: on ? b.color + "22" : OB.card }]}>
+                    <Text style={{ fontSize: 22 }}>💵</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.cardTitle, { color: on ? b.color : OB.text }]}>{b.label}</Text>
+                    <Text style={styles.cardDesc}>{b.desc}</Text>
+                  </View>
+                  <View style={[styles.radio, on && { borderColor: b.color, backgroundColor: b.color }]}>{on && <View style={styles.radioDot} />}</View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {showErrors && !weeklyBudget && <Text style={styles.errMsg}>Please select your budget</Text>}
+          <View style={{ height: 32 }} />
+        </ScrollView>
+
+        {/* ── STEP 4: Dietary Profile ── */}
+        <ScrollView style={styles.slide} showsVerticalScrollIndicator={false} contentContainerStyle={styles.slideContent}>
+          <Text style={styles.bigEmoji}>🥗</Text>
+          <Text style={styles.stepTitle}>Any dietary{"\n"}requirements?</Text>
+          <Text style={styles.stepSub}>We'll only show you food that works for you.</Text>
+          <Text style={styles.noteText}>Select all that apply. You can change these anytime in Settings.</Text>
+          <View style={styles.dietGrid}>
+            {DIET_OPTIONS.map((d) => {
+              const on = dietTypes.includes(d.id);
+              return (
+                <TouchableOpacity key={d.id} style={[styles.dietCard, on && styles.dietCardOn]} onPress={() => toggleDiet(d.id)}>
+                  {on && <View style={styles.dietCheckBadge}><Feather name="check" size={10} color="#fff" /></View>}
+                  <Text style={{ fontSize: 28, marginBottom: 6 }}>{d.emoji}</Text>
+                  <Text style={[styles.dietLabel, { color: on ? OB.blue : OB.text }]}>{d.label}</Text>
+                  <Text style={styles.dietDesc}>{d.desc}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View style={{ height: 32 }} />
+        </ScrollView>
+
+        {/* ── STEP 5: Allergies ── */}
+        <ScrollView style={styles.slide} showsVerticalScrollIndicator={false} contentContainerStyle={styles.slideContent}>
+          <Text style={styles.bigEmoji}>⚠️</Text>
+          <Text style={styles.stepTitle}>Any food{"\n"}allergies?</Text>
+          <View style={styles.allergyWarningBox}>
+            <Text style={styles.allergyWarningText}>⚠️ Your safety comes first. Selected allergens will be filtered from ALL recipes, ingredients, and suggestions.</Text>
+          </View>
+          <Text style={styles.noteText}>Select all that apply. Leave blank if you have no allergies.</Text>
+          <View style={styles.allergyGrid}>
+            {ALLERGY_OPTIONS.map((a) => {
+              const on = allergies.includes(a.id);
+              return (
+                <TouchableOpacity key={a.id} style={[styles.allergyChip, on && styles.allergyChipOn]} onPress={() => setAllergies((prev) => prev.includes(a.id) ? prev.filter((x) => x !== a.id) : [...prev, a.id])}>
+                  <Text style={{ fontSize: 16 }}>{a.emoji}</Text>
+                  <Text style={[styles.allergyLabel, on && styles.allergyLabelOn]}>{a.id}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {Object.entries(ALLERGY_SWAPS).map(([key, val]) => {
+            if (!allergies.includes(key)) return null;
+            return (
+              <View key={key} style={styles.swapCard}>
+                <Text style={styles.swapTitle}>{val.title}</Text>
+                {val.swaps.map((s, i) => <Text key={i} style={styles.swapItem}>• {s}</Text>)}
+              </View>
+            );
+          })}
+          <View style={{ height: 32 }} />
+        </ScrollView>
+
+        {/* ── STEP 6: Goal ── */}
+        <ScrollView style={styles.slide} showsVerticalScrollIndicator={false} contentContainerStyle={styles.slideContent}>
+          <Text style={styles.bigEmoji}>🎯</Text>
+          <Text style={styles.stepTitle}>What do you want{"\n"}to achieve?</Text>
+          <Text style={styles.stepSub}>Pick your top goal — you can add more later.</Text>
+          <View style={styles.cardStack}>
+            {GOALS.map((g) => {
+              const on = goal === g.id;
+              return (
+                <TouchableOpacity key={g.id} style={[styles.selectCard, on && styles.selectCardOn]} onPress={() => setGoal(g.id)}>
+                  <View style={[styles.cardIcon, { backgroundColor: on ? OB.blue + "22" : OB.card }]}>
+                    <Text style={{ fontSize: 24 }}>{g.emoji}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.cardTitle, { color: on ? OB.blue : OB.text }]}>{g.title}</Text>
+                    <Text style={styles.cardDesc}>{g.desc}</Text>
+                  </View>
+                  <View style={[styles.radio, on && styles.radioOn]}>{on && <View style={styles.radioDot} />}</View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {showErrors && !goal && <Text style={styles.errMsg}>Please select your goal</Text>}
+          <View style={{ height: 32 }} />
+        </ScrollView>
+
+        {/* ── STEP 7: Cuisines ── */}
+        <ScrollView style={styles.slide} showsVerticalScrollIndicator={false} contentContainerStyle={styles.slideContent}>
+          <Text style={styles.bigEmoji}>🌍</Text>
+          <Text style={styles.stepTitle}>What cuisines{"\n"}excite you?</Text>
+          <Text style={styles.stepSub}>Pick at least one. Your swipe deck will reflect your taste.</Text>
+          <View style={styles.cuisineHeader}>
+            <Text style={[styles.cuisineCount, { color: selectedCuisines.length > 0 ? OB.blue : OB.muted }]}>{selectedCuisines.length} selected</Text>
+            <View style={{ flexDirection: "row", gap: 14 }}>
+              <TouchableOpacity onPress={() => { setSelectedCuisines(CUISINES.map((c) => c.id)); setCuisineError(false); }}>
+                <Text style={[styles.cuisineAction, { color: OB.blue }]}>Select All</Text>
+              </TouchableOpacity>
+              {selectedCuisines.length > 0 && (
+                <TouchableOpacity onPress={() => setSelectedCuisines([])}>
+                  <Text style={[styles.cuisineAction, { color: OB.muted }]}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+          <View style={styles.cuisineGrid}>
+            {CUISINES.map((c) => {
+              const on = selectedCuisines.includes(c.id);
+              return (
+                <TouchableOpacity key={c.id} style={[styles.cuisineCard, on && styles.cuisineCardOn]} onPress={() => { setCuisineError(false); setSelectedCuisines((prev) => prev.includes(c.id) ? prev.filter((x) => x !== c.id) : [...prev, c.id]); }}>
+                  {on && <View style={styles.cuisineCheckBadge}><Feather name="check" size={10} color="#fff" /></View>}
+                  <Text style={{ fontSize: 32, marginBottom: 6 }}>{c.flag}</Text>
+                  <Text style={[styles.cuisineName, { color: on ? OB.blue : OB.text }]}>{c.id}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {cuisineError && <Text style={[styles.errMsg, { marginTop: 8 }]}>Please select at least one cuisine to continue</Text>}
+          <View style={{ height: 32 }} />
+        </ScrollView>
+
+        {/* ── STEP 8: Pantry Setup ── */}
+        <ScrollView style={styles.slide} showsVerticalScrollIndicator={false} contentContainerStyle={styles.slideContent}>
+          <Text style={styles.bigEmoji}>🥦</Text>
+          <Text style={styles.stepTitle}>Let's stock{"\n"}your pantry</Text>
+          <Text style={styles.stepSub}>The more you add, the better your recipe suggestions.</Text>
+          <View style={styles.pantryList}>
+            {[
+              { id: "scan", emoji: "🤳", bg: OB.blueLight, title: "Scan Fridge / Pantry", desc: "Point your camera at your food — AI will detect it instantly" },
+              { id: "receipt", emoji: "🧾", bg: "#E6FAF5", title: "Scan Receipt", desc: "Take a photo of your grocery receipt — we'll read it for you" },
+              { id: "type", emoji: "✏️", bg: OB.amberLight, title: "Type It In", desc: "Add ingredients manually at your own pace" },
+              { id: "skip", emoji: "⏭️", bg: "#F1F5F9", title: "I'll Add Later", desc: "Skip for now — add from the Pantry tab anytime" },
+            ].map((opt) => (
+              <TouchableOpacity key={opt.id} style={styles.pantryOption} onPress={goNext}>
+                <View style={[styles.pantryIconBox, { backgroundColor: opt.bg }]}>
+                  <Text style={{ fontSize: 26 }}>{opt.emoji}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pantryOptTitle}>{opt.title}</Text>
+                  <Text style={styles.pantryOptDesc}>{opt.desc}</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={OB.muted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={{ height: 32 }} />
+        </ScrollView>
+
       </Animated.View>
 
-      {/* Bottom CTA */}
-      <View style={[styles.bottomContainer, { paddingBottom: bottomPadding + 16 }]}>
+      {/* ── CTA ── */}
+      <View style={[styles.bottom, { paddingBottom: bottomPadding + 16 }]}>
         <TouchableOpacity
-          style={[styles.nextButton, { backgroundColor: colors.saffron }]}
+          style={[styles.ctaBtn, !ctaEnabled && styles.ctaBtnOff]}
           onPress={goNext}
           activeOpacity={0.88}
         >
-          <Text style={styles.nextButtonText}>
-            {step === TOTAL_STEPS - 1 ? "Start Cooking" : "Continue"}
-          </Text>
-          <Feather name="arrow-right" size={20} color="#fff" />
+          <Text style={[styles.ctaText, !ctaEnabled && styles.ctaTextOff]}>{ctaLabel}</Text>
+          <Feather name="arrow-right" size={20} color={ctaEnabled ? "#fff" : OB.muted} />
         </TouchableOpacity>
       </View>
+
+      {/* ── Creating Account Modal ── */}
+      <Modal visible={showCreating} animationType="fade" statusBarTranslucent>
+        <View style={styles.loadScreen}>
+          {!loadingDone ? (
+            <View style={styles.loadContent}>
+              <Text style={styles.loadTitle}>Creating your account</Text>
+              <View style={styles.foodRow}>
+                {FOOD_EMOJIS.map((e, i) => (
+                  <Animated.Text key={i} style={[styles.foodEmoji, { transform: [{ translateY: foodAnims[i] }] }]}>{e}</Animated.Text>
+                ))}
+              </View>
+              <Text style={styles.wokEmoji}>🍳</Text>
+              <View style={styles.loadTrack}>
+                <Animated.View style={[styles.loadFill, { width: loadingWidth }]} />
+              </View>
+              <Text style={styles.loadMsg}>{loadingMsg}</Text>
+            </View>
+          ) : (
+            <View style={styles.doneWrap}>
+              <Text style={styles.doneEmoji}>✅</Text>
+              <Text style={styles.doneText}>Account Created!</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    gap: 12,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  progressDots: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  dot: {
-    height: 8,
-    borderRadius: 4,
-  },
-  skipText: { fontSize: 15, fontWeight: "500" },
-  slidesContainer: {
-    flex: 1,
-    flexDirection: "row",
-    width: width * TOTAL_STEPS,
-  },
-  slide: {
-    width,
-    paddingHorizontal: 24,
-    paddingTop: 8,
-  },
-  stepTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: -0.8,
-    lineHeight: 36,
-    marginBottom: 8,
-  },
-  stepSubtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 28,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  nameInput: {
-    height: 54,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    paddingHorizontal: 16,
-    fontSize: 17,
-    marginBottom: 8,
-    fontWeight: "500",
-  },
-  errorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 20,
-  },
-  errorText: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  stepper: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 24,
-    marginBottom: 12,
-  },
-  stepperBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepperValue: {
-    fontSize: 28,
-    fontWeight: "700",
-    minWidth: 40,
-    textAlign: "center",
-  },
-  chipGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 24,
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 100,
-    borderWidth: 1.5,
-  },
-  chipText: {
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  budgetRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 4,
-    marginBottom: 16,
-  },
-  budgetValue: { fontSize: 40, fontWeight: "800" },
-  budgetLabel: { fontSize: 18, fontWeight: "500" },
-  budgetButtons: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  budgetBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 100,
-    borderWidth: 1.5,
-  },
-  goalGrid: {
-    gap: 12,
-  },
-  goalCard: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 14,
-  },
-  goalText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  cuisineGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    paddingBottom: 20,
-  },
-  cuisineCard: {
-    width: (width - 68) / 3,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: "center",
-    gap: 6,
-    position: "relative",
-  },
-  cuisineFlag: { fontSize: 28 },
-  cuisineName: { fontSize: 12, fontWeight: "600", textAlign: "center" },
-  cuisineCheck: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pantryOptions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  pantryOption: {
-    flex: 1,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 16,
-    alignItems: "center",
-    gap: 10,
-  },
-  pantryIconBg: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pantryOptionTitle: { fontSize: 13, fontWeight: "700", textAlign: "center" },
-  pantryOptionSub: { fontSize: 11, textAlign: "center" },
-  skipLink: { paddingTop: 20, alignItems: "center" },
-  skipLinkText: { fontSize: 15 },
-  bottomContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
-  },
-  nextButton: {
-    height: 56,
-    borderRadius: 100,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  nextButtonText: {
-    color: "#fff",
-    fontSize: 17,
-    fontWeight: "700",
-  },
+  header: { paddingBottom: 12 },
+  headerRow: { flexDirection: "row", alignItems: "center" },
+  backBtn: { width: 52, height: 36, alignItems: "center", justifyContent: "center" },
+  progressTrack: { flex: 1, height: 4, backgroundColor: OB.border, borderRadius: 999, marginRight: 16 },
+  progressFill: { height: 4, backgroundColor: OB.blue, borderRadius: 999 },
+  skipText: { fontSize: 14, fontWeight: "500" },
+
+  slidesWrap: { flex: 1, flexDirection: "row", width: width * TOTAL_STEPS },
+  slide: { width },
+  slideContent: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 20 },
+
+  bigEmoji: { fontSize: 48, marginBottom: 10 },
+  stepTitle: { fontSize: 28, fontWeight: "800", color: OB.text, letterSpacing: -0.8, lineHeight: 36, marginBottom: 8 },
+  stepSub: { fontSize: 15, color: OB.muted, lineHeight: 22, marginBottom: 20 },
+  noteText: { fontSize: 13, color: OB.muted, marginBottom: 14 },
+  errMsg: { fontSize: 13, color: OB.error, marginBottom: 8, marginTop: 2 },
+
+  fieldLabel: { fontSize: 12, fontWeight: "700", color: OB.text, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 },
+  inputRow: { flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderColor: OB.border, borderRadius: 14, backgroundColor: OB.card, paddingRight: 12, marginBottom: 14 },
+  inputRowError: { borderColor: OB.error },
+  inputField: { flex: 1, height: 52, paddingHorizontal: 16, fontSize: 16, color: OB.text },
+  pwChecklist: { gap: 5, marginBottom: 14 },
+  pwCheckRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  pwCheckText: { fontSize: 12 },
+
+  termsRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginTop: 8 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: OB.border, alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 },
+  checkboxOn: { backgroundColor: OB.blue, borderColor: OB.blue },
+  termsText: { flex: 1, fontSize: 14, color: OB.muted, lineHeight: 20 },
+
+  hhRow: { flexDirection: "row", gap: 8, marginBottom: 18 },
+  hhPill: { flex: 1, height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: OB.border, backgroundColor: OB.card, alignItems: "center", justifyContent: "center" },
+  hhPillOn: { backgroundColor: OB.blue, borderColor: OB.blue },
+  hhPillText: { fontSize: 17, fontWeight: "700", color: OB.text },
+  hhPillTextOn: { color: "#fff" },
+  hhCard: { padding: 18, borderRadius: 16, borderWidth: 1, borderColor: OB.border, backgroundColor: OB.blueLight },
+  hhCardText: { fontSize: 15, fontWeight: "600", color: OB.blue, lineHeight: 22 },
+
+  cardStack: { gap: 10 },
+  selectCard: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 18, borderWidth: 1.5, borderColor: OB.border, backgroundColor: "#fff" },
+  selectCardOn: { borderColor: OB.blue, backgroundColor: OB.blueLight },
+  cardIcon: { width: 52, height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  cardTitle: { fontSize: 15, fontWeight: "700", marginBottom: 2 },
+  cardDesc: { fontSize: 12, color: OB.muted, lineHeight: 16 },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: OB.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  radioOn: { borderColor: OB.blue, backgroundColor: OB.blue },
+  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" },
+
+  dietGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  dietCard: { width: (width - 68) / 2, padding: 14, borderRadius: 16, borderWidth: 1.5, borderColor: OB.border, backgroundColor: "#fff", alignItems: "center", position: "relative" },
+  dietCardOn: { borderColor: OB.blue, backgroundColor: OB.blueLight },
+  dietLabel: { fontSize: 13, fontWeight: "700", textAlign: "center", marginBottom: 3 },
+  dietDesc: { fontSize: 10, color: OB.muted, textAlign: "center", lineHeight: 13 },
+  dietCheckBadge: { position: "absolute", top: 8, right: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: OB.blue, alignItems: "center", justifyContent: "center" },
+
+  allergyWarningBox: { backgroundColor: OB.amberLight, borderLeftWidth: 4, borderLeftColor: OB.amber, borderRadius: 12, padding: 12, marginBottom: 14 },
+  allergyWarningText: { fontSize: 13, color: "#92400E", lineHeight: 18 },
+  allergyGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
+  allergyChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 100, borderWidth: 1.5, borderColor: OB.border, backgroundColor: "#fff" },
+  allergyChipOn: { backgroundColor: OB.redLight, borderColor: OB.redBorder },
+  allergyLabel: { fontSize: 13, fontWeight: "600", color: OB.text },
+  allergyLabelOn: { color: OB.red },
+  swapCard: { backgroundColor: OB.card, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: OB.border },
+  swapTitle: { fontSize: 13, fontWeight: "700", color: OB.text, marginBottom: 6 },
+  swapItem: { fontSize: 12, color: OB.muted, lineHeight: 18 },
+
+  cuisineHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  cuisineCount: { fontSize: 14, fontWeight: "600" },
+  cuisineAction: { fontSize: 13, fontWeight: "600" },
+  cuisineGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  cuisineCard: { width: (width - 68) / 3, paddingVertical: 18, borderRadius: 16, borderWidth: 1.5, borderColor: OB.border, backgroundColor: "#fff", alignItems: "center", position: "relative" },
+  cuisineCardOn: { borderColor: OB.blue, backgroundColor: OB.blueLight },
+  cuisineCheckBadge: { position: "absolute", top: 8, right: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: OB.blue, alignItems: "center", justifyContent: "center" },
+  cuisineName: { fontSize: 11, fontWeight: "600", textAlign: "center" },
+
+  pantryList: { gap: 12 },
+  pantryOption: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 18, borderWidth: 1.5, borderColor: OB.border, backgroundColor: "#fff" },
+  pantryIconBox: { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  pantryOptTitle: { fontSize: 15, fontWeight: "700", color: OB.text, marginBottom: 2 },
+  pantryOptDesc: { fontSize: 12, color: OB.muted, lineHeight: 16 },
+
+  bottom: { paddingHorizontal: 24, paddingTop: 8 },
+  ctaBtn: { height: 56, borderRadius: 16, backgroundColor: OB.blue, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  ctaBtnOff: { backgroundColor: OB.border },
+  ctaText: { color: "#fff", fontSize: 17, fontWeight: "700" },
+  ctaTextOff: { color: OB.muted },
+
+  loadScreen: { flex: 1, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+  loadContent: { width: "100%", paddingHorizontal: 40, alignItems: "center" },
+  loadTitle: { fontSize: 24, fontWeight: "800", color: OB.text, letterSpacing: -0.5, marginBottom: 28 },
+  foodRow: { flexDirection: "row", gap: 14, marginBottom: 0 },
+  foodEmoji: { fontSize: 28 },
+  wokEmoji: { fontSize: 60, marginTop: 8, marginBottom: 32 },
+  loadTrack: { width: "100%", height: 4, backgroundColor: OB.border, borderRadius: 999, marginBottom: 18, overflow: "hidden" },
+  loadFill: { height: 4, backgroundColor: OB.blue, borderRadius: 999 },
+  loadMsg: { fontSize: 15, color: OB.muted, textAlign: "center" },
+  doneWrap: { alignItems: "center", gap: 16 },
+  doneEmoji: { fontSize: 72 },
+  doneText: { fontSize: 26, fontWeight: "800", color: OB.text, letterSpacing: -0.5 },
 });

@@ -1,0 +1,977 @@
+# PANTRYSWIPE — COMPLETE ONBOARDING FLOW
+## Master Build Prompt: Welcome → Account Creation → Pantry Setup → Discover
+
+> This prompt covers the entire first-time user experience from splash screen to the Discover page. Paste into Replit Agent as a standalone feature build on top of the existing codebase.
+
+---
+
+## OVERVIEW
+
+The onboarding is a **multi-step wizard** with a persistent progress bar at the top. Each step has a smooth horizontal slide transition (like swiping pages). The user cannot skip ahead — each step has a validation gate. The back button is always available (top left) except on Step 1.
+
+**Total steps: 6 pages** (not 10 individual screens — combined as below)
+1. Welcome — Name + Password + Household Size (all on one page)
+2. Skill Level + Weekly Budget (both on one page)
+3. Dietary Profile + Allergies (both on one page)
+4. Your Goal (one page)
+5. Cuisine Preferences (one page)
+6. Pantry Setup (scan fridge / scan receipt / type / skip — one page) → Creating Account animation → Discover
+
+---
+
+## GLOBAL ONBOARDING STYLES
+
+```css
+/* Onboarding uses the same white-blue design system */
+--ob-bg: #FFFFFF;
+--ob-card: #F0F6FF;
+--ob-blue: #2B7FFF;
+--ob-blue-light: #EBF3FF;
+--ob-text: #0F1C2E;
+--ob-muted: #94A3B8;
+--ob-border: #E2EAFF;
+--ob-error: #EF4444;
+--ob-success: #10B981;
+
+/* Progress bar */
+.progress-bar-track {
+  height: 4px;
+  background: var(--ob-border);
+  border-radius: 999px;
+  margin: 0 24px;
+}
+.progress-bar-fill {
+  height: 4px;
+  background: var(--ob-blue);
+  border-radius: 999px;
+  transition: width 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Page slide transition */
+.step-enter  { transform: translateX(100%); opacity: 0; }
+.step-active { transform: translateX(0);    opacity: 1; transition: all 350ms cubic-bezier(0.16, 1, 0.3, 1); }
+.step-exit   { transform: translateX(-100%); opacity: 0; }
+
+/* Selection card (for skill, budget, diet, goal etc.) */
+.select-card {
+  background: white;
+  border: 1.5px solid var(--ob-border);
+  border-radius: 18px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+.select-card:active { transform: scale(0.97); }
+.select-card.selected {
+  border-color: var(--ob-blue);
+  background: var(--ob-blue-light);
+  box-shadow: 0 0 0 3px rgba(43, 127, 255, 0.15);
+}
+
+/* Primary CTA button */
+.ob-btn {
+  width: 100%;
+  height: 56px;
+  background: var(--ob-blue);
+  color: white;
+  border-radius: 16px;
+  font: 600 17px 'Inter', sans-serif;
+  box-shadow: 0 6px 20px rgba(43, 127, 255, 0.35);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.ob-btn:active { transform: scale(0.98); box-shadow: 0 3px 10px rgba(43,127,255,0.25); }
+.ob-btn:disabled {
+  background: var(--ob-border);
+  color: var(--ob-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Text input */
+.ob-input {
+  width: 100%;
+  height: 52px;
+  background: var(--ob-card);
+  border: 1.5px solid var(--ob-border);
+  border-radius: 14px;
+  padding: 0 16px;
+  font: 400 16px 'Inter', sans-serif;
+  color: var(--ob-text);
+  outline: none;
+  transition: border-color 200ms ease;
+}
+.ob-input:focus { border-color: var(--ob-blue); box-shadow: 0 0 0 3px rgba(43,127,255,0.12); }
+.ob-input.error { border-color: var(--ob-error); }
+```
+
+---
+
+## SPLASH SCREEN (Before Step 1)
+
+Full screen white page shown for 2 seconds on first app launch.
+
+```
+Background: white
+
+Center:
+  Animated logo — fork icon + swipe arrow, drawn-on SVG animation (stroke-dashoffset trick)
+  Logo animates in over 800ms on load
+
+  Below logo (fade in at 600ms):
+  "PantrySwipe" — 32px Playfair Display Bold, --ob-text
+
+  Tagline (fade in at 900ms):
+  "Your fridge. Your chef. Your way." — 15px Inter, --ob-muted
+
+After 2.2s → slides into Step 1 automatically
+```
+
+---
+
+## STEP 1 — WELCOME: NAME + PASSWORD
+
+**Progress bar: 10% filled**
+
+```
+TOP SECTION:
+  Back button: hidden on this step
+  Progress bar: 10%
+
+CONTENT (padded 24px sides):
+
+  Illustration:
+    Friendly waving chef character — SVG illustration, centered, ~160px tall
+    Small animated wave on the hand (CSS keyframe, subtle)
+
+  Heading (24px Playfair Display Bold):
+    "Welcome to PantrySwipe! 👋"
+
+  Subtext (14px Inter, --ob-muted):
+    "Let's set up your account. This takes about 2 minutes."
+
+  ── FORM FIELDS ──
+
+  Label: "Your Name"
+  Input: text, placeholder "e.g. Alex Chen"
+  Validation:
+    - Required — cannot be empty
+    - Minimum 2 characters
+    - Only letters, spaces, hyphens allowed (no numbers/symbols)
+    - Error message below: "Please enter your name (letters only)"
+    - Once valid: green checkmark icon appears inside input on the right
+
+  Label: "Email Address"
+  Input: email, placeholder "you@example.com"
+  Validation:
+    - Must be valid email format (regex check)
+    - Error: "Please enter a valid email address"
+
+  Label: "Password"
+  Input: password (masked), placeholder "Create a password"
+  Right icon: eye toggle (show/hide password)
+  Validation rules shown as a live checklist below the input:
+    ✓ or ✗ (green/red) for each rule, updates in real time as user types:
+      [ ] At least 8 characters
+      [ ] At least 1 uppercase letter
+      [ ] At least 1 number
+      [ ] At least 1 special character (!@#$%^&*)
+  All 4 must be green to enable Next button.
+
+  Label: "Confirm Password"
+  Input: password (masked), placeholder "Re-enter your password"
+  Validation:
+    - Must match Password field exactly
+    - Error shown inline: "Passwords do not match"
+    - Green checkmark when matching
+
+  ── TERMS ROW ──
+  Checkbox + "I agree to the Terms of Service and Privacy Policy"
+  Both "Terms of Service" and "Privacy Policy" are blue underlined links → open modal
+  Must be checked to proceed.
+
+  ── CTA BUTTON ──
+  "Continue →"
+  DISABLED (grey) until: name valid + email valid + password valid + confirm matches + checkbox ticked
+  ENABLED (blue) once all conditions met
+
+BACKEND:
+  On Continue → create user record in DB with:
+    name (stored permanently — used everywhere in app, cannot be changed without support)
+    email
+    password_hash (bcrypt, 12 rounds)
+    onboarding_step: 1
+    created_at: now()
+
+  The name is FIXED to the profile permanently once submitted:
+    - Displayed in: Home screen greeting, Profile page, Social posts, Comments, Meal log
+    - Stored as users.display_name — shown exactly as entered (respects capitalisation)
+    - Settings page shows it greyed out with a lock icon and "Contact support to change name"
+```
+
+---
+
+## STEP 2 — HOUSEHOLD SIZE
+
+**Progress bar: 20%**
+
+```
+Heading: "Who are you cooking for?" — 24px Playfair Display Bold
+Subtext: "This helps us suggest the right portion sizes." — 14px Inter, --ob-muted
+
+VISUAL: Interactive illustration
+  A simple animated kitchen table with chairs
+  As user selects a number, chairs animate in/out (1 chair for Solo, 2 for Couple, etc.)
+  This makes the step feel alive and fun
+
+SIZE OPTIONS (displayed as a horizontal number picker + cards below):
+
+  Large pill number row (horizontal):
+    [ 1 ] [ 2 ] [ 3 ] [ 4 ] [ 5 ] [ 6+ ]
+    Active number: blue filled pill, white number
+    Tap to select
+
+  Below the number, a label card appears describing the household type:
+    1 → "🧍 Just You — solo portions, minimal waste"
+    2 → "👫 Couple — intimate meals, perfect for two"
+    3 → "👨‍👩‍👦 Small Family — easy weeknight dinners"
+    4 → "👨‍👩‍👧‍👦 Family of Four — crowd-pleasing recipes"
+    5 → "🏠 Big Household — batch cooking friendly"
+    6+ → "🎉 Large Group — meal prep & sharing meals"
+
+HOW THIS INTEGRATES INTO THE APP:
+  - household_size stored in users table
+  - Every recipe's default serving size is set to household_size
+  - Swipe deck shows recipes scaled to household_size portions
+  - Shopping list quantities are multiplied by household_size
+  - Meal planner calorie totals multiply by household_size (for "household total" view)
+  - "Feeds X people" badge on recipe cards uses this number
+  - Can be edited in Settings → "Household" section anytime
+
+CTA: "Continue →" (always enabled — has a default of 1 if nothing tapped, but nudge them: "Tap to select your household size")
+```
+
+---
+
+## STEP 3 — SKILL LEVEL
+
+**Progress bar: 30%**
+
+```
+Heading: "How confident are you in the kitchen?" — 24px Playfair Display Bold
+Subtext: "Be honest — we'll tailor recipes to match." — 14px Inter, --ob-muted
+
+4 OPTION CARDS (vertical stack, full width):
+
+  Each card: .select-card layout
+    Left: emoji in 48px circle (--ob-card background)
+    Center: title (16px Inter SemiBold) + description (13px Inter, --ob-muted)
+    Right: radio circle (unfilled → filled blue on select)
+
+  🥄 Beginner
+    "I follow recipes step by step and keep it simple"
+    → App shows: recipes tagged Easy, max 5 ingredients, <30 min, with extra tip callouts on each step
+
+  🍳 Home Cook
+    "I'm comfortable in the kitchen with most techniques"
+    → App shows: Easy + Medium recipes, standard instructions, no extra hand-holding
+
+  👨‍🍳 Confident Cook
+    "I experiment and enjoy a challenge"
+    → App shows: Medium + Hard recipes, advanced techniques, flavour variation tips
+
+  ⭐ Advanced / Chef Level
+    "I know my way around a professional kitchen"
+    → App shows: all difficulty levels including complex multi-component dishes, wine pairing suggestions, plating tips
+
+HOW THIS INTEGRATES INTO THE APP:
+  - skill_level stored in users table
+  - Swipe deck filters recipes by difficulty matching skill level:
+      Beginner → only "Easy" tagged recipes
+      Home Cook → "Easy" and "Medium"
+      Confident → "Medium" and "Hard"
+      Advanced → all, including "Pro" tagged recipes
+  - Recipe step detail level changes:
+      Beginner: every step has a "💡 Tip" callout (e.g. "Tip: Pat the chicken dry before searing for a better crust")
+      Advanced: steps are concise, no hand-holding
+  - Difficulty badge on recipe card is colour-coded vs user's skill (green = within comfort zone, amber = stretch goal, red = challenging)
+  - CHANGEABLE in Settings → "Cooking Profile" → "Skill Level" at any time (change takes effect immediately on next swipe session)
+
+Validation: Must select one to enable Continue.
+CTA: "Continue →"
+```
+
+---
+
+## STEP 4 — WEEKLY BUDGET
+
+**Progress bar: 40%**
+
+```
+Heading: "What's your weekly food budget?" — 24px Playfair Display Bold
+Subtext: "We'll suggest recipes that fit your wallet." — 14px Inter, --ob-muted
+
+VISUAL: Animated piggy bank or wallet icon at top, subtle jiggle animation
+
+5 BUDGET OPTION CARDS (vertical stack):
+
+  Each card: .select-card with:
+    Left: dollar icon in circle (colour-coded by budget tier)
+    Center: amount (18px Inter Bold) + description (13px Inter, --ob-muted)
+    Right: radio circle
+
+  💵 Under $50/week
+    "Budget-friendly meals, pantry staples, minimal waste"
+    Color: green
+
+  💵 $50–$75/week
+    "Smart spending with variety"
+    Color: teal
+
+  💵 $75–$100/week
+    "Balanced meals with quality ingredients"
+    Color: blue
+
+  💵 $100–$150/week
+    "More variety, premium cuts, diverse cuisines"
+    Color: indigo
+
+  💵 $150–$200+/week
+    "No compromise — quality-first cooking"
+    Color: purple
+
+HOW THIS INTEGRATES INTO THE APP:
+  - weekly_budget stored in users table as a range string ("50-75") and midpoint int (62)
+  - Recipe cards show estimated cost per serving (calculated from ingredient prices via Open Food Facts API or AI estimate)
+  - Budget badge on recipe card: green if under budget, amber if close, red if over
+  - Planner weekly summary: "Estimated spend this week: $68 / $75 budget" with progress bar
+  - Shopping list shows total estimated cost at bottom vs weekly budget remaining
+  - "Budget-friendly" filter chip auto-populates based on this setting
+  - AI Chef recommendations bias toward recipes within budget
+  - In Settings → "Budget & Spending" section: user can update budget anytime
+  - If user is consistently over budget, app sends weekly tip: "💡 Try these 3 cheaper alternatives to [ingredient]"
+
+Validation: Must select one.
+CTA: "Continue →"
+```
+
+---
+
+## STEP 5 — DIETARY PROFILE
+
+**Progress bar: 50%**
+
+```
+Heading: "Any dietary requirements?" — 24px Playfair Display Bold
+Subtext: "We'll only show you food that works for you." — 14px Inter, --ob-muted
+
+Note text at top (small, --ob-muted): "Select all that apply. You can change these anytime in Settings."
+
+8 DIET OPTIONS (2-column grid of selection cards):
+
+Each card: rounded square card, centered emoji (32px), diet name (14px Inter SemiBold), short description (11px Inter, --ob-muted)
+Multi-select allowed (some are combinable e.g. Halal + Keto)
+Selected state: blue border + blue-light background + blue checkmark top-right
+
+  🥩 Omnivore
+    "I eat everything — no restrictions"
+    Note: selecting Omnivore deselects all others (it's the default)
+
+  🥗 Vegetarian
+    "No meat or fish, but dairy & eggs are fine"
+    → Filters: removes all recipes containing meat, poultry, seafood
+
+  🌿 Vegan
+    "No animal products at all"
+    → Filters: removes meat, fish, dairy, eggs, honey, gelatin
+
+  🐟 Pescatarian
+    "No meat, but fish and seafood are fine"
+    → Filters: removes meat and poultry, keeps fish/seafood
+
+  ☪️ Halal
+    "No pork, lard, or non-halal slaughtered meat"
+    → Filters: STRICT — removes all pork, bacon, ham, lard, pepperoni, prosciutto, chorizo (unless halal-certified), alcohol in cooking (no wine reductions, beer batters), gelatin from non-halal sources
+    → Recipe ingredient substitutions offered: "This recipe uses wine — we've swapped it for grape juice + vinegar"
+
+  ✡️ Kosher
+    "Jewish dietary laws — no pork, shellfish, no mixing meat & dairy"
+    → Filters: removes pork, shellfish, lobster, crab; flags recipes that mix meat and dairy; separates meat and dairy meal sessions in planner
+
+  🥑 Keto
+    "High fat, very low carb (under 20g net carbs/day)"
+    → Filters: removes high-carb recipes (pasta, rice, bread, potatoes, sugary dishes); shows net carbs prominently on recipe cards; adjusts macro targets accordingly
+
+  🍖 Paleo
+    "Whole foods — no grains, legumes, dairy, or processed food"
+    → Filters: removes recipes with grains (bread, pasta, rice, oats), dairy, legumes (beans, lentils, peanuts), refined sugar, processed ingredients
+
+HOW THIS INTEGRATES:
+  - dietary_restrictions stored as string array in users table: ["halal", "keto"]
+  - Every recipe in the database is tagged with dietary flags
+  - All recipe filtering, swipe deck, AI suggestions, and social feed recipe buttons respect these filters
+  - If a posted social recipe conflicts with dietary profile: "⚠️ This recipe contains pork — not compatible with your Halal diet. See alternatives?"
+  - Recipe detail ingredient list: incompatible ingredients highlighted in red with suggested swap:
+      "🚫 Bacon → ✅ Swap with turkey strips or mushrooms"
+      "🚫 White wine → ✅ Swap with chicken stock + 1 tsp apple cider vinegar"
+  - Settings → "Dietary Profile" to change anytime
+
+Validation: Must select at least one.
+CTA: "Continue →"
+```
+
+---
+
+## STEP 6 — ALLERGIES
+
+**Progress bar: 55%**
+
+```
+Heading: "Any food allergies?" — 24px Playfair Display Bold
+
+Sub-heading in amber warning card:
+  ⚠️ "Your safety comes first. Selected allergens will be filtered from ALL recipes, ingredients, and suggestions."
+  Background: #FFF8EB, border-left: 4px solid #F59E0B, border-radius: 12px, padding: 12px
+
+Note: "Select all that apply. Leave blank if you have no allergies."
+
+12 ALLERGY CHIPS (multi-select grid, 2 columns):
+
+  🥜 Peanuts
+  🌰 Tree Nuts
+  🥛 Dairy / Lactose
+  🌾 Gluten / Wheat
+  🥚 Eggs
+  🦐 Shellfish
+  🐟 Fish
+  🫘 Soy
+  🌻 Sesame
+  🐝 Sulphites
+  🌽 Corn
+  🍓 Fruit (specify below)
+
+Each chip: pill shape, emoji + label
+DEFAULT: unselected (light grey border, white bg)
+SELECTED: red-tinted background (#FEF2F2), red border (#FECACA), red text (#DC2626), checkmark
+
+"Other allergy" free-text input at bottom:
+  Placeholder: "e.g. mustard, celery, lupin..."
+  Tags appear as red pills as user types + presses comma or return
+
+── INGREDIENT SWAP SUGGESTIONS ──
+Below allergen selection, show a "Smart Swaps" preview panel that updates in real time:
+
+When user selects an allergen, show a small expandable card:
+
+  "🥜 Peanuts selected — here are common swaps we'll suggest in recipes:"
+    • Peanut butter → Sunflower seed butter (SunButter) or almond butter (if no tree nut allergy)
+    • Peanuts in stir-fry → Toasted pumpkin seeds or cashews (if no tree nut allergy)
+    • Satay sauce → Tahini-based sauce
+
+  "🥛 Dairy selected — swaps we'll use:"
+    • Milk → Oat milk, almond milk, coconut milk
+    • Butter → Vegan butter, coconut oil, olive oil
+    • Cheese → Nutritional yeast, cashew cream, vegan cheese
+    • Cream → Full-fat coconut cream
+    • Greek yogurt → Coconut yogurt, silken tofu blended
+
+  "🌾 Gluten selected — swaps we'll use:"
+    • Flour → Almond flour, rice flour, tapioca starch
+    • Soy sauce → Tamari (GF soy sauce) or coconut aminos
+    • Pasta → Rice noodles, zucchini noodles, chickpea pasta
+    • Breadcrumbs → Crushed rice crackers, almond meal
+
+  "🥚 Eggs selected — swaps we'll use:"
+    • 1 egg in baking → 1 tbsp ground flaxseed + 3 tbsp water (flax egg)
+    • Egg wash → Brushed olive oil or plant milk
+    • Scrambled eggs → Silken tofu scramble
+
+  (Show the relevant one(s) based on selected allergens)
+
+HOW THIS INTEGRATES:
+  - allergies stored as string array in users table
+  - HARD FILTER — unlike dietary preferences which have "swap" options, allergens trigger a BLOCK:
+      Recipe detail: incompatible ingredient shown with 🚫 and red background
+      Recipe card in swipe deck: if recipe contains allergen with no viable swap → recipe removed from deck entirely
+      Social recipe "See Recipe" button: shows allergy warning modal first with confirm or view swaps
+  - AI Chef is briefed on allergies in every system prompt call
+  - Shopping list: items flagged if they might contain allergen (cross-contamination note)
+  - Barcode scanner: after scanning item, if ingredient list contains user's allergen → full-screen red WARNING modal before adding to pantry
+
+Validation: Can be skipped (button text changes to "Skip — No Allergies →" if nothing selected, regular "Continue →" if something selected)
+```
+
+---
+
+## STEP 7 — YOUR GOAL
+
+**Progress bar: 65%**
+
+```
+Heading: "What do you want to achieve?" — 24px Playfair Display Bold
+Subtext: "Pick your top goal — you can add more later." — 14px Inter, --ob-muted
+
+6 GOAL CARDS (vertical stack, single select):
+
+  🥦 Eat Healthier
+    "Better nutrients, less processed food, more balance"
+    → App: prioritises recipes with high micronutrient density, Nutri-Score A/B, limits ultra-processed ingredients, suggests vegetable-heavy dishes
+
+  💪 Build Muscle
+    "High protein meals to support training and gains"
+    → App: filters to recipes ≥30g protein per serving, shows protein per 100g on cards, suggests post-workout meal timing in planner, macro targets auto-set to high-protein split (40P/30C/30F)
+
+  💰 Save Money
+    "Cook well without breaking the bank"
+    → App: surfaces cheapest recipes first, budget badge always visible on cards, suggests bulk-cook meals, highlights pantry-match (use what you have), weekly spend summary prominent on planner
+
+  ⚡ Cook Faster
+    "Weeknight-friendly meals, minimal time"
+    → App: default filter max 30 mins cook time, one-pan/one-pot recipes prioritised, "Prep now, cook later" meal suggestions, meal prep Sunday planning view
+
+  🌍 Explore Cuisines
+    "Discover new flavours and culinary traditions"
+    → App: rotation system ensures cuisine variety in swipe deck, "New to you" badge on first recipe of each cuisine, weekly "Cuisine Spotlight" feature on Home, cultural context notes in recipe detail
+
+  👨‍👩‍👧 Cook for Others
+    "Impress guests, cook for family, host with confidence"
+    → App: default servings match household_size, "Crowd-pleaser" tagged recipes prioritised, occasion selector pre-selected to Family/Friends, portion scaling prompt always visible in recipe detail
+
+HOW THIS INTEGRATES:
+  - primary_goal stored in users table
+  - Swipe deck algorithm weights recipes by goal alignment (score boost for on-goal recipes)
+  - Home screen shows goal-contextual tip each morning:
+      Eat Healthier → "💡 Today's tip: Swap white rice for cauliflower rice to cut 180 kcal"
+      Build Muscle → "💡 Post-workout: These high-protein recipes recover your muscles faster"
+      Save Money → "💡 You saved $14 vs ordering out this week. Keep it up!"
+  - Planner weekly summary section changes title based on goal:
+      Build Muscle → "Protein this week: avg 142g/day ✓"
+      Save Money → "Spend this week: $62 / $75 budget ✓"
+
+Validation: Must select one.
+CTA: "Continue →"
+```
+
+---
+
+## STEP 8 — CUISINE PREFERENCES
+
+**Progress bar: 75%**
+
+```
+Heading: "What cuisines excite you?" — 24px Playfair Display Bold
+Subtext: "Pick at least one. Your swipe deck will reflect your taste." — 14px Inter, --ob-muted
+
+11 CUISINE OPTIONS (grid, 3 columns):
+
+Each option: square card
+  Top half: flag emoji or illustrated icon (large, 40px)
+  Bottom: cuisine name (13px Inter SemiBold)
+  Selected: blue border + blue-light bg + blue checkmark badge top-right
+  Unselected: white bg + light border
+
+  🇮🇹 Italian
+  🇯🇵 Japanese
+  🇰🇷 Korean
+  🇮🇳 Indian
+  🇹🇭 Thai
+  🇲🇽 Mexican
+  🇺🇸 American
+  🇫🇷 French
+  🇻🇳 Vietnamese
+  🇸🇬 Singaporean
+  🇲🇾 Malaysian
+
+"Select All" button (text link, top right of grid)
+"Clear" button (appears after selecting, top right)
+
+Counter below grid: "3 selected" — updates in real time
+
+HOW THIS INTEGRATES:
+  - preferred_cuisines stored as string array in users table
+  - Swipe deck recipe pool is filtered to these cuisines (with occasional 10% wildcard from unselected cuisines to encourage discovery)
+  - Home screen occasion chips auto-populate relevant cuisines
+  - AI Chef's recipe generation is constrained to preferred cuisines unless user explicitly asks for something else
+  - "Cuisine Passport" gamification tracks progress within each selected cuisine
+  - Social feed shows posts tagged with preferred cuisines first
+  - Exploring a new cuisine (one not in preferences) can be done from the Explore tab
+
+Validation: Must select at least one. If user tries to continue with none selected:
+  Red shake animation on grid + error text: "Please select at least one cuisine to continue"
+
+CTA: "Continue →"
+```
+
+---
+
+## STEP 9 — YOUR PANTRY STARTS HERE
+
+**Progress bar: 88%**
+
+```
+Heading: "Let's stock your pantry" — 24px Playfair Display Bold
+Subtext: "The more you add, the better your recipe suggestions." — 14px Inter, --ob-muted
+
+4 LARGE OPTION CARDS (vertical stack, tappable):
+
+Each card: full-width .select-card with:
+  Left: large icon in 56x56px coloured circle
+  Center: title (16px Inter Bold) + description (13px Inter, --ob-muted)
+  Right: Lucide ChevronRight, --ob-muted
+  No radio button — these are actions, not selections
+
+── OPTION 1: SCAN FRIDGE ──
+  🤳 "Scan Fridge / Pantry"
+  "Point your camera at your food — AI will detect it instantly"
+  Background circle: blue (#EBF3FF)
+
+  ON TAP:
+    1. Request camera permission via browser getUserMedia API
+       Permission prompt uses custom in-app overlay BEFORE triggering browser permission:
+         Modal: "📷 Camera Access Needed"
+         "PantrySwipe needs your camera to identify food items. We don't store any camera footage."
+         Two buttons: "Allow Camera" (blue) | "Not Now" (ghost)
+         If "Allow Camera" → triggers browser getUserMedia({ video: { facingMode: 'environment' } })
+         If browser denies → show instructions: "Go to Settings → Browser → Camera → Allow"
+
+    2. Camera view opens (full screen):
+       Live camera feed with white rounded-rect targeting overlay
+       Instructions text: "Point at food items one by one — hold steady for 2 seconds"
+       Subtle animated scan line (top to bottom, repeating, blue glow)
+       
+       Bottom panel (semi-transparent):
+         Counter: "Items detected: 3" — updates as AI detects items
+         "Done Scanning" button (blue, full width)
+         "Switch to Receipt Scan" link
+
+    3. AI Detection (send frame to Claude Vision API every 2 seconds):
+       System prompt: "You are a pantry inventory AI. Identify food items visible in this image. For each item provide: name, estimated quantity, unit (pieces/g/ml/pack), and category (dairy/produce/meat/seafood/grains/condiments/sauces/spices/frozen/drinks/snacks/baking). Return only JSON array."
+       
+       As items are detected, they appear as small animated pills at the bottom of camera view:
+         "🥦 Broccoli · 1 head · Produce" (slides up with spring animation)
+         "🥛 Milk · 1 carton · Dairy" (slides up)
+         "🧀 Cheddar · 200g · Dairy" (slides up)
+
+    4. User taps "Done Scanning" → Review Screen:
+       Title: "Here's what we found 👀"
+       Subtext: "Edit anything that looks wrong, then add to your pantry."
+
+       List of detected items, each as an editable row:
+         Emoji icon + Name (editable text field) + Quantity (editable number) + Unit (dropdown) + Category (dropdown pill)
+         Trash icon to remove item from list
+         "Looks wrong? Fix it" — tap row to expand and edit all fields
+
+       Bottom: "+ Add another item manually" link
+
+       "Add X Items to Pantry →" button (blue, shows count)
+
+    5. On confirm → items are added to pantry_items table with:
+         user_id, name, quantity, unit, category, purchase_date: today, expiry_date: AI estimated or null
+         source: 'camera_scan'
+       Items appear in Pantry screen immediately, grouped by category
+
+── OPTION 2: SCAN RECEIPT ──
+  🧾 "Scan Receipt"
+  "Take a photo of your grocery receipt — we'll read it for you"
+  Background circle: teal (#E6FAF5)
+
+  ON TAP:
+    1. Same camera permission flow as above (if not already granted)
+
+    2. Static photo capture (not live scan):
+       Shutter button centered at bottom
+       "Or upload from gallery" link below shutter
+       Frame guide overlay: white rectangle outline with corner marks
+       Instruction: "Fit your receipt in the frame"
+
+    3. On photo taken → Loading state:
+       "Reading your receipt..." with animated receipt icon (lines appearing one by one)
+
+    4. Claude Vision API call:
+       System prompt: "You are a grocery receipt parser. Extract every food/grocery item from this receipt image. For each item return: name (clean product name, not the barcode string), quantity (default 1 if not specified), estimated unit (pieces/g/ml/pack), category (dairy/produce/meat/seafood/grains/condiments/sauces/spices/frozen/drinks/snacks/baking), estimated_price (from receipt if visible). Return only JSON array."
+
+    5. Review Screen (same as camera scan review — same component):
+       Title: "Items from your receipt 🧾"
+       Same editable list UI
+       Note at top: "We've matched [X] items. Check quantities and categories."
+
+    6. Confirm → add to pantry (source: 'receipt_scan')
+
+── OPTION 3: TYPE IT IN ──
+  ✏️ "Type It In"
+  "Add ingredients manually at your own pace"
+  Background circle: amber (#FFF8EB)
+
+  ON TAP:
+    Opens a streamlined manual entry bottom sheet:
+
+    Search field at top: "Search for an ingredient..." (auto-suggest from Open Food Facts + common pantry items)
+
+    As user types, dropdown shows matching items with:
+      Emoji · Name · Common unit
+      Tap to select → pre-fills the form below
+
+    Form fields:
+      Name (text, required)
+      Quantity (number input)
+      Unit (dropdown: pieces / g / kg / ml / L / pack / can / bunch / tbsp / cup)
+      Category (dropdown with emoji: see categories above)
+      Location (dropdown: Fridge / Freezer / Pantry shelf / Spice rack)
+      Expiry date (optional date picker)
+
+    "Add Item" button → adds to list at bottom of sheet
+    Added items shown as a growing list with edit/remove options
+    "Done — Add to Pantry" at bottom
+
+── OPTION 4: I'LL ADD LATER ──
+  ⏭️ "I'll Add Later"
+  "Skip for now — you can always add ingredients from the Pantry tab"
+  Background circle: grey (#F1F5F9)
+
+  ON TAP:
+    Small confirmation bottom sheet slides up:
+      "You sure? 🤔"
+      "No worries! Head to the Pantry tab anytime to add ingredients. Your recipe suggestions will improve as you add more."
+      Two buttons:
+        "Yes, skip for now" → proceeds to Step 10 (account creation animation)
+        "Actually, let me add some" → dismisses sheet, stays on Step 9
+
+CTA at bottom of Step 9 (only shown after scan/type option completes or after "I'll Add Later"):
+  "Let's Go! →" (blue, full width)
+```
+
+---
+
+## STEP 10 — CREATING ACCOUNT (Animated Loading Screen)
+
+**Progress bar: 100% (fills up during animation)**
+
+```
+This screen appears after user taps "Let's Go!" or "Start Cooking!" and lasts for 3.5–4 seconds before navigating to Discover.
+
+BACKGROUND: White
+
+ANIMATION (centered, takes up 60% of screen height):
+  A wok/pan illustration at the center
+
+  Animation sequence (CSS keyframes + SVG animation):
+
+    Phase 1 (0–0.8s):
+      Wok slides in from bottom of frame, bounces slightly (spring easing)
+      Pan is empty, sitting on a flame (flame flickers with CSS animation)
+
+    Phase 2 (0.8–2.2s): THE TOSS ANIMATION
+      Food items fly UP from the wok:
+        🥦 broccoli floret → flies up 180px, rotates 360deg, hangs for a moment
+        🧄 garlic clove → flies up 220px, wobbles, rotates
+        🍅 tomato → flies up 160px, bounces
+        🍝 pasta strands → fly up and separate, spread out
+        🫒 olive → small, flies up high, comes back fast
+        🧀 cheese chunk → tumbles up, rotates
+        🥕 carrot → flies up at angle, spins
+
+      Each ingredient has a unique trajectory (slight left/right variation)
+      They arc UP, pause briefly at peak (ease-in-out), then arc back DOWN into the wok
+      Wok "catches" them with a subtle shake animation
+      This loop plays 1.5 times total (goes up, comes down, goes up again)
+
+    Phase 3 (2.2–3.0s):
+      Steam puffs rise from the wok (3 separate SVG puffs, staggered timing)
+      Progress bar at bottom reaches 100%
+
+    Phase 4 (3.0–3.5s):
+      Wok animation fades out
+      "✅ Account Created!" appears in center with a pop animation (scale 0 → 1.1 → 1)
+
+  BELOW THE ANIMATION at all times:
+    Progress bar: thin (4px), blue, filling from 0% to 100% over 3.5s (CSS animation)
+
+    Loading messages that cycle (fade in/out every 700ms):
+      "Setting up your profile..."
+      "Learning your taste preferences..."
+      "Stocking your recipe engine..."
+      "Filtering for your dietary needs..."
+      "Personalising your swipe deck..."
+      "Almost ready to cook! 🍳"
+
+  After 3.5s → navigate to Discover screen with a fade transition (400ms)
+
+WHAT HAPPENS BACKEND DURING THIS ANIMATION:
+  - Finalize user record: mark onboarding_complete: true
+  - Generate initial recipe pool (25 recipes) via Claude API using user's full profile
+  - Pre-load first 5 swipe cards into cache
+  - Calculate initial pantry match scores
+  - Create default meal plan placeholders for the week
+  - Set session token + store in secure httpOnly cookie
+```
+
+---
+
+## FIRST-TIME SWIPE TUTORIAL (On First Visit to Discover)
+
+After account creation, the user lands on the Discover/Swipe page for the first time. Before they can swipe, show the tutorial overlay.
+
+```
+TUTORIAL OVERLAY:
+  Semi-transparent dark overlay (rgba(10, 20, 40, 0.75)) covers entire screen
+  The swipe card is visible through the overlay (not covered — spotlight effect using CSS mask)
+
+  A real recipe card is shown underneath — the tutorial shows on top of it
+
+  SEQUENCE OF 3 ANIMATED INSTRUCTIONS (auto-advance every 2.5s, or user taps to advance):
+
+  ── CARD 1: SWIPE RIGHT ──
+    Animated hand icon appears on the card and drags right
+    The card tilts right (+10deg) and slides partially off screen right
+    Green overlay appears on card with "✓" stamp
+    
+    Instruction bubble (white card, blue border, rounded, appears BELOW the recipe card):
+      "→ Swipe Right"
+      (larger, bold)
+      "You want to cook this! Opens the full recipe with ingredients & instructions."
+      
+      Right side: green arrow icon → animated (pulsing rightward)
+
+  ── CARD 2: SWIPE LEFT ──
+    Card resets (spring back) → same card now drags left
+    Card tilts left (-10deg), red overlay with "✗" stamp
+    
+    Instruction bubble:
+      "← Swipe Left"
+      "Not feeling it. We'll learn your taste and show better options."
+      Left side: red arrow icon ← animated (pulsing leftward)
+
+  ── CARD 3: SWIPE UP ──
+    Card resets → drags upward
+    Card moves up, blue overlay with "🔖" stamp
+    
+    Instruction bubble:
+      "↑ Swipe Up"
+      "Save for later. Find it anytime in your Saved Recipes."
+      Bookmark icon animated (filling in)
+
+  AFTER 3 CARDS:
+    All overlay fades out
+    CTA appears centered: 
+      White pill button: "Got it — Let's Cook! 🍳"
+      Tapping this clears tutorial and enables live swiping
+
+  SKIP LINK:
+    Small "Skip tutorial" text link top-right of overlay
+    Visible from the start
+    Tapping → immediately clears overlay and starts live swiping
+
+  TUTORIAL NEVER SHOWS AGAIN:
+    Set tutorial_shown: true in users table + localStorage
+    If user clears app data → tutorial shows again (acceptable UX)
+```
+
+---
+
+## DATA PERSISTENCE — WHERE EVERYTHING IS STORED
+
+```
+users table columns populated during onboarding:
+
+  id                  UUID, primary key
+  display_name        TEXT NOT NULL           ← from Step 1, FIXED permanently
+  email               TEXT UNIQUE NOT NULL    ← from Step 1
+  password_hash       TEXT NOT NULL           ← bcrypt from Step 1
+  household_size      INTEGER DEFAULT 1       ← from Step 2
+  skill_level         TEXT                    ← 'beginner'|'home_cook'|'confident'|'advanced'
+  weekly_budget       TEXT                    ← '50-75'|'75-100'|'100-150'|'150-200'
+  dietary_restrictions TEXT[]                 ← from Step 5
+  allergies           TEXT[]                  ← from Step 6
+  primary_goal        TEXT                    ← from Step 7
+  preferred_cuisines  TEXT[]                  ← from Step 8
+  onboarding_complete BOOLEAN DEFAULT FALSE
+  tutorial_shown      BOOLEAN DEFAULT FALSE
+  created_at          TIMESTAMP DEFAULT NOW()
+
+All of these except display_name are editable in Settings.
+display_name: shown as locked field in Settings with tooltip "Name is fixed to your account. Contact support to request a change."
+```
+
+---
+
+## SETTINGS PAGE — WHERE THESE CAN BE CHANGED
+
+```
+Settings → "Your Profile":
+  Name: [Alex Chen] [🔒 locked]
+  Email: [editable with re-verify]
+  Change Password: [opens change password flow]
+
+Settings → "Household":
+  Household Size: [1 2 3 4 5 6+] — same picker as onboarding
+
+Settings → "Cooking Profile":
+  Skill Level: [4 option cards, same as onboarding]
+  Preferred Cuisines: [same multi-select grid]
+
+Settings → "Budget & Spending":
+  Weekly Budget: [5 option cards, same as onboarding]
+
+Settings → "Dietary & Allergies":
+  Dietary Profile: [same 8-option grid]
+  Allergies: [same chip selector]
+  Smart Swaps: [toggle — show/hide swap suggestions]
+
+Settings → "Goals":
+  Your Goal: [same 6-option cards]
+
+All changes → save instantly (no "Save" button needed — auto-save with small toast "✓ Saved")
+All changes take effect on next app load or next swipe session refresh.
+```
+
+---
+
+## TECHNICAL NOTES
+
+```
+1. Onboarding state management:
+   - Use React Context (OnboardingContext) to hold all answers during the flow
+   - Only write to DB on final Step 10 (creating account)
+   - If user closes app mid-onboarding → store step number + answers in localStorage
+   - On re-open: restore from localStorage, ask "Welcome back! Continue where you left off?"
+
+2. Camera integration:
+   - Use navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+   - Falls back to facingMode: 'user' if environment camera unavailable
+   - For receipt scan: use canvas to capture frame from video element
+   - Send frame as base64 to backend → backend calls Claude Vision API
+   - Never send raw camera feed to server — only single captured frames
+
+3. Password security:
+   - bcrypt with 12 salt rounds
+   - zxcvbn library for password strength meter (show strength bar under password field)
+   - Never store plaintext password anywhere
+
+4. Performance:
+   - Each step component lazy-loaded to minimise initial bundle
+   - Wok animation: use Lottie JSON animation OR pure CSS/SVG keyframes (prefer CSS for performance)
+   - Images in cuisine grid: use emoji flags only (no external image fetches)
+
+5. Accessibility:
+   - All selection cards have proper aria-selected, role="radio" or role="checkbox"
+   - Progress bar has aria-valuenow and aria-valuemax
+   - Skip links for screen readers on tutorial
+   - Error messages linked to inputs via aria-describedby
+```
+
+---
+
+## WHAT THE FINAL APP EXPERIENCE FEELS LIKE
+
+When a user completes onboarding, their entire app experience is shaped by their answers:
+
+- The name "Alex" appears in every greeting, personalised messages, and social posts
+- The swipe deck shows only Halal Japanese and Korean recipes under 30 mins with no tree nuts, scaled for 2 people, biased toward high-protein options — all from their profile answers
+- The recipe cards show estimated cost vs their $75 budget
+- Steps have beginner tips throughout if they selected Home Cook
+- The shopping list shows their weekly remaining budget
+- The AI Chef knows all their preferences without them having to re-explain
+
+This is a fully personalised cooking companion from the very first swipe.
