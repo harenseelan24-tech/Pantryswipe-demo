@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Animated,
   Modal,
@@ -92,7 +92,7 @@ export default function PantryScreen() {
   const [newItemCategory, setNewItemCategory] = useState<typeof CATEGORY_ITEMS[number]>("Pantry");
   const [scanning, setScanning] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<typeof BARCODE_DEMOS[number] | null>(null);
-  const scanLineAnim = useState(new Animated.Value(0))[0];
+  const scanLineAnim = useRef(new Animated.Value(0)).current;
   // Use SCREEN_HEIGHT - tab bar height (mirrors Discover tab approach — avoids circular onLayout measurement)
   const TAB_BAR_H = Platform.OS === "web" ? 68 : 60;
   const [topH, setTopH] = useState(0);

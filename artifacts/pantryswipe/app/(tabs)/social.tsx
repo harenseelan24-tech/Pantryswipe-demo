@@ -132,7 +132,7 @@ export default function SocialScreen() {
             <Feather name="share-2" size={22} color={colors.foreground} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionItem} onPress={() => toggleSave(item.id)}>
-            <Feather name="bookmark" size={22} color={item.saved ? colors.saveBlue : colors.foreground} fill={item.saved ? colors.saveBlue : undefined} />
+            <Feather name="bookmark" size={22} color={item.saved ? colors.saveBlue : colors.foreground} />
           </TouchableOpacity>
         </View>
 
