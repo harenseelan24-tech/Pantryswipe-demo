@@ -9,7 +9,7 @@ const NOTIFICATIONS = [
   { id: "1", icon: "alert-triangle", color: "#E84040", title: "Milk expires tomorrow", body: "Here are 5 recipes to use it up.", time: "2h ago" },
   { id: "2", icon: "check-circle", color: "#4CAF76", title: "Carbonara ready to cook!", body: "You now have all the ingredients. Ready?", time: "4h ago" },
   { id: "3", icon: "heart", color: "#E84040", title: "Chef Marco liked your post", body: "Your Spaghetti photo got a reaction!", time: "6h ago" },
-  { id: "4", icon: "flame", color: "#F5A623", title: "7-day cooking streak!", body: "Amazing! Keep it up tonight.", time: "8h ago" },
+  { id: "4", icon: "zap", color: "#F5A623", title: "7-day cooking streak!", body: "Amazing! Keep it up tonight.", time: "8h ago" },
   { id: "5", icon: "calendar", color: "#5B8EF5", title: "Weekly meal plan ready", body: "Your personalized plan for next week is here.", time: "1d ago" },
   { id: "6", icon: "user", color: "#9B6DFF", title: "Chef Marco cooked Salmon", body: "Ask them how it turned out!", time: "1d ago" },
 ];

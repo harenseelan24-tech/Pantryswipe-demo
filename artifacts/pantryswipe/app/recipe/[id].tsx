@@ -25,7 +25,7 @@ const RECIPE_IMAGES: Record<string, ReturnType<typeof require>> = {
 };
 
 const AI_VARIATIONS = [
-  { label: "Make Vegetarian", icon: "leaf" as const, color: "#4CAF76" },
+  { label: "Make Vegetarian", icon: "wind" as const, color: "#4CAF76" },
   { label: "Budget Version", icon: "dollar-sign" as const, color: "#F5A623" },
   { label: "High Protein", icon: "trending-up" as const, color: "#5B8EF5" },
   { label: "Spicier", icon: "zap" as const, color: "#E84040" },
