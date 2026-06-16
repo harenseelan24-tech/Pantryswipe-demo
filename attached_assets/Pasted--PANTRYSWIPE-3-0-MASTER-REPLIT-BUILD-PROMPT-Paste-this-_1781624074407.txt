@@ -1,0 +1,595 @@
+# PANTRYSWIPE 3.0 — MASTER REPLIT BUILD PROMPT
+
+> Paste this entire prompt into Replit Agent. This is a complete, production-ready specification.
+
+---
+
+## OVERVIEW
+
+Build a full-stack mobile-first web application called **PantrySwipe** — an AI-powered cooking ecosystem that combines pantry management, Tinder-style recipe discovery, meal planning, nutrition tracking, food waste reduction, barcode scanning, and a social feed into one beautifully designed app.
+
+**Tech Stack:**
+- Frontend: React (Vite) + TypeScript + Tailwind CSS
+- Backend: Node.js + Express + TypeScript
+- Database: PostgreSQL with Drizzle ORM
+- AI: Anthropic Claude API (`claude-sonnet-4-6`) for recipe generation, macro adjustment, shopping list generation
+- Barcode: `@zxing/browser` for in-browser camera barcode scanning (no native SDK needed)
+- Auth: Supabase Auth or simple JWT with bcrypt
+- Storage: Supabase Storage (for user photos, food images)
+- Package manager: pnpm
+
+**Design System:**
+- Color palette: White (`#FFFFFF`), Soft Blue (`#4A90D9`), Light Blue (`#EBF4FF`), Warm Off-White (`#F8F9FA`), Dark Navy (`#1A2E4A`), Accent Teal (`#2DD4BF`), Warning Amber (`#F59E0B`), Danger Red (`#EF4444`), Success Green (`#10B981`)
+- Typography: `Inter` (UI) + `Playfair Display` (headings/recipe names) — both from Google Fonts
+- Corner radius: `rounded-2xl` everywhere (homey, soft, not clinical)
+- Cards: white with subtle `shadow-md`, 1px blue-tinted border
+- Bottom navigation bar: 5 icons, pill-shaped active indicator in soft blue
+- Micro-animations: card swipe physics, ingredient entry animations, loading skeletons
+- Icons: Lucide React
+- The overall feel: like a clean modern kitchen — warm, organised, inviting. Think Notion meets a high-end recipe book.
+
+---
+
+## DATABASE SCHEMA
+
+Create the following tables in PostgreSQL via Drizzle:
+
+```sql
+users (id, email, password_hash, name, avatar_url, country, skill_level, dietary_restrictions[], allergies[], household_size, budget_range, fitness_goals, preferred_cuisines[], created_at)
+
+pantry_items (id, user_id, name, category, quantity, unit, purchase_date, expiry_date, barcode, brand, calories_per_unit, macros_json, image_url, notes, created_at)
+
+recipes (id, name, cuisine, difficulty, cook_time_mins, servings, calories, macros_json, ingredients_json, steps_json, image_url, tags[], event_types[], ai_generated, created_at)
+
+user_recipe_interactions (id, user_id, recipe_id, action [liked/disliked/saved/cooked], created_at)
+
+meal_log (id, user_id, recipe_id, meal_type [breakfast/lunch/dinner/snack], date, servings, calories, macros_json, estimated_cost, notes, created_at)
+
+shopping_list (id, user_id, name, items_json, generated_from, week_start, created_at)
+
+social_posts (id, user_id, recipe_id, caption, image_url, likes_count, comments_count, created_at)
+
+social_likes (id, post_id, user_id, created_at)
+
+social_comments (id, post_id, user_id, content, created_at)
+
+follows (follower_id, following_id, created_at)
+
+timers (id, user_id, label, duration_seconds, started_at, recipe_id)
+```
+
+---
+
+## SCREEN STRUCTURE
+
+### SCREEN 1 — SPLASH / WELCOME
+
+Full-screen gradient from `#EBF4FF` to white.
+
+- Animated PantrySwipe logo (fork + swipe arrow icon, animated on load)
+- Tagline: *"Your fridge, your chef, your way."*
+- Two buttons: **Get Started** (filled blue) | **Sign In** (ghost)
+- Small footer: "Join 50,000+ home cooks" (social proof)
+
+---
+
+### SCREEN 2 — ONBOARDING (Multi-step, 6 steps with progress bar)
+
+Step 1 — Personal: Name, Country (searchable dropdown), Language preference
+
+Step 2 — Cooking: Skill level (Beginner / Home Cook / Confident / Chef — shown as illustrated cards to tap), Available kitchen equipment (multi-select chips: oven, microwave, air fryer, hob, blender, etc.)
+
+Step 3 — Dietary: Dietary tags (Vegan, Vegetarian, Halal, Kosher, Gluten-Free, Dairy-Free, Keto, Paleo, etc. — multi-select pill buttons), Allergy list (free-text with auto-suggest)
+
+Step 4 — Household: Household size slider (1–10+), Weekly grocery budget slider with currency selector
+
+Step 5 — Goals: Fitness goal chips (Lose Weight / Maintain / Bulk / Eat Healthier / Reduce Waste / Save Money), Daily Kcal target (optional, or AI-calculated from goal)
+
+Step 6 — Cuisines: Grid of cuisine flags/icons to tap (Italian, Japanese, Chinese, Mexican, Indian, Thai, Mediterranean, Middle Eastern, Korean, American, French, etc.)
+
+After final step → animate into Home Feed.
+
+---
+
+### SCREEN 3 — HOME FEED (Tab 1)
+
+**Top section:**
+- Greeting: "Good morning, [Name] 👋" + date
+- Expiry alert banner (if any item expiring within 2 days): amber card with "⚠️ Your spinach expires in 1 day — here's what to cook" → taps into filtered swipe mode
+- Quick action row (horizontal scroll): 📷 Scan Barcode | ➕ Add Ingredient | 📅 Meal Plan | 🛒 Shopping List | 🎉 Plan an Event
+
+**Occasion Selector (key feature):**
+Below quick actions, a horizontal scrollable row of occasion chips:
+- 🍽️ Just Me
+- 💑 Date Night
+- 👨‍👩‍👧 Family Dinner
+- 👯 Group of Friends
+- 🎬 Movie Night
+- 🏈 Watch Party
+- 🎂 Birthday Dinner
+- 🥗 Meal Prep Sunday
+- 🌅 Brunch
+
+When an occasion is tapped, it:
+1. Highlights with a filled blue chip
+2. Updates the swipe deck below to show curated recipes matching that occasion (e.g., Date Night = romantic, elegant, <2 dishes; Watch Party = finger foods, shareable; Movie Night = easy snacks + one-pot)
+3. Changes the card deck header: "Perfect for Date Night ✨"
+
+**Recipe Swipe Deck:**
+- Stack of 3 cards (top card interactive, 2 behind for depth)
+- Each card: full bleed food image (high quality), gradient overlay at bottom, shows: Recipe name (Playfair Display), Cuisine flag + name, ⏱ Cook time, 🔥 Calories, ⭐ Match %, difficulty dots
+- Bottom of card: pantry match indicator — "You have 7/9 ingredients ✅"
+- Swipe Left = Not interested (card flies left with ✗ overlay)
+- Swipe Right = I want to cook this (card flies right with ✓ overlay, goes to Recipe Detail)
+- Swipe Up = Save for later (card flies up with 🔖 overlay, saves to Saved Recipes)
+- Action buttons below deck (for non-touch users): ✗ | 🔖 | ✓
+
+---
+
+### SCREEN 4 — RECIPE DETAIL
+
+Triggered on swipe right OR card tap. Full sheet modal sliding up.
+
+**Header:** Full bleed hero image, back button, share button, bookmark button
+
+**Section 1 — Overview:**
+- Recipe name (large, Playfair Display)
+- Cuisine | Difficulty | ⏱ Cook Time | 👤 Servings (adjustable ± stepper)
+- Occasion tags (Date Night, Family, etc.)
+
+**Section 2 — Macros Panel (interactive):**
+- Circular macro chart (Protein / Carbs / Fat / Fibre) using Recharts
+- Below chart: editable macro sliders — user can drag Protein slider up → AI recalculates ingredient quantities automatically (e.g., "Add 50g extra chicken breast")
+- Toggle: per serving / total
+- Adjust servings → all macros and ingredients scale proportionally
+
+**Section 3 — Ingredients:**
+- Each ingredient line item:
+  - ✅ Green checkmark = you have this in your pantry (with quantity available shown)
+  - 🛒 Orange cart icon = you need to buy this
+  - Quantity is scaled to selected servings
+- At bottom: "You need to buy X items" → one-tap "Add missing to shopping list"
+
+**Section 4 — Cooking Instructions:**
+- Numbered steps with large readable text
+- Each step that involves time has an inline timer button: "⏱ Start 8 min timer"
+- Tapping starts a floating persistent timer (shown at top of screen like iOS timers)
+- Users can add custom extra timers ("+Add Timer" button at top)
+- Steps can be checked off as done
+- "Mark as Cooked" button at bottom → logs to Meal Log
+
+---
+
+### SCREEN 5 — PANTRY (Tab 2)
+
+**Top section:**
+- Search bar + filter button (filter by category, expiry, quantity)
+- Category tabs (horizontal scroll): All | 🥩 Meat | 🥛 Dairy | 🥦 Vegetables | 🍎 Fruit | 🌾 Grains | 🥫 Canned | 🧂 Condiments | 🍫 Snacks | ❄️ Frozen | 🍷 Drinks | 🧴 Other
+
+**Add Ingredient options (FAB button → bottom sheet):**
+1. 📷 Scan Barcode
+2. 🔍 Search by name (with Open Food Facts API auto-fill)
+3. ✏️ Manual entry
+
+**Barcode Scanner Flow:**
+- Request camera permission in browser using `getUserMedia`
+- Use `@zxing/browser` to scan EAN/UPC barcodes
+- Call Open Food Facts API (`https://world.openfoodfacts.org/api/v0/product/{barcode}.json`) to retrieve:
+  - Product name
+  - Brand
+  - Serving size + macros (calories, protein, carbs, fat)
+  - Product image
+- Pre-fill a form with all retrieved data
+- User then fills in:
+  - Quantity + Unit (e.g., "1 carton", "500g", "2 cans")
+  - Category (auto-suggested based on product type)
+  - Purchase date (auto-filled as today)
+  - Expiry date (picker — mandatory for perishables, optional for dry goods)
+  - Notes (optional)
+- Save to pantry_items
+
+**Manual/Search Entry form:**
+- Ingredient name (with auto-suggest from Open Food Facts)
+- Category selector (icon grid)
+- Quantity + Unit selector
+- Purchase date (auto = today)
+- Expiry date picker
+- Macros (auto-filled if from API, editable)
+- Save button
+
+**Pantry Item Card:**
+- Shows: name, quantity, category icon, expiry date
+- Expiry color coding:
+  - 🟢 Green = 7+ days
+  - 🟡 Amber = 3–6 days
+  - 🔴 Red = 1–2 days ("Use today!")
+  - ⚫ Grey = Expired
+- Tap to edit/delete
+- Swipe to delete (with undo snackbar)
+
+**Bottom of Pantry Screen — "What Can I Make?" Panel:**
+- Persistent sticky card at bottom showing: "🍳 You can make **14 dishes** with your current pantry"
+- Tap to expand dropdown list of those dish names, grouped by category (Quick & Easy, Healthy, Indulgent, etc.)
+- Tapping a dish name opens Recipe Detail
+- This recalculates every time pantry changes
+
+**Expiry Intelligence:**
+- When user opens app, run background check: any item within 3 days of expiry?
+- Show push notification (if permission granted) OR in-app banner
+- Banner: "⚠️ [Item] expires in [X] days. Tap to see recipes using it."
+- This creates an urgency-filtered swipe deck prioritising those ingredients
+
+---
+
+### SCREEN 6 — SWIPE / DISCOVER (Tab 3 — center tab, largest icon)
+
+Dedicated full-screen swipe experience.
+
+**Top controls:**
+- Occasion selector row (same as Home)
+- Filter button → bottom sheet filters: Cuisine, Max cook time, Calories range, Difficulty, Dietary tags, "Only use my pantry" toggle
+
+**Swipe Card (full screen on mobile):**
+- Full-bleed food photo
+- Gradient overlay from transparent to dark at bottom
+- Recipe info bar: Name | Cuisine | Time | Cals | Pantry Match %
+- Subtle left/right arrows at card edges (for hint on first use)
+- Haptic-style animation on swipe (spring physics using CSS transitions)
+- Between cards: "Loading next dish..." skeleton animation
+- Card stack shows 3 cards with slight rotation on background cards
+
+**Bottom action buttons:**
+- ✗ (large circle, red tint) — Nope
+- 🔖 (medium circle, blue) — Save for later
+- ✓ (large circle, green tint) — Cook this!
+- ⟳ (small, grey) — Undo last swipe
+
+**Empty state:** "You've seen everything! Adjusting your preferences..." → auto-widens filter criteria and refreshes
+
+---
+
+### SCREEN 7 — MEAL PLANNER (Tab 4)
+
+**Sub-tabs:** Day | Week | Month
+
+**Day view:**
+- Date header with arrow nav
+- 4 meal slots: Breakfast / Lunch / Dinner / Snacks
+- Each slot shows: recipe card thumbnail, name, kcal
+- Tap slot → search + add from saved recipes or log a custom meal
+- Bottom summary bar: Total Kcal | Protein | Carbs | Fat (colour-coded progress bars vs daily goal)
+- Estimated cost for the day (calculated from recipe ingredient costs)
+
+**Week view:**
+- 7-column calendar grid
+- Each day cell shows total kcal (coloured by: under/at goal/over)
+- Tap day to expand
+- Week summary card:
+  - Avg daily Kcal
+  - Total spend (estimated)
+  - Meals cooked
+  - Waste prevented (items used before expiry)
+  - Macro averages as pie chart
+
+**Month view:**
+- Calendar heat map (green = good days, amber = ok, grey = no data)
+- Monthly stats card: Total meals logged, Avg Kcal/day, Total spend, Most cooked dish, Cuisine breakdown pie chart
+
+**Generate Shopping List button:**
+- Select a date range
+- AI analyses planned meals for that period
+- Compares required ingredients vs current pantry
+- Generates a categorised shopping list: Produce / Dairy / Meat / Pantry Staples / etc.
+- Each item shows estimated price (from Open Food Facts or AI estimate)
+- User can tick off items as they shop
+- Option to export as text/share
+
+**Nutrition Progress Section:**
+- MyFitnessPal-style daily ring charts
+- Weekly trend line charts (Recharts LineChart)
+- Macro breakdown per week
+- Streak tracker: "🔥 5-day logging streak!"
+
+---
+
+### SCREEN 8 — SOCIAL (Tab 5)
+
+**Feed:**
+- Infinite scroll of posts (newest first, with algorithm weighting for follows)
+- Each post card:
+  - User avatar + name + follow button (if not following)
+  - Food photo (full width, 4:3 aspect)
+  - Caption
+  - ❤️ Like count | 💬 Comment count | 🔗 Share
+  - 🍽️ **"See Recipe" button** — prominent, blue, below image → opens Recipe Detail sheet with ingredients, macros, and step-by-step instructions (the creator's version)
+  - Pantry overlap indicator: "You have 6/8 ingredients for this!"
+
+**Post Creation:**
+- FAB "+" button
+- Upload photo (camera or gallery)
+- Write caption
+- Attach a recipe (search from database or generate new with AI)
+- Optional: tag occasion, cuisine, difficulty
+- Publish
+
+**Profile page:**
+- Avatar, name, bio, stats: Posts | Followers | Following
+- Grid of posts
+- Saved recipes collection
+- My Pantry summary (optional, privacy toggle)
+
+**Explore tab within Social:**
+- Trending dishes
+- Trending cuisines
+- Featured creators
+- "Near me" food posts (if location permission granted)
+
+---
+
+### SCREEN 9 — PROFILE / SETTINGS (accessible from Home or side menu)
+
+- Edit profile details
+- Update dietary preferences + allergies
+- Nutrition goals (edit daily Kcal, macro split targets)
+- Notification settings (expiry alerts, meal reminders, social notifications)
+- Linked accounts (future: Google, Apple)
+- App theme (Light / Dark — dark mode uses Navy `#1A2E4A` as background)
+- Privacy settings (public/private profile, hide pantry)
+- Data export
+- Log out
+
+---
+
+## AI INTEGRATION (Claude API)
+
+Use `claude-sonnet-4-6` for all AI tasks.
+
+**1. Recipe Generation from Pantry:**
+
+```
+System: You are a professional chef and nutritionist. Generate recipes that are realistic, delicious, and achievable for home cooks. Always return valid JSON only.
+
+User: I have these pantry items: [list]. My dietary restrictions: [list]. Cooking skill: [level]. Occasion: [occasion]. Generate 10 recipe cards.
+
+Response format: JSON array of recipe objects with fields: name, cuisine, difficulty, cook_time_mins, servings, calories, macros {protein, carbs, fat, fibre}, ingredients [{name, quantity, unit, inPantry: true/false}], steps [{step_number, instruction, timer_seconds (if applicable)}], image_prompt (for placeholder), tags, event_types
+```
+
+**2. Macro Adjustment:**
+
+```
+User: I want to increase the protein in [recipe name] from 25g to 45g per serving. Keep the dish the same cuisine and style. Adjust ingredients accordingly and recalculate all macros.
+
+Response: Updated ingredients JSON + updated macros JSON
+```
+
+**3. Shopping List Generation:**
+
+```
+User: Based on my meal plan for [date range] with these meals: [meal list], and my current pantry: [pantry JSON], generate a categorised shopping list for everything I need to buy. Group by supermarket aisle category. Include estimated costs in [currency].
+
+Response: JSON shopping list categorised by section
+```
+
+**4. Expiry Recipe Suggestion:**
+
+```
+User: These pantry items are expiring soon: [list with expiry dates]. Suggest 5 recipes that use as many of these items as possible. Prioritise the most critical items.
+
+Response: Array of 5 recipe suggestions with urgency explanation
+```
+
+**5. Nutrition Analysis:**
+
+```
+User: Here is my meal log for this week: [JSON]. Analyse my nutrition patterns, highlight deficiencies or excesses, and suggest 3 actionable improvements for next week.
+
+Response: Analysis text + 3 specific suggestions
+```
+
+---
+
+## BARCODE SCANNER IMPLEMENTATION
+
+Use `@zxing/browser` (install: `npm install @zxing/browser`).
+
+```typescript
+// BarcodeScanner.tsx
+import { BrowserMultiFormatReader } from '@zxing/browser';
+
+const scanner = new BrowserMultiFormatReader();
+
+// Request camera permission
+const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+
+// Start continuous scanning
+scanner.decodeFromVideoElement(videoElement, (result, error) => {
+  if (result) {
+    const barcode = result.getText();
+    fetchProductByBarcode(barcode);
+  }
+});
+
+// Fetch from Open Food Facts
+async function fetchProductByBarcode(barcode: string) {
+  const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+  const data = await res.json();
+  if (data.status === 1) {
+    const product = data.product;
+    return {
+      name: product.product_name,
+      brand: product.brands,
+      calories: product.nutriments['energy-kcal_100g'],
+      protein: product.nutriments.proteins_100g,
+      carbs: product.nutriments.carbohydrates_100g,
+      fat: product.nutriments.fat_100g,
+      image: product.image_url,
+    };
+  }
+}
+```
+
+Camera permission UI: full-screen camera view, targeting reticle overlay (rounded square), animated scan line, "Point at barcode" instruction, manual entry fallback button at bottom.
+
+---
+
+## TIMER SYSTEM
+
+**Persistent floating timer (like iOS):**
+- When a recipe step timer is started, a floating pill appears at top of screen
+- Pill shows: step name + countdown + pause/resume/cancel
+- Multiple timers can stack (each gets its own pill)
+- When timer hits 0: play notification sound + vibrate (if supported) + show alert: "⏱ [Step name] is done!"
+- User can add custom timers with their own label from any recipe screen
+- Timers persist if user navigates away (stored in React context, not localStorage)
+
+---
+
+## NAVIGATION STRUCTURE
+
+Bottom tab bar (5 tabs):
+1. 🏠 Home (Feed + Quick Actions)
+2. 🥦 Pantry (Pantry Manager)
+3. 🔥 Swipe (full-screen, center — slightly larger icon)
+4. 📅 Planner (Meal Log + Calendar)
+5. 👤 Social + Profile
+
+Active tab: blue filled icon + label, pill-shaped blue indicator above icon.
+
+---
+
+## ADDITIONAL FEATURES TO BUILD
+
+**"What Can I Make?" Engine:**
+- On every pantry change, run a matching algorithm server-side
+- Match pantry items against recipe ingredients (fuzzy match — "tomatoes" matches "cherry tomatoes", "roma tomatoes")
+- Score each recipe by % ingredient coverage
+- Surface recipes where user has ≥60% of ingredients
+- Store result count in state, show at bottom of Pantry screen
+- Dropdown scrollable list of matchable dishes, sorted by % match descending
+
+**Waste Reduction Score:**
+- On Profile/Stats page: "This month you used X items before expiry, saving an estimated $Y and Z kg of food waste 🌱"
+- Calculated from: pantry items marked as used (via recipe cooking) before their expiry date
+
+**Smart Notifications (in-app banners + browser push if permitted):**
+- Expiry warnings (1 day, 3 days before)
+- Meal reminder (configurable: "Time to plan dinner!" at 4pm)
+- Social: new likes/comments/followers
+- Weekly summary every Sunday: "Your week in food 📊"
+
+**Recipe Difficulty Guidance:**
+- Beginner recipes get extra tips inline in steps: "Tip: Make sure your pan is hot before adding oil 💡"
+- Video placeholder links (YouTube search embed for recipe name)
+
+**Cuisine Passport (gamification):**
+- Every time a user cooks a dish from a cuisine for the first time, they "unlock" that country
+- Profile shows a world map with unlocked countries highlighted
+- Achievement badges: "Italian Explorer 🇮🇹", "5-Day Streak 🔥", "Zero Waste Week 🌱"
+
+**Multi-language Support:**
+- i18n with `i18next` + `react-i18next`
+- Languages: English, Spanish, French, Malay, Mandarin, Arabic
+- RTL support for Arabic
+
+**Dark Mode:**
+- Toggle in settings
+- Dark: Navy `#1A2E4A` background, white cards with `bg-opacity-10`, blue accents unchanged
+- Smooth animated transition on toggle
+
+---
+
+## LOADING STATES & EMPTY STATES
+
+Every list/card screen must have:
+- **Loading skeleton:** matching the shape of the real content (animated shimmer in light blue)
+- **Empty state:** illustrated icon + helpful message + CTA button
+  - Empty pantry: 🥡 "Your pantry looks empty! Add your first ingredient" → Add Ingredient
+  - No recipes swiped: 🍳 "No saved recipes yet. Start swiping!" → Go to Swipe
+  - No meal log: 📅 "Start logging your meals to see insights" → Log Meal
+  - No social posts: 📸 "Be the first to share! Post your cooking." → Create Post
+
+---
+
+## ERROR HANDLING
+
+- All API calls wrapped in try/catch with user-friendly toast notifications
+- Offline detection: show banner "You're offline — some features may be limited"
+- Barcode scan fail: "Barcode not recognised. Try manual entry instead"
+- AI generation timeout: "Taking longer than usual... still working on it 🍳"
+- Camera permission denied: clear instructions with a button to open device settings
+
+---
+
+## PERFORMANCE REQUIREMENTS
+
+- Recipe swipe deck: pre-load next 5 cards in background
+- Pantry list: virtual scroll for >50 items
+- Social feed: infinite scroll with intersection observer
+- Images: lazy load with blur-up placeholder
+- All AI calls: show skeleton/loading state immediately
+- API responses cached for 5 minutes (React Query or SWR)
+
+---
+
+## DEMO DATA
+
+Pre-populate the app with:
+- 1 demo user: "Alex Chen"
+- 15 pantry items (mix of categories, some expiring soon)
+- 30 recipes (various cuisines and occasions)
+- 10 social posts with likes and comments
+- 7 days of meal log entries
+- 1 shopping list
+
+This allows the app to be immediately usable without needing to set up a real account.
+
+---
+
+## FOLDER STRUCTURE
+
+```
+/src
+  /components
+    /ui (Button, Card, Badge, Modal, Chip, ProgressBar, Skeleton, Toast)
+    /layout (BottomNav, TopBar, PageWrapper)
+    /swipe (SwipeCard, SwipeStack, SwipeActions)
+    /pantry (PantryItem, AddIngredientModal, BarcodeScanner, ExpiryBadge)
+    /recipe (RecipeCard, RecipeDetail, MacroPanel, IngredientsPanel, StepsPanel)
+    /planner (MealSlot, WeekCalendar, NutritionRings, ShoppingList)
+    /social (PostCard, CreatePostModal, UserProfile)
+    /timers (TimerPill, TimerManager, AddTimerModal)
+  /screens
+    Welcome, Onboarding, Home, Pantry, Swipe, Planner, Social, Profile
+  /context
+    AppContext (user, pantry, timers, activeOccasion)
+    ThemeContext (light/dark)
+  /hooks
+    usePantry, useRecipes, useTimers, useSwipe, useMealLog
+  /services
+    ai.ts (Claude API calls)
+    barcode.ts (ZXing + Open Food Facts)
+    api.ts (backend API client)
+  /utils
+    expiryCalc.ts, macroCalc.ts, matchingEngine.ts
+  /constants
+    colors.ts, occasions.ts, categories.ts, cuisines.ts
+```
+
+---
+
+## FINAL NOTES FOR REPLIT AGENT
+
+1. Build mobile-first. All layouts should be optimised for 375px–430px width first.
+2. Use Tailwind CSS throughout. No inline styles except for dynamic values (e.g., swipe transform).
+3. All text must be legible — minimum 14px body, 18px headings. Never use light grey text on white.
+4. Every interactive element must have hover + active states.
+5. The swipe physics must feel natural — use CSS `transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)` for card throw.
+6. The app should work fully in the browser without a native app wrapper — no Expo, no React Native.
+7. All Claude AI API calls should go through the backend (server/api/ai.ts) — never expose API keys to the frontend.
+8. Use environment variables: `DATABASE_URL`, `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
+9. Include a `/health` endpoint on the backend.
+10. Include a `README.md` with setup instructions and feature list.
+
+Start by building the database schema, then the backend API routes, then the frontend screens in this order: Welcome → Onboarding → Home → Pantry → Swipe → Recipe Detail → Planner → Social. Then wire up the AI features last.
+
+**The defining goal of this app:** Every user who opens it should feel like they have a personal chef living in their phone — one who knows exactly what's in their fridge, what they feel like eating tonight, and won't let anything go to waste.
