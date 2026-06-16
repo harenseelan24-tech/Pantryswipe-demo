@@ -89,7 +89,7 @@ const CUISINES = [
   { id: "Italian", flag: "🇮🇹" }, { id: "Japanese", flag: "🇯🇵" }, { id: "Korean", flag: "🇰🇷" },
   { id: "Indian", flag: "🇮🇳" }, { id: "Thai", flag: "🇹🇭" }, { id: "Mexican", flag: "🇲🇽" },
   { id: "American", flag: "🇺🇸" }, { id: "French", flag: "🇫🇷" }, { id: "Vietnamese", flag: "🇻🇳" },
-  { id: "Singaporean", flag: "🇸🇬" }, { id: "Malaysian", flag: "🇲🇾" },
+  { id: "Chinese", flag: "🇨🇳" }, { id: "Singaporean", flag: "🇸🇬" }, { id: "Malaysian", flag: "🇲🇾" },
 ];
 
 const LOADING_MESSAGES = [
