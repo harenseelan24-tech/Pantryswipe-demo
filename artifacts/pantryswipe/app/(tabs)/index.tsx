@@ -150,6 +150,7 @@ export default function HomeScreen() {
   const [selectedServings, setSelectedServings] = useState(2);
   const [customServingMode, setCustomServingMode] = useState(false);
   const [customServingInput, setCustomServingInput] = useState("");
+  const [programmaticSwipe, setProgrammaticSwipe] = useState<"left" | "right" | "up" | null>(null);
 
   // ── Tutorial state ──
   const [showTutorial, setShowTutorial] = useState(false);
@@ -287,6 +288,7 @@ export default function HomeScreen() {
   }, [saveToastAnim]);
 
   const handleSwipeLeft = useCallback(() => {
+    setProgrammaticSwipe(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     triggerParticles("left");
     const recipe = filteredRecipes[currentIndex];
@@ -295,6 +297,7 @@ export default function HomeScreen() {
   }, [filteredRecipes, currentIndex, triggerParticles, trackSwipe]);
 
   const handleSwipeRight = useCallback(() => {
+    setProgrammaticSwipe(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     triggerParticles("right");
     const recipe = filteredRecipes[currentIndex];
@@ -308,6 +311,7 @@ export default function HomeScreen() {
   }, [filteredRecipes, currentIndex, triggerParticles, trackSwipe]);
 
   const handleSwipeUp = useCallback(() => {
+    setProgrammaticSwipe(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const recipe = filteredRecipes[currentIndex];
     if (recipe) { saveRecipe(recipe.id); trackSwipe(recipe, "up"); }
@@ -558,6 +562,7 @@ export default function HomeScreen() {
                 isTop={i === 0}
                 index={i}
                 containerHeight={deckHeight + 8}
+                programmaticSwipe={i === 0 ? programmaticSwipe : null}
               />
             )).reverse()}
           </View>
@@ -576,6 +581,33 @@ export default function HomeScreen() {
           </Animated.Text>
         ))}
       </View>
+
+      {/* ── ACTION BUTTONS (always-visible swipe controls) ── */}
+      {!noMoreCards && (
+        <View style={styles.actionBtnRow}>
+          <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: "#E84040", shadowColor: "#E84040" }]}
+            onPress={() => setProgrammaticSwipe("left")}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.actionBtnIcon, { color: "#E84040" }]}>✕</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnMid, { borderColor: "#5B8EF5", shadowColor: "#5B8EF5" }]}
+            onPress={() => setProgrammaticSwipe("up")}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.actionBtnIcon, { color: "#5B8EF5", fontSize: 20 }]}>★</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: "#4CAF76", borderColor: "#4CAF76", shadowColor: "#4CAF76" }]}
+            onPress={() => setProgrammaticSwipe("right")}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.actionBtnIcon, { color: "#fff" }]}>♥</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── SAVE TOAST ── */}
       {saveToast && (
@@ -956,6 +988,33 @@ const styles = StyleSheet.create({
   // ── Deck ──
   deckWrapper: { alignItems: "center", position: "relative", flex: 1 },
   cardStack: { position: "relative" },
+  actionBtnRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 20,
+    paddingTop: 14,
+    paddingBottom: 4,
+  },
+  actionBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  actionBtnMid: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  actionBtnIcon: { fontSize: 22, fontWeight: "700" },
   emptyState: {
     width: SCREEN_WIDTH - 64,
     paddingVertical: 48, paddingHorizontal: 32,

@@ -1,9 +1,10 @@
-import React, { useRef } from "react";
+import React, { useRef, useEffect } from "react";
 import {
   Animated,
   Dimensions,
   Image,
   PanResponder,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -47,6 +48,7 @@ interface SwipeCardProps {
   isTop: boolean;
   index: number;
   containerHeight: number;
+  programmaticSwipe?: "left" | "right" | "up" | null;
 }
 
 export default function SwipeCard({
@@ -58,6 +60,7 @@ export default function SwipeCard({
   isTop,
   index,
   containerHeight,
+  programmaticSwipe,
 }: SwipeCardProps) {
   const pan = useRef(new Animated.ValueXY()).current;
   const cardHeight = containerHeight > 0 ? containerHeight - 8 : SCREEN_HEIGHT * 0.62;
@@ -71,6 +74,27 @@ export default function SwipeCard({
   onSwipeRightRef.current = onSwipeRight;
   const onSwipeUpRef = useRef(onSwipeUp);
   onSwipeUpRef.current = onSwipeUp;
+
+  // ── Programmatic swipe (for action buttons on web) ──────────────────────────
+  useEffect(() => {
+    if (!programmaticSwipe || !isTopRef.current) return;
+    const targets = {
+      left:  { x: -SCREEN_WIDTH * 1.5, y: 0 },
+      right: { x:  SCREEN_WIDTH * 1.5, y: 0 },
+      up:    { x: 0, y: -SCREEN_HEIGHT * 1.2 },
+    };
+    Animated.timing(pan, {
+      toValue: targets[programmaticSwipe],
+      duration: programmaticSwipe === "up" ? 260 : 240,
+      useNativeDriver: false,
+    }).start(() => {
+      if (programmaticSwipe === "left")  onSwipeLeftRef.current();
+      else if (programmaticSwipe === "right") onSwipeRightRef.current();
+      else if (programmaticSwipe === "up")   onSwipeUpRef.current();
+    });
+  // Only fire when programmaticSwipe value changes to a non-null direction
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [programmaticSwipe]);
 
   // Image section = top 58%, info section = bottom 42%
   const imageSectionH = cardHeight * 0.58;
@@ -187,6 +211,10 @@ export default function SwipeCard({
             ? [{ translateX: pan.x }, { translateY: pan.y }, { rotate }]
             : [{ scale: stackScale }, { translateY: stackOffsetY }],
         },
+        // On web: prevent browser text/image selection from stealing drag events
+        Platform.OS === "web" && isTop
+          ? ({ userSelect: "none", WebkitUserSelect: "none", cursor: "grab" } as object)
+          : null,
       ]}
       {...(isTop ? panResponder.panHandlers : {})}
     >
