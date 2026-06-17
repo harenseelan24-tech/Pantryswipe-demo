@@ -15,7 +15,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import SwipeCard from "@/components/SwipeCard";
 import { useColors } from "@/hooks/useColors";
@@ -24,6 +24,7 @@ import { useApp } from "@/context/AppContext";
 import { Recipe } from "@/data/mockData";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const INTENT_KEY = "@pantryswipe:pendingIntent";
 const CARD_WIDTH = SCREEN_WIDTH - 16;
 
 const MOODS = [
@@ -137,6 +138,7 @@ export default function HomeScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeMealType, setActiveMealType] = useState<"Breakfast" | "Lunch" | "Dinner" | null>(null);
+  const [activeIngredient, setActiveIngredient] = useState<string | null>(null);
   const [showServingsModal, setShowServingsModal] = useState(false);
   const [pendingSwipeRecipe, setPendingSwipeRecipe] = useState<Recipe | null>(null);
   const [selectedServings, setSelectedServings] = useState(2);
@@ -302,11 +304,50 @@ export default function HomeScreen() {
     setCurrentIndex((prev) => Math.min(prev + 1, filteredRecipes.length));
   }, [filteredRecipes, currentIndex, saveRecipe, triggerParticles, showSaveToast]);
 
+  // ── Deep-link intent from notifications ──────────────────────────────────────
+  useFocusEffect(
+    useCallback(() => {
+      const applyIntent = async () => {
+        try {
+          const raw = await AsyncStorage.getItem(INTENT_KEY);
+          if (!raw) return;
+          await AsyncStorage.removeItem(INTENT_KEY);
+          const intent = JSON.parse(raw) as { type: string; value: string };
+
+          if (intent.type === "mealType") {
+            const mealType = intent.value as "Breakfast" | "Lunch" | "Dinner";
+            const f = MEAL_TYPE_FILTERS[mealType];
+            const r = liveRecipes.filter(f);
+            setActiveMealType(mealType);
+            setActiveMood(null);
+            setActiveIngredient(null);
+            setFilteredRecipes(r.length >= 3 ? r : liveRecipes);
+            setCurrentIndex(0);
+          } else if (intent.type === "ingredient") {
+            const ing = intent.value.toLowerCase();
+            const r = liveRecipes.filter((recipe) =>
+              recipe.ingredients.some((i) => i.name.toLowerCase().includes(ing)) ||
+              recipe.title.toLowerCase().includes(ing) ||
+              recipe.tags.some((t) => t.toLowerCase().includes(ing))
+            );
+            setActiveIngredient(intent.value);
+            setActiveMealType(null);
+            setActiveMood(null);
+            setFilteredRecipes(r.length >= 2 ? r : liveRecipes);
+            setCurrentIndex(0);
+          }
+        } catch {}
+      };
+      applyIntent();
+    }, [liveRecipes])
+  );
+
   const resetCards = useCallback(() => {
     setFilteredRecipes(liveRecipes);
     setCurrentIndex(0);
     setActiveMood(null);
     setActiveMealType(null);
+    setActiveIngredient(null);
   }, [liveRecipes]);
 
   const searchResults = SEARCH_VARIANTS.filter((v) =>
@@ -416,6 +457,7 @@ export default function HomeScreen() {
                 const next = isActive ? null : type;
                 setActiveMealType(next);
                 setActiveMood(null);
+                setActiveIngredient(null);
                 if (next) {
                   const f = MEAL_TYPE_FILTERS[next];
                   const r = liveRecipes.filter(f);
@@ -435,8 +477,24 @@ export default function HomeScreen() {
         })}
       </View>
 
+      {/* ── INGREDIENT FILTER BANNER ── */}
+      {activeIngredient && (
+        <TouchableOpacity
+          style={[styles.ingredientBanner, { backgroundColor: colors.secondary + "18", borderColor: colors.secondary + "40" }]}
+          onPress={resetCards}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 15 }}>🌿</Text>
+          <Text style={[styles.ingredientBannerText, { color: colors.secondary, fontFamily: "Inter_500Medium" }]}>
+            Showing recipes with{" "}
+            <Text style={{ fontFamily: "Inter_700Bold" }}>{activeIngredient}</Text>
+          </Text>
+          <Feather name="x" size={14} color={colors.secondary} />
+        </TouchableOpacity>
+      )}
+
       {/* ── SMART BANNER ── */}
-      {expiringItems.length > 0 ? (
+      {!activeIngredient && expiringItems.length > 0 ? (
         <View style={styles.expiryBannerWrap}>
           <View style={styles.expiryBannerAccent} />
           <View style={styles.expiryBannerBody}>
@@ -448,7 +506,7 @@ export default function HomeScreen() {
             </Text>
           </View>
         </View>
-      ) : hasBanner ? (
+      ) : !activeIngredient && hasBanner ? (
         <View style={[styles.matchBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.matchDot, { backgroundColor: colors.primary }]} />
           <Text style={[styles.matchBannerText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
@@ -850,6 +908,14 @@ const styles = StyleSheet.create({
     height: 50, borderRadius: 14, borderWidth: 1.5,
     paddingHorizontal: 16, fontSize: 17, fontFamily: "Inter_500Medium", marginBottom: 12,
   },
+
+  // ── Ingredient filter banner ──
+  ingredientBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    marginHorizontal: 16, paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 12, borderWidth: 1, marginBottom: 8,
+  },
+  ingredientBannerText: { flex: 1, fontSize: 13 },
 
   // ── Expiry banner ──
   expiryBannerWrap: {
