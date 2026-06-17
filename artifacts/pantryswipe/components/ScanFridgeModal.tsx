@@ -95,14 +95,14 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
       const frame = captureFrame();
       if (!frame) return;
 
-      const slowTimer = setTimeout(() => setSlowWarning(true), 10000);
+      const slowTimer = setTimeout(() => setSlowWarning(true), 15000);
 
       try {
         const res = await fetch(`${API_BASE}/vision/scan-pantry`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ image: frame }),
-          signal: AbortSignal.timeout(12000),
+          signal: AbortSignal.timeout(45000),
         });
         clearTimeout(slowTimer);
         setSlowWarning(false);
@@ -140,6 +140,62 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
     onDone(detectedItems);
   }, [detectedItems, stopScanning, stopStream, onDone]);
 
+  // ── Native: gallery upload ─────────────────────────────────────────────────
+  const handleNativeGallery = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") { setNativePhase("error-perm"); return; }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      base64: true,
+      quality: 0.85,
+    });
+
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+
+    const base64 = result.assets[0].base64;
+    setNativeLoading(true);
+    setNativePhase("scanning");
+
+    try {
+      const res = await fetch(`${API_BASE}/vision/scan-pantry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64 }),
+        signal: AbortSignal.timeout(60000),
+      });
+
+      if (!res.ok) throw new Error("api-error");
+      const data = (await res.json()) as { items?: DetectedItem[] };
+      const newItems = data.items ?? [];
+
+      if (newItems.length === 0) {
+        setNativePhase("error-unknown");
+      } else {
+        setDetectedItems((prev) => {
+          const merged = mergeItems(prev, newItems);
+          for (const item of merged) {
+            if (!pillAnims.current[item.id]) {
+              pillAnims.current[item.id] = new Animated.Value(30);
+              Animated.spring(pillAnims.current[item.id], { toValue: 0, useNativeDriver: true, tension: 80 }).start();
+            }
+          }
+          return merged;
+        });
+        setNativePhase("idle");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.name : "";
+      if (msg === "NetworkError") {
+        setNativePhase("error-offline");
+      } else {
+        setNativePhase("error-unknown");
+      }
+    } finally {
+      setNativeLoading(false);
+    }
+  }, []);
+
   // ── Native: take a photo and scan it ──────────────────────────────────────
   const handleNativeScan = useCallback(async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -151,7 +207,7 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: "images",
       base64: true,
-      quality: 0.7,
+      quality: 0.85,
       allowsEditing: false,
     });
 
@@ -166,27 +222,31 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: base64 }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(60000),
       });
 
       if (!res.ok) throw new Error("api-error");
       const data = (await res.json()) as { items?: DetectedItem[] };
       const newItems = data.items ?? [];
 
-      setDetectedItems((prev) => {
-        const merged = mergeItems(prev, newItems);
-        for (const item of merged) {
-          if (!pillAnims.current[item.id]) {
-            pillAnims.current[item.id] = new Animated.Value(30);
-            Animated.spring(pillAnims.current[item.id], { toValue: 0, useNativeDriver: true, tension: 80 }).start();
+      if (newItems.length === 0) {
+        setNativePhase("error-unknown");
+      } else {
+        setDetectedItems((prev) => {
+          const merged = mergeItems(prev, newItems);
+          for (const item of merged) {
+            if (!pillAnims.current[item.id]) {
+              pillAnims.current[item.id] = new Animated.Value(30);
+              Animated.spring(pillAnims.current[item.id], { toValue: 0, useNativeDriver: true, tension: 80 }).start();
+            }
           }
-        }
-        return merged;
-      });
-      setNativePhase("idle");
+          return merged;
+        });
+        setNativePhase("idle");
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.name : "";
-      if (msg === "NetworkError" || msg === "AbortError") {
+      if (msg === "NetworkError") {
         setNativePhase("error-offline");
       } else {
         setNativePhase("error-unknown");
@@ -327,8 +387,10 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
             {/* Loading overlay */}
             {nativeLoading && (
               <View style={s.nativeLoadingBox}>
-                <ActivityIndicator color={colors.primary} size="large" />
-                <Text style={s.nativeLoadingTxt}>AI is identifying your food items...</Text>
+                <Text style={{ fontSize: 48, textAlign: "center" }}>🔍</Text>
+                <ActivityIndicator color={colors.primary} size="large" style={{ marginTop: 4 }} />
+                <Text style={s.nativeLoadingTxt}>AI is identifying your food...</Text>
+                <Text style={{ color: "rgba(255,255,255,0.45)", fontSize: 13, textAlign: "center" }}>This takes 10–30 seconds</Text>
               </View>
             )}
 
@@ -343,6 +405,15 @@ export default function ScanFridgeModal({ visible, onClose, onDone }: Props) {
                 <Text style={s.nativePrimaryBtnTxt}>
                   {detectedItems.length === 0 ? "Take a Photo" : "Scan Another Shelf"}
                 </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[s.nativeOutlineBtn, { opacity: nativeLoading ? 0.5 : 1 }]}
+                onPress={handleNativeGallery}
+                disabled={nativeLoading}
+              >
+                <Feather name="image" size={18} color="rgba(255,255,255,0.7)" style={{ marginRight: 8 }} />
+                <Text style={s.nativeOutlineBtnTxt}>Choose from Gallery</Text>
               </TouchableOpacity>
 
               {detectedItems.length > 0 && (
@@ -449,6 +520,11 @@ function styles(c: ReturnType<typeof useColors>) {
       paddingVertical: 16, borderRadius: 14,
     },
     nativePrimaryBtnTxt: { color: "#fff", fontSize: 17, fontWeight: "700" },
+    nativeOutlineBtn: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
+    },
+    nativeOutlineBtnTxt: { color: "rgba(255,255,255,0.7)", fontSize: 15, fontWeight: "600" },
     nativeSecondaryBtn: {
       paddingVertical: 15, borderRadius: 14, alignItems: "center",
     },

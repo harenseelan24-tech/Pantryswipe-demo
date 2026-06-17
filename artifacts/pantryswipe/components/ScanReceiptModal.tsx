@@ -69,7 +69,7 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ image: base64 }),
-          signal: AbortSignal.timeout(12000),
+          signal: AbortSignal.timeout(45000),
         });
         if (!res.ok) return null;
         const data = (await res.json()) as { items?: DetectedItem[] };
@@ -79,8 +79,7 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
       }
     };
 
-    let items = await attemptScan();
-    if (items === null) items = await attemptScan();
+    const items = await attemptScan();
     if (items === null || items.length === 0) {
       setWebPhase("error-unclear");
       return;
@@ -140,7 +139,7 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: "images",
       base64: true,
-      quality: 0.8,
+      quality: 0.85,
       allowsEditing: false,
     });
 
@@ -149,29 +148,18 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
     const base64 = result.assets[0].base64;
     setNativePhase("reading");
 
-    const attemptScan = async (): Promise<DetectedItem[] | null> => {
-      try {
-        const res = await fetch(`${API_BASE}/vision/scan-receipt`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: base64 }),
-          signal: AbortSignal.timeout(15000),
-        });
-        if (!res.ok) return null;
-        const data = (await res.json()) as { items?: DetectedItem[] };
-        return data.items ?? [];
-      } catch (err: unknown) {
-        const name = err instanceof Error ? err.name : "";
-        if (name === "AbortError" || name === "NetworkError") throw err;
-        return null;
-      }
-    };
-
     try {
-      let items = await attemptScan();
-      if (items === null) items = await attemptScan();
+      const res = await fetch(`${API_BASE}/vision/scan-receipt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64 }),
+        signal: AbortSignal.timeout(60000),
+      });
+      if (!res.ok) { setNativePhase("error-unclear"); return; }
+      const data = (await res.json()) as { items?: DetectedItem[] };
+      const items = data.items ?? [];
 
-      if (items === null || items.length === 0) {
+      if (items.length === 0) {
         setNativePhase("error-unclear");
         return;
       }
@@ -184,10 +172,10 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
       onDone(enriched);
     } catch (err: unknown) {
       const name = err instanceof Error ? err.name : "";
-      if (name === "AbortError" || name === "NetworkError") {
-        setNativePhase("error-offline");
+      if (name === "AbortError") {
+        setNativePhase("error-unclear");
       } else {
-        setNativePhase("error-unknown");
+        setNativePhase("error-offline");
       }
     }
   }, [onDone]);
@@ -202,7 +190,7 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: "images",
       base64: true,
-      quality: 0.8,
+      quality: 0.85,
     });
 
     if (result.canceled || !result.assets?.[0]?.base64) return;
@@ -215,9 +203,9 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: base64 }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(60000),
       });
-      if (!res.ok) throw new Error("api-error");
+      if (!res.ok) { setNativePhase("error-unclear"); return; }
       const data = (await res.json()) as { items?: DetectedItem[] };
       const items = data.items ?? [];
 
@@ -229,8 +217,13 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
         emoji: CATEGORY_EMOJIS[item.category?.toLowerCase()] ?? "🍽️",
       }));
       onDone(enriched);
-    } catch {
-      setNativePhase("error-offline");
+    } catch (err: unknown) {
+      const name = err instanceof Error ? err.name : "";
+      if (name === "AbortError") {
+        setNativePhase("error-unclear");
+      } else {
+        setNativePhase("error-offline");
+      }
     }
   }, [onDone]);
 
@@ -283,6 +276,7 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
                 <Text style={{ fontSize: 48 }}>🧾</Text>
                 <ActivityIndicator color="#fff" size="large" style={{ marginTop: 16 }} />
                 <Text style={s.overlayTxt}>Reading your receipt...</Text>
+                <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, textAlign: "center" }}>AI is extracting items — this takes 10–30 seconds</Text>
               </View>
             )}
 
@@ -351,17 +345,18 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
               <View style={s.nativeLoadingBox}>
                 <Text style={{ fontSize: 56, textAlign: "center" }}>🧾</Text>
                 <ActivityIndicator color={colors.primary} size="large" style={{ marginTop: 8 }} />
-                <Text style={s.nativeLoadingTxt}>Reading your receipt...</Text>
-                <Text style={s.nativeLoadingHint}>This usually takes 5–10 seconds</Text>
+                <Text style={s.nativeLoadingTxt}>AI is reading your receipt...</Text>
+                <Text style={s.nativeLoadingHint}>This usually takes 10–30 seconds</Text>
+                <Text style={[s.nativeLoadingHint, { marginTop: 4 }]}>Claude AI is extracting all food items</Text>
               </View>
             )}
 
             {/* Error states */}
             {nativePhase === "error-unclear" && (
               <View style={s.nativeError}>
-                <Text style={s.nativeErrorTitle}>📄 Receipt unclear</Text>
+                <Text style={s.nativeErrorTitle}>📄 Couldn't read receipt</Text>
                 <Text style={s.nativeErrorTxt}>
-                  Try better lighting, flatten the receipt fully, or move closer. Make sure the whole receipt is in frame.
+                  No items were detected. Try better lighting, flatten the receipt fully, or use "Choose from Gallery" to upload a saved photo.
                 </Text>
                 <TouchableOpacity
                   style={[s.nativeRetryBtn, { backgroundColor: colors.primary }]}
