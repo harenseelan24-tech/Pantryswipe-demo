@@ -18,6 +18,10 @@ function isOriginAllowed(origin: string | undefined): boolean {
 
 const app: Express = express();
 
+// ─── Trust proxy (Replit reverse-proxy sets X-Forwarded-For) ─────────────────
+// Required so express-rate-limit can identify clients by real IP, not proxy IP.
+app.set("trust proxy", 1);
+
 // ─── Security headers (helmet) ────────────────────────────────────────────────
 app.use(
   helmet({

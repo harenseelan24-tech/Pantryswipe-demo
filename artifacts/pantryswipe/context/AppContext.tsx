@@ -48,7 +48,7 @@ function mapApiRecipe(r: ApiRecipe): Recipe {
     servings: r.servings ?? 2,
     calories: r.calories ?? 0,
     rating: Math.round(parseFloat(r.rating ?? "4.0") * 10) / 10,
-    reviewCount: Math.max(50, Math.round(parseFloat(r.rating ?? "4.0") * 120 + Math.random() * 200)),
+    reviewCount: Math.max(50, Math.round(parseFloat(r.rating ?? "4.0") * 120 + (r.id % 200))),
     ingredients: (r.ingredients_json ?? []).map((ing) => ({
       name: ing.name,
       amount: ing.quantity || "1",
@@ -174,22 +174,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
         AsyncStorage.getItem("pantryswipe_setup_complete"),
       ]);
 
-      if (profileData) setUserProfile(JSON.parse(profileData));
+      const loadedProfile: UserProfile | undefined = profileData
+        ? (JSON.parse(profileData) as UserProfile)
+        : undefined;
+
+      if (loadedProfile) setUserProfile(loadedProfile);
       if (pantryData) setPantryItems(JSON.parse(pantryData));
       if (savedData) setSavedRecipes(JSON.parse(savedData));
       if (cookedData) setCookedRecipes(JSON.parse(cookedData));
       if (statsData) setStats(JSON.parse(statsData));
       if (setupData) setIsSetupComplete(JSON.parse(setupData));
-    } catch {
-      // Use defaults on error
-    }
 
-    // Fetch live recipes from the API after loading user prefs
-    fetchLiveRecipes();
+      // Pass loaded profile so we use correct saved cuisine prefs, not the
+      // stale default profile from the first render closure.
+      fetchLiveRecipes(loadedProfile);
+    } catch {
+      // Use defaults on error — still attempt to fetch live recipes
+      fetchLiveRecipes();
+    }
   };
 
+  const isFetchingRef = React.useRef(false);
+
   const fetchLiveRecipes = useCallback(async (profile?: UserProfile) => {
-    if (recipesLoading) return;
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     setRecipesLoading(true);
     try {
       const prefs = profile ?? userProfile;
@@ -216,9 +225,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch {
       // Network error — keep current recipes (mock or previously loaded)
     } finally {
+      isFetchingRef.current = false;
       setRecipesLoading(false);
     }
-  }, [userProfile, recipesLoading]);
+  }, [userProfile]);
 
   const saveData = async (key: string, value: unknown) => {
     try {
