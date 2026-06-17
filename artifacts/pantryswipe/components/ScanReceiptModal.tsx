@@ -272,7 +272,7 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
 
             {webPhase === "preview" && (
               <>
-                <View style={s.receiptFrame} pointerEvents="none">
+                <View style={[s.receiptFrame, { pointerEvents: "none" }]}>
                   {(["tl", "tr", "bl", "br"] as const).map((c) => (
                     <View key={c} style={[s.corner, {
                       top: c[0] === "t" ? 0 : undefined, bottom: c[0] === "b" ? 0 : undefined,

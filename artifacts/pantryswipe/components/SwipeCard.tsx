@@ -255,9 +255,8 @@ export default function SwipeCard({
             style={[
               StyleSheet.absoluteFill,
               styles.stampOverlay,
-              { backgroundColor: "rgba(16,185,129,0.22)", opacity: cookOpacity },
+              { backgroundColor: "rgba(16,185,129,0.22)", opacity: cookOpacity, pointerEvents: "none" },
             ]}
-            pointerEvents="none"
           >
             <View style={[styles.stampWrap, styles.stampLeft]}>
               <Text style={[styles.stamp, { color: "#10B981", borderColor: "#10B981" }]}>COOK ✓</Text>
@@ -269,9 +268,8 @@ export default function SwipeCard({
             style={[
               StyleSheet.absoluteFill,
               styles.stampOverlay,
-              { backgroundColor: "rgba(239,68,68,0.22)", opacity: nopeOpacity },
+              { backgroundColor: "rgba(239,68,68,0.22)", opacity: nopeOpacity, pointerEvents: "none" },
             ]}
-            pointerEvents="none"
           >
             <View style={[styles.stampWrap, styles.stampRight]}>
               <Text style={[styles.stamp, { color: "#EF4444", borderColor: "#EF4444" }]}>NOPE ✗</Text>
@@ -283,9 +281,8 @@ export default function SwipeCard({
             style={[
               StyleSheet.absoluteFill,
               styles.stampOverlay,
-              { backgroundColor: "rgba(43,127,255,0.22)", opacity: saveOpacity },
+              { backgroundColor: "rgba(43,127,255,0.22)", opacity: saveOpacity, pointerEvents: "none" },
             ]}
-            pointerEvents="none"
           >
             <View style={[styles.stampWrap, styles.stampCenter]}>
               <Text style={[styles.stamp, { color: "#5A9FFF", borderColor: "#5A9FFF" }]}>SAVED 🔖</Text>

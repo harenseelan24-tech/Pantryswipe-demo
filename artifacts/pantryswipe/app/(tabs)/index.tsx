@@ -43,15 +43,15 @@ const MOODS = [
 ];
 
 const SEARCH_VARIANTS: { label: string; subtitle: string; recipeId: string }[] = [
-  { label: "Spaghetti Carbonara", subtitle: "Classic Roman · 620 kcal", recipeId: "1" },
-  { label: "Garlic Butter Salmon", subtitle: "Mediterranean · 480 kcal", recipeId: "2" },
-  { label: "Buddha Bowl", subtitle: "Vegan · 520 kcal", recipeId: "3" },
-  { label: "Beef Bibimbap", subtitle: "Korean · 680 kcal", recipeId: "4" },
-  { label: "Avocado Toast", subtitle: "Breakfast · 380 kcal", recipeId: "5" },
-  { label: "Chicken Tikka Masala", subtitle: "Indian · 560 kcal", recipeId: "6" },
+  { label: "Spaghetti Carbonara", subtitle: "Classic Roman · 830 kcal", recipeId: "1" },
+  { label: "Garlic Butter Salmon", subtitle: "Mediterranean · 660 kcal", recipeId: "2" },
+  { label: "Buddha Bowl", subtitle: "Vegan · 720 kcal", recipeId: "3" },
+  { label: "Beef Bibimbap", subtitle: "Korean · 760 kcal", recipeId: "4" },
+  { label: "Avocado Toast", subtitle: "Breakfast · 720 kcal", recipeId: "5" },
+  { label: "Chicken Tikka Masala", subtitle: "Indian · 540 kcal", recipeId: "6" },
   { label: "Tacos al Pastor", subtitle: "Mexican · 450 kcal", recipeId: "7" },
-  { label: "Beef Ramen", subtitle: "Japanese · 720 kcal", recipeId: "9" },
-  { label: "Overnight Oats", subtitle: "Meal prep · 420 kcal", recipeId: "10" },
+  { label: "Beef Ramen", subtitle: "Japanese · 580 kcal", recipeId: "9" },
+  { label: "Overnight Oats", subtitle: "Meal prep · 430 kcal", recipeId: "10" },
 ];
 
 const MEAL_TYPE_FILTERS: Record<string, (r: Recipe) => boolean> = {
@@ -631,7 +631,7 @@ export default function HomeScreen() {
               {/* Card info strip */}
               <View style={styles.tutCardInfo}>
                 <Text style={styles.tutCardTitle} numberOfLines={1}>Spaghetti Carbonara</Text>
-                <Text style={styles.tutCardMeta}>Italian · 30m · 620 kcal</Text>
+                <Text style={styles.tutCardMeta}>Italian · 30m · 830 kcal</Text>
               </View>
               {/* Stamp overlay on card */}
               <Animated.View
