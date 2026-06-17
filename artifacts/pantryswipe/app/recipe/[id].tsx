@@ -37,7 +37,7 @@ export default function RecipeDetailScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { savedRecipes, saveRecipe, unsaveRecipe, markCooked, getPantryMatchScore, liveRecipes } = useApp();
+  const { savedRecipes, saveRecipe, unsaveRecipe, markCooked, getPantryMatchScore, liveRecipes, getIngredientMatches } = useApp();
 
   const recipe = liveRecipes.find((r) => r.id === id);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
@@ -112,8 +112,9 @@ export default function RecipeDetailScreen() {
 
   const isSaved = savedRecipes.includes(recipe.id);
   const matchScore = getPantryMatchScore(recipe);
-  const pantryIngredients = recipe.ingredients.filter((i) => i.inPantry);
-  const missingIngredients = recipe.ingredients.filter((i) => !i.inPantry);
+  const enrichedIngredients = getIngredientMatches(recipe);
+  const pantryIngredients = enrichedIngredients.filter((i) => i.inPantry);
+  const missingIngredients = enrichedIngredients.filter((i) => !i.inPantry);
   const imageSource = recipe.image
     ? recipe.image.startsWith("http")
       ? { uri: recipe.image }

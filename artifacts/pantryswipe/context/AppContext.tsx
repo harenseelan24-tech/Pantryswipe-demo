@@ -2,6 +2,29 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { INITIAL_PANTRY, MOCK_RECIPES, PantryItem, Recipe } from "@/data/mockData";
 
+// ─── Pantry quantity-aware ingredient matching helpers ───────────────────────
+function normalizeUnit(unit: string): string {
+  const u = unit.toLowerCase().trim();
+  if (["g", "gram", "grams", "gr"].includes(u)) return "g";
+  if (["kg", "kilogram", "kilograms"].includes(u)) return "kg";
+  if (["ml", "milliliter", "milliliters", "millilitre"].includes(u)) return "ml";
+  if (["l", "liter", "liters", "litre", "ltr"].includes(u)) return "l";
+  if (["cup", "cups"].includes(u)) return "cup";
+  if (["tbsp", "tablespoon", "tablespoons"].includes(u)) return "tbsp";
+  if (["tsp", "teaspoon", "teaspoons"].includes(u)) return "tsp";
+  if (["piece", "pieces", "pcs", "pc", ""].includes(u)) return "piece";
+  if (["can", "cans"].includes(u)) return "can";
+  if (["clove", "cloves"].includes(u)) return "clove";
+  return u;
+}
+
+function parseIngredientAmount(str: string): { value: number; unit: string } | null {
+  if (!str) return null;
+  const m = str.trim().match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]*)/);
+  if (!m || !m[1]) return null;
+  return { value: parseFloat(m[1]), unit: normalizeUnit(m[2] || "") };
+}
+
 const API_BASE = process.env.EXPO_PUBLIC_DOMAIN
   ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`
   : "/api";
@@ -118,6 +141,7 @@ interface AppContextType {
   markCooked: (id: string) => void;
   getMatchingRecipes: () => Recipe[];
   getPantryMatchScore: (recipe: Recipe) => number;
+  getIngredientMatches: (recipe: Recipe) => Array<{ name: string; amount: string; inPantry: boolean; sufficient: boolean }>;
   refreshRecipes: () => void;
 }
 
@@ -303,6 +327,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const getIngredientMatches = useCallback((recipe: Recipe) => {
+    return recipe.ingredients.map((ing) => {
+      const ingName = ing.name.toLowerCase();
+      const pantryItem = pantryItems.find((p) => {
+        const pName = p.name.toLowerCase();
+        return pName.includes(ingName) || ingName.includes(pName);
+      });
+      if (!pantryItem) return { name: ing.name, amount: ing.amount, inPantry: false, sufficient: false };
+
+      const needed = parseIngredientAmount(ing.amount);
+      const haveUnit = normalizeUnit(pantryItem.unit);
+      let sufficient = true;
+      if (needed && needed.unit && needed.unit !== "piece" && haveUnit && needed.unit === haveUnit) {
+        sufficient = pantryItem.quantity >= needed.value;
+      }
+      return { name: ing.name, amount: ing.amount, inPantry: sufficient, sufficient };
+    });
+  }, [pantryItems]);
+
   const getPantryMatchScore = (recipe: Recipe): number => {
     const pantryNames = pantryItems.map((p) => p.name.toLowerCase());
     if (recipe.ingredients.length === 0) return 0;
@@ -341,6 +384,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         markCooked,
         getMatchingRecipes,
         getPantryMatchScore,
+        getIngredientMatches,
         refreshRecipes,
       }}
     >

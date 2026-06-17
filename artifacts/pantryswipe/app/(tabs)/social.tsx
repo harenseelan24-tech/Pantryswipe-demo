@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
+import { useApp } from "@/context/AppContext";
 import { MOCK_SOCIAL_POSTS, SocialPost } from "@/data/mockData";
 
 const DISCOVERY_TABS = ["For You", "Following", "Trending", "Near Me"];
@@ -43,10 +44,17 @@ const SEED_COMMENTS: Record<string, Comment[]> = {
   s5: [],
 };
 
+const CUISINE_EMOJIS: Record<string, string> = {
+  Italian: "🍝", Japanese: "🍜", Korean: "🥘", Mexican: "🌮",
+  Indian: "🍛", Chinese: "🥡", Thai: "🍲", American: "🍔",
+  French: "🥐", Mediterranean: "🫒", Vietnamese: "🍜", Singaporean: "🦀",
+};
+
 export default function SocialScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { liveRecipes } = useApp();
   const [activeTab, setActiveTab] = useState("For You");
   const [activeCuisine, setActiveCuisine] = useState("All");
   const [posts, setPosts] = useState<SocialPost[]>(MOCK_SOCIAL_POSTS);
@@ -90,7 +98,16 @@ export default function SocialScreen() {
   const formatCount = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString();
 
   const renderPost = ({ item }: { item: SocialPost }) => {
-    const imageSource = item.image ? RECIPE_IMAGES[item.image] : null;
+    let imageSource: any = null;
+    if (item.image) {
+      imageSource = item.image.startsWith("http") ? { uri: item.image } : (RECIPE_IMAGES[item.image] ?? null);
+    }
+    if (!imageSource && item.recipeId) {
+      const linked = liveRecipes.find((r) => r.id === item.recipeId || r.id === `api_${item.recipeId}`);
+      if (linked?.image) {
+        imageSource = linked.image.startsWith("http") ? { uri: linked.image } : (RECIPE_IMAGES[linked.image] ?? null);
+      }
+    }
     const postComments = comments[item.id] || [];
 
     return (
@@ -110,11 +127,14 @@ export default function SocialScreen() {
         </View>
 
         {/* Image */}
-        <View style={[styles.postImageContainer, { backgroundColor: colors.card }]}>
+        <View style={[styles.postImageContainer, { backgroundColor: colors.muted }]}>
           {imageSource ? (
-            <Image source={imageSource} style={styles.postImage} resizeMode="contain" />
+            <Image source={imageSource} style={styles.postImage} resizeMode="cover" />
           ) : (
-            <Feather name="image" size={36} color={colors.textMuted} />
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <Text style={{ fontSize: 52 }}>{CUISINE_EMOJIS[item.recipeName?.split(" ").pop() ?? ""] ?? "🍽"}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: "Inter_500Medium" }}>{item.recipeName ?? "Food"}</Text>
+            </View>
           )}
         </View>
 

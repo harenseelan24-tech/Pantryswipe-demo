@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { Recipe } from "@/data/mockData";
+import { useApp } from "@/context/AppContext";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.26;
@@ -155,8 +156,10 @@ export default function SwipeCard({
   const stackWidthReduction = index === 0 ? 0 : index === 1 ? 20 : 36;
   const cardWidth = CARD_BASE_WIDTH - stackWidthReduction;
 
-  const matchedCount = recipe.ingredients.filter((i) => i.inPantry).length;
-  const missingCount = recipe.ingredients.filter((i) => !i.inPantry).length;
+  const { getIngredientMatches } = useApp();
+  const enrichedIngredients = getIngredientMatches(recipe);
+  const matchedCount = enrichedIngredients.filter((i) => i.inPantry).length;
+  const missingCount = enrichedIngredients.filter((i) => !i.inPantry).length;
 
   const difficultyColor =
     recipe.difficulty === "Easy" ? "#10B981"

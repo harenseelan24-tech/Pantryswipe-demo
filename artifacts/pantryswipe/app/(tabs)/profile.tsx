@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import {
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -11,8 +12,21 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
-import { BADGES, MOCK_RECIPES } from "@/data/mockData";
+import { BADGES } from "@/data/mockData";
 import { useRouter } from "expo-router";
+
+const RECIPE_IMAGES: Record<string, ReturnType<typeof require>> = {
+  "recipe-pasta": require("@/assets/images/recipe-pasta.png"),
+  "recipe-salmon": require("@/assets/images/recipe-salmon.png"),
+  "recipe-bowl": require("@/assets/images/recipe-bowl.png"),
+  "recipe-bibimbap": require("@/assets/images/recipe-bibimbap.png"),
+};
+
+const CUISINE_EMOJIS: Record<string, string> = {
+  Italian: "🍝", Japanese: "🍜", Korean: "🥘", Mexican: "🌮",
+  Indian: "🍛", Chinese: "🥡", Thai: "🍲", American: "🍔",
+  French: "🥐", Mediterranean: "🫒", Vietnamese: "🍜", International: "🍽",
+};
 
 const PROFILE_TABS = ["Recipes", "Saved", "Stats", "Badges"] as const;
 const RECIPE_SUBTABS = ["Saved Later", "Made", "To Cook"] as const;
@@ -30,15 +44,15 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { userProfile, stats, savedRecipes, cookedRecipes } = useApp();
+  const { userProfile, stats, savedRecipes, cookedRecipes, liveRecipes } = useApp();
   const [activeTab, setActiveTab] = useState<(typeof PROFILE_TABS)[number]>("Stats");
   const [recipeSubtab, setRecipeSubtab] = useState<(typeof RECIPE_SUBTABS)[number]>("Saved Later");
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
-  const savedRecipesList = MOCK_RECIPES.filter((r) => savedRecipes.includes(r.id));
-  const cookedRecipesList = MOCK_RECIPES.filter((r) => cookedRecipes.includes(r.id));
-  const toCookList = MOCK_RECIPES.filter((r) => !cookedRecipes.includes(r.id) && !savedRecipes.includes(r.id)).slice(0, 4);
+  const savedRecipesList = liveRecipes.filter((r) => savedRecipes.includes(r.id));
+  const cookedRecipesList = liveRecipes.filter((r) => cookedRecipes.includes(r.id));
+  const toCookList = liveRecipes.filter((r) => !cookedRecipes.includes(r.id) && !savedRecipes.includes(r.id)).slice(0, 4);
 
   const recipesList = recipeSubtab === "Saved Later" ? savedRecipesList : recipeSubtab === "Made" ? cookedRecipesList : toCookList;
 
@@ -148,17 +162,24 @@ export default function ProfileScreen() {
                 </View>
               ) : (
                 <View style={styles.recipeGrid}>
-                  {recipesList.map((recipe) => (
+                  {recipesList.map((recipe) => {
+                    const imgSrc = recipe.image
+                      ? recipe.image.startsWith("http") ? { uri: recipe.image } : (RECIPE_IMAGES[recipe.image] ?? null)
+                      : null;
+                    return (
                     <TouchableOpacity key={recipe.id} style={[styles.recipeGridItem, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push(`/recipe/${recipe.id}`)}>
-                      <View style={[styles.recipeGridImage, { backgroundColor: colors.primary + "20" }]}>
-                        <Text style={{ fontSize: 32 }}>
-                          {recipe.cuisine === "Italian" ? "🍝" : recipe.cuisine === "Japanese" ? "🍜" : recipe.cuisine === "Korean" ? "🥘" : recipe.cuisine === "Indian" ? "🍛" : "🍽"}
-                        </Text>
+                      <View style={[styles.recipeGridImage, { backgroundColor: colors.primary + "20", overflow: "hidden" }]}>
+                        {imgSrc ? (
+                          <Image source={imgSrc} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                        ) : (
+                          <Text style={{ fontSize: 32 }}>{CUISINE_EMOJIS[recipe.cuisine] ?? "🍽"}</Text>
+                        )}
                       </View>
                       <Text style={[styles.recipeGridTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>{recipe.title}</Text>
                       <Text style={[styles.recipeGridMeta, { color: colors.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{recipe.calories} kcal · {recipe.prepTime + recipe.cookTime}m</Text>
                     </TouchableOpacity>
-                  ))}
+                    );
+                  })}
                 </View>
               )}
             </View>
@@ -167,25 +188,32 @@ export default function ProfileScreen() {
           {/* ── SAVED TAB ── */}
           {activeTab === "Saved" && (
             <View style={{ gap: 12 }}>
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>Posts you saved from Social</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>Recipes you've saved</Text>
               {savedRecipesList.length === 0 ? (
                 <View style={styles.emptyTab}>
                   <Text style={{ fontSize: 36 }}>🔖</Text>
-                  <Text style={[styles.emptyTabText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Tap the bookmark icon on social posts to save them here</Text>
+                  <Text style={[styles.emptyTabText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Swipe up on a recipe to save it here</Text>
                 </View>
               ) : (
                 <View style={styles.recipeGrid}>
-                  {savedRecipesList.map((recipe) => (
+                  {savedRecipesList.map((recipe) => {
+                    const imgSrc = recipe.image
+                      ? recipe.image.startsWith("http") ? { uri: recipe.image } : (RECIPE_IMAGES[recipe.image] ?? null)
+                      : null;
+                    return (
                     <TouchableOpacity key={recipe.id} style={[styles.recipeGridItem, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push(`/recipe/${recipe.id}`)}>
-                      <View style={[styles.recipeGridImage, { backgroundColor: colors.saveBlue + "20" }]}>
-                        <Text style={{ fontSize: 32 }}>
-                          {recipe.cuisine === "Italian" ? "🍝" : recipe.cuisine === "Japanese" ? "🍜" : "🍽"}
-                        </Text>
+                      <View style={[styles.recipeGridImage, { backgroundColor: colors.saveBlue + "20", overflow: "hidden" }]}>
+                        {imgSrc ? (
+                          <Image source={imgSrc} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                        ) : (
+                          <Text style={{ fontSize: 32 }}>{CUISINE_EMOJIS[recipe.cuisine] ?? "🍽"}</Text>
+                        )}
                       </View>
                       <Text style={[styles.recipeGridTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>{recipe.title}</Text>
                       <Text style={[styles.recipeGridMeta, { color: colors.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{recipe.calories} kcal</Text>
                     </TouchableOpacity>
-                  ))}
+                    );
+                  })}
                 </View>
               )}
             </View>
