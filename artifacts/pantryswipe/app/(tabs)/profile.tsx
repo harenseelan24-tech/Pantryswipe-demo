@@ -127,12 +127,28 @@ export default function ProfileScreen() {
 
         {/* Tabs — sticky */}
         <View style={[styles.tabsContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-          {PROFILE_TABS.map((tab) => (
-            <TouchableOpacity key={tab} style={[styles.tab, { borderBottomColor: colors.border }]} onPress={() => setActiveTab(tab)}>
-              {activeTab === tab && <View style={[styles.tabIndicator, { backgroundColor: colors.primary }]} />}
-              <Text style={[styles.tabText, { color: activeTab === tab ? colors.foreground : colors.textSecondary, fontFamily: activeTab === tab ? "Inter_700Bold" : "Inter_500Medium", paddingLeft: 8 }]}>{tab}</Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScrollContent}>
+            {PROFILE_TABS.map((tab) => {
+              const isActive = activeTab === tab;
+              return (
+                <TouchableOpacity
+                  key={tab}
+                  style={[
+                    styles.tab,
+                    {
+                      backgroundColor: isActive ? colors.primary : colors.card,
+                      borderColor: isActive ? colors.primary : colors.border,
+                    },
+                  ]}
+                  onPress={() => setActiveTab(tab)}
+                >
+                  <Text style={[styles.tabText, { color: isActive ? "#fff" : colors.textSecondary, fontFamily: isActive ? "Inter_700Bold" : "Inter_500Medium" }]}>
+                    {tab}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {/* Tab content */}
@@ -323,7 +339,8 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12 },
   statDivider: { width: 1, height: 28 },
   tabsContainer: { borderBottomWidth: 1 },
-  tab: { flexDirection: "row", alignItems: "center", paddingVertical: 15, paddingHorizontal: 20, position: "relative", borderBottomWidth: StyleSheet.hairlineWidth },
+  tabsScrollContent: { paddingHorizontal: 16, gap: 8, alignItems: "center", height: 54, paddingVertical: 9 },
+  tab: { height: 36, paddingHorizontal: 18, borderRadius: 100, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   tabText: { fontSize: 14 },
   tabIndicator: { position: "absolute", left: 0, top: 8, bottom: 8, width: 3, borderRadius: 2 },
   tabContent: { padding: 16, paddingBottom: 80 },

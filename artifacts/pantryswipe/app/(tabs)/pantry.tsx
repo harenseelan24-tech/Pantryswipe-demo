@@ -112,6 +112,7 @@ export default function PantryScreen() {
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
   const [showLowStockModal, setShowLowStockModal] = useState(false);
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [newItemName, setNewItemName] = useState("");
   const [newItemQty, setNewItemQty] = useState("1");
   const [newItemUnit, setNewItemUnit] = useState("pieces");
@@ -1103,48 +1104,111 @@ export default function PantryScreen() {
       <Modal
         visible={showLowStockModal}
         animationType="slide"
-        presentationStyle="formSheet"
-        onRequestClose={() => setShowLowStockModal(false)}
+        transparent
+        onRequestClose={() => { setShowLowStockModal(false); setCheckedItems(new Set()); }}
       >
-        <View style={[styles.sheet, { backgroundColor: isDark ? "#141210" : "#fff" }]}>
-          <View style={[styles.sheetHandle, { backgroundColor: isDark ? "#333" : "#E5E7EB" }]} />
-          <Text style={[styles.sheetTitle, { color: isDark ? "#F0EDE8" : "#0F1C2E", fontFamily: "Fraunces_700Bold" }]}>
-            Shopping List 🛒
-          </Text>
-          <Text style={{ fontSize: 14, marginBottom: 16, color: isDark ? "#9E9E9E" : "#6B7280", fontFamily: "Inter_400Regular" }}>
-            {lowStockItems.length} item{lowStockItems.length !== 1 ? "s" : ""} running low in your pantry
-          </Text>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 24 }}>
-            {lowStockItems.map((item) => (
-              <View
-                key={item.id}
-                style={{
-                  flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1,
-                  backgroundColor: isDark ? "#1A1714" : "#F9FAFB",
-                  borderColor: isDark ? "#2A2724" : "#E5E7EB",
-                }}
-              >
-                <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, color: isDark ? "#F0EDE8" : "#0F1C2E", fontFamily: "Inter_600SemiBold" }}>
-                    {item.name}
-                  </Text>
-                  <Text style={{ fontSize: 12, marginTop: 2, color: isDark ? "#9E9E9E" : "#6B7280", fontFamily: "Inter_400Regular" }}>
-                    Only {item.quantity} {item.unit} left · {item.category}
-                  </Text>
-                </View>
-                <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: "#E8452022" }}>
-                  <Text style={{ fontSize: 11, color: "#E84040", fontFamily: "Inter_500Medium" }}>Low</Text>
-                </View>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { backgroundColor: colors.background, paddingHorizontal: 20, paddingBottom: 36, maxHeight: "85%" }]}>
+            {/* Handle */}
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+            {/* Header row */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 4 }}>
+              <View>
+                <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold", fontSize: 22 }]}>
+                  Shopping List 🛒
+                </Text>
+                <Text style={{ fontSize: 13, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }}>
+                  {lowStockItems.length - checkedItems.size} item{lowStockItems.length - checkedItems.size !== 1 ? "s" : ""} left to grab
+                </Text>
               </View>
-            ))}
-          </ScrollView>
-          <TouchableOpacity
-            style={{ paddingVertical: 16, borderRadius: 14, alignItems: "center", backgroundColor: colors.primary }}
-            onPress={() => setShowLowStockModal(false)}
-          >
-            <Text style={{ fontSize: 16, color: "#fff", fontFamily: "Inter_700Bold" }}>Got It</Text>
-          </TouchableOpacity>
+              {checkedItems.size > 0 && (
+                <TouchableOpacity
+                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, backgroundColor: colors.muted }}
+                  onPress={() => setCheckedItems(new Set())}
+                >
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.textSecondary }}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 14 }} />
+
+            {/* Items list */}
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 8 }}>
+              {lowStockItems.map((item) => {
+                const isChecked = checkedItems.has(item.id);
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setCheckedItems((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(item.id)) next.delete(item.id);
+                        else next.add(item.id);
+                        return next;
+                      });
+                    }}
+                    style={[
+                      styles.shoppingRow,
+                      {
+                        backgroundColor: isChecked ? colors.muted : colors.card,
+                        borderColor: isChecked ? colors.border : colors.border,
+                        opacity: isChecked ? 0.65 : 1,
+                      },
+                    ]}
+                  >
+                    {/* Checkbox */}
+                    <View style={[
+                      styles.shoppingCheckbox,
+                      {
+                        backgroundColor: isChecked ? colors.secondary : "transparent",
+                        borderColor: isChecked ? colors.secondary : colors.border,
+                      },
+                    ]}>
+                      {isChecked && <Feather name="check" size={12} color="#fff" />}
+                    </View>
+
+                    {/* Emoji */}
+                    <Text style={{ fontSize: 24, marginRight: 4 }}>{item.emoji}</Text>
+
+                    {/* Info */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={[
+                        { fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.foreground },
+                        isChecked && { textDecorationLine: "line-through", color: colors.textMuted },
+                      ]}>
+                        {item.name}
+                      </Text>
+                      <Text style={{ fontSize: 12, marginTop: 2, color: colors.textMuted, fontFamily: "Inter_400Regular" }}>
+                        {item.quantity} {item.unit} left · {item.category}
+                      </Text>
+                    </View>
+
+                    {/* Low badge */}
+                    {!isChecked && (
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: "#E8402215" }}>
+                        <Text style={{ fontSize: 11, color: "#E84040", fontFamily: "Inter_500Medium" }}>Low</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Done button */}
+            <TouchableOpacity
+              style={{ paddingVertical: 16, borderRadius: 14, alignItems: "center", backgroundColor: colors.primary, marginTop: 16 }}
+              onPress={() => { setShowLowStockModal(false); setCheckedItems(new Set()); }}
+            >
+              <Text style={{ fontSize: 16, color: "#fff", fontFamily: "Inter_700Bold" }}>
+                {checkedItems.size > 0 ? `Done — ${checkedItems.size} item${checkedItems.size !== 1 ? "s" : ""} grabbed ✓` : "Done"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </View>
@@ -1195,6 +1259,14 @@ const styles = StyleSheet.create({
   },
   lowStockText: { flex: 1, fontSize: 13, color: "#78180F" },
   lowStockLink: { fontSize: 13 },
+  shoppingRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 14, borderRadius: 16, borderWidth: 1,
+  },
+  shoppingCheckbox: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 1.5,
+    alignItems: "center", justifyContent: "center",
+  },
   categoriesContainer: { paddingHorizontal: 16, gap: 8, paddingBottom: 10, alignItems: "center", height: 50 },
   categoryTab: { height: 34, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   categoryTabText: { fontSize: 13 },

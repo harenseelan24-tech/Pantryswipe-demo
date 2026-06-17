@@ -76,7 +76,11 @@ export default function RecipeDetailScreen() {
 
   // ── Celebration overlay ──────────────────────────────────────────────────────
   const [showCelebration, setShowCelebration] = useState(false);
-  const [celebrationData, setCelebrationData] = useState({ deducted: 0 });
+  const [celebrationData, setCelebrationData] = useState<{
+    deducted: number;
+    used: Array<{ name: string; amount: string }>;
+    needStock: Array<{ name: string; amount: string }>;
+  }>({ deducted: 0, used: [], needStock: [] });
   const celebrationScale = useRef(new Animated.Value(0.6)).current;
   const celebrationOpacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -300,7 +304,11 @@ export default function RecipeDetailScreen() {
             onPress={() => {
               if (isLast) {
                 const deducted = cookDish(recipe, selectedMealType, selectedServings);
-                setCelebrationData({ deducted });
+                setCelebrationData({
+                  deducted,
+                  used: pantryIngredients.map((i) => ({ name: i.name, amount: i.amount })),
+                  needStock: missingIngredients.map((i) => ({ name: i.name, amount: i.amount })),
+                });
                 setCookMode(false);
                 setShowCelebration(true);
               } else {
@@ -461,16 +469,52 @@ export default function RecipeDetailScreen() {
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>AI Variations</Text>
             {varNotes && appliedVariation && (
               <View style={[styles.varNoteBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Feather name="check-circle" size={14} color="#4CAF76" />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.varNoteTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                    {appliedVariation} applied
-                  </Text>
-                  <Text style={[styles.varNoteText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{varNotes}</Text>
+                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                  <Feather name="check-circle" size={14} color="#4CAF76" style={{ marginTop: 2 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.varNoteTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                      {appliedVariation} applied
+                    </Text>
+                    <Text style={[styles.varNoteText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{varNotes}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => { setAppliedVariation(null); setVarIngredients(null); setVarSteps(null); setVarNotes(null); }}>
+                    <Feather name="x" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={() => { setAppliedVariation(null); setVarIngredients(null); setVarSteps(null); setVarNotes(null); }}>
-                  <Feather name="x" size={16} color={colors.mutedForeground} />
-                </TouchableOpacity>
+
+                {/* Pantry match for variation ingredients */}
+                {varIngredients && varIngredients.length > 0 && (() => {
+                  const have = varIngredients.filter((i) => i.inPantry);
+                  const need = varIngredients.filter((i) => !i.inPantry);
+                  return (
+                    <View style={{ marginTop: 12, gap: 8 }}>
+                      {have.length > 0 && (
+                        <View>
+                          <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#4CAF76", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                            ✅ You have ({have.length})
+                          </Text>
+                          {have.map((ing) => (
+                            <Text key={ing.name} style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.foreground, lineHeight: 18 }}>
+                              · {ing.name} — {ing.amount}
+                            </Text>
+                          ))}
+                        </View>
+                      )}
+                      {need.length > 0 && (
+                        <View>
+                          <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.saffron, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                            🛒 Need to buy ({need.length})
+                          </Text>
+                          {need.map((ing) => (
+                            <Text key={ing.name} style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.foreground, lineHeight: 18 }}>
+                              · {ing.name} — {ing.amount}
+                            </Text>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })()}
               </View>
             )}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}>
@@ -642,6 +686,37 @@ export default function RecipeDetailScreen() {
                 </Text>
               </View>
             </View>
+
+            {/* Ingredient breakdown */}
+            {(celebrationData.used.length > 0 || celebrationData.needStock.length > 0) && (
+              <View style={{ width: "100%", gap: 10, marginBottom: 4 }}>
+                {celebrationData.used.length > 0 && (
+                  <View style={[styles.celebIngBlock, { backgroundColor: "#4CAF7615", borderColor: "#4CAF7630" }]}>
+                    <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#4CAF76", marginBottom: 6 }}>
+                      ✅ Used from your pantry
+                    </Text>
+                    {celebrationData.used.map((ing, i) => (
+                      <Text key={i} style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.foreground, lineHeight: 18 }}>
+                        · {ing.name}{ing.amount ? ` (${ing.amount})` : ""}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+                {celebrationData.needStock.length > 0 && (
+                  <View style={[styles.celebIngBlock, { backgroundColor: "#F5A62315", borderColor: "#F5A62330" }]}>
+                    <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.saffron, marginBottom: 6 }}>
+                      🛒 Stock up on these
+                    </Text>
+                    {celebrationData.needStock.map((ing, i) => (
+                      <Text key={i} style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.foreground, lineHeight: 18 }}>
+                        · {ing.name}{ing.amount ? ` (${ing.amount})` : ""}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
             <View style={styles.celebrationBtns}>
               <TouchableOpacity
                 style={[styles.celebrationBtn, { backgroundColor: colors.muted }]}
@@ -811,5 +886,6 @@ const styles = StyleSheet.create({
   celebrationStatLabel: { fontSize: 12, textAlign: "center" },
   celebrationBtns: { flexDirection: "row", gap: 12, marginTop: 8, width: "100%" },
   celebrationBtn: { flex: 1, paddingVertical: 16, borderRadius: 14, alignItems: "center" },
+  celebIngBlock: { borderRadius: 12, borderWidth: 1, padding: 12, width: "100%" },
   celebrationBtnText: { fontSize: 15 },
 });
