@@ -4,6 +4,7 @@ import {
   Platform, ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useCameraStream } from "@/hooks/useCameraStream";
@@ -22,6 +23,24 @@ interface Props {
 
 function generateId() {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+}
+
+/**
+ * Resize + compress an image URI to a max width of 1200px at 0.55 JPEG quality.
+ * This cuts a 4–8 MB phone photo down to ~150–350 KB — fast enough to upload
+ * over mobile data in a few seconds while keeping receipt text fully readable.
+ */
+async function compressForUpload(uri: string): Promise<string | null> {
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1200 } }],
+      { compress: 0.55, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+    );
+    return result.base64 ?? null;
+  } catch {
+    return null;
+  }
 }
 
 type WebPhase = "preview" | "reading" | "error-unclear" | "error-offline" | "error-denied" | "error-server" | "error-ratelimit";
@@ -146,15 +165,15 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
 
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: "images",
-      base64: true,
-      quality: 0.85,
+      quality: 1,
       allowsEditing: false,
     });
 
-    if (result.canceled || !result.assets?.[0]?.base64) return;
+    if (result.canceled || !result.assets?.[0]?.uri) return;
 
-    const base64 = result.assets[0].base64;
     setNativePhase("reading");
+    const base64 = await compressForUpload(result.assets[0].uri);
+    if (!base64) { setNativePhase("error-unclear"); return; }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 60000);
@@ -195,14 +214,14 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: "images",
-      base64: true,
-      quality: 0.85,
+      quality: 1,
     });
 
-    if (result.canceled || !result.assets?.[0]?.base64) return;
+    if (result.canceled || !result.assets?.[0]?.uri) return;
 
-    const base64 = result.assets[0].base64;
     setNativePhase("reading");
+    const base64 = await compressForUpload(result.assets[0].uri);
+    if (!base64) { setNativePhase("error-unclear"); return; }
 
     const controller2 = new AbortController();
     const timer2 = setTimeout(() => controller2.abort(), 60000);
