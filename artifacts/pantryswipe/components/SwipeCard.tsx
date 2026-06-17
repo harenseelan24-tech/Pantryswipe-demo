@@ -165,7 +165,11 @@ export default function SwipeCard({
 
   const cuisineFlag = CUISINE_FLAGS[recipe.cuisine] ?? "🌍";
   const cuisineEmoji = CUISINE_EMOJIS[recipe.cuisine] ?? "🍽";
-  const imageSource = recipe.image ? RECIPE_IMAGES[recipe.image] : null;
+  const imageSource = recipe.image
+    ? recipe.image.startsWith("http")
+      ? { uri: recipe.image }
+      : (RECIPE_IMAGES[recipe.image] ?? null)
+    : null;
 
   return (
     <Animated.View

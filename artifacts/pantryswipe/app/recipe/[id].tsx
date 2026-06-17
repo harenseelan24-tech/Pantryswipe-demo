@@ -15,7 +15,6 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
-import { MOCK_RECIPES } from "@/data/mockData";
 
 const RECIPE_IMAGES: Record<string, ReturnType<typeof require>> = {
   "recipe-pasta": require("@/assets/images/recipe-pasta.png"),
@@ -38,9 +37,9 @@ export default function RecipeDetailScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { savedRecipes, saveRecipe, unsaveRecipe, markCooked, getPantryMatchScore } = useApp();
+  const { savedRecipes, saveRecipe, unsaveRecipe, markCooked, getPantryMatchScore, liveRecipes } = useApp();
 
-  const recipe = MOCK_RECIPES.find((r) => r.id === id);
+  const recipe = liveRecipes.find((r) => r.id === id);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [cookMode, setCookMode] = useState(false);
   const [cookModeStep, setCookModeStep] = useState(0);
@@ -115,7 +114,11 @@ export default function RecipeDetailScreen() {
   const matchScore = getPantryMatchScore(recipe);
   const pantryIngredients = recipe.ingredients.filter((i) => i.inPantry);
   const missingIngredients = recipe.ingredients.filter((i) => !i.inPantry);
-  const imageSource = recipe.image ? RECIPE_IMAGES[recipe.image] : null;
+  const imageSource = recipe.image
+    ? recipe.image.startsWith("http")
+      ? { uri: recipe.image }
+      : (RECIPE_IMAGES[recipe.image] ?? null)
+    : null;
 
   const handleToggleSave = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
