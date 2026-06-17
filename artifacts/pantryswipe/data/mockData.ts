@@ -28,6 +28,7 @@ export interface PantryItem {
   unit: string;
   category: "Fridge" | "Freezer" | "Pantry" | "Spices" | "Sauces" | "Beverages" | "Produce";
   expiryDate?: string;
+  purchaseDate?: string;
   status: "Fresh" | "Use Soon" | "Expiring" | "Expired";
   emoji: string;
 }

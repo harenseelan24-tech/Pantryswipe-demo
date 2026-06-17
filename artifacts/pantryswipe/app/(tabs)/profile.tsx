@@ -254,9 +254,9 @@ export default function ProfileScreen() {
               <View style={styles.statsGrid}>
                 {[
                   { label: "Meals Cooked", value: stats.mealsCoooked.toString(), icon: "coffee", color: colors.primary },
-                  { label: "Money Saved", value: `$${stats.moneySaved}`, icon: "dollar-sign", color: "#00C9B1" },
+                  { label: "Cuisines Tried", value: `${new Set(liveRecipes.filter(r => cookedRecipes.includes(r.id)).map(r => r.cuisine)).size}`, icon: "globe", color: "#00C9B1" },
                   { label: "Waste Reduced", value: `${stats.wasteReduced}kg`, icon: "wind", color: "#4CAF76" },
-                  { label: "Ingredients", value: `${stats.mealsCoooked * 3}`, icon: "package", color: colors.saveBlue },
+                  { label: "Recipes Saved", value: `${savedRecipes.length}`, icon: "bookmark", color: colors.saveBlue },
                 ].map((s) => (
                   <View key={s.label} style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Feather name={s.icon as any} size={20} color={s.color} />

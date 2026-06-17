@@ -5,6 +5,7 @@ import {
   Image,
   Linking,
   Modal,
+  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
@@ -93,6 +94,85 @@ function categoryToEmoji(cat: typeof CATEGORY_ITEMS[number]): string {
   return map[cat] ?? "🛒";
 }
 
+// ── Expiry helpers ────────────────────────────────────────────────────────────
+const CATEGORY_SHELF_DAYS: Record<string, number> = {
+  Fridge: 10, Produce: 7, Freezer: 90, Pantry: 180, Spices: 365, Sauces: 120, Beverages: 30,
+};
+
+function getDaysUntilExpiry(expiryDate: string): number {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const expiry = new Date(expiryDate); expiry.setHours(0, 0, 0, 0);
+  return Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function formatCountdown(days: number): string {
+  if (days < 0) return `Expired ${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} ago`;
+  if (days === 0) return "⚡ Expires today!";
+  if (days === 1) return "⏰ 1 day left";
+  return `⏱ ${days} days left`;
+}
+
+function isNearExpiry(item: PantryItem): boolean {
+  if (item.status === "Expired") return true;
+  if (!item.expiryDate) return item.status === "Expiring";
+  const daysLeft = getDaysUntilExpiry(item.expiryDate);
+  if (daysLeft < 0) return true;
+  const shelfLife = CATEGORY_SHELF_DAYS[item.category] ?? 30;
+  return daysLeft <= Math.max(2, Math.floor(shelfLife * 0.25));
+}
+
+// ── SwipeableRow ──────────────────────────────────────────────────────────────
+function SwipeableRow({
+  children,
+  onDelete,
+  colors,
+}: {
+  children: React.ReactNode;
+  onDelete: () => void;
+  colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
+}) {
+  const tx = useRef(new Animated.Value(0)).current;
+  const REVEAL = 80;
+  const pr = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
+      onPanResponderMove: (_, g) => {
+        if (g.dx < 0) tx.setValue(Math.max(g.dx, -REVEAL));
+      },
+      onPanResponderRelease: (_, g) => {
+        Animated.spring(tx, {
+          toValue: g.dx < -REVEAL / 2 ? -REVEAL : 0,
+          useNativeDriver: true,
+        }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <View style={{ overflow: "hidden", borderRadius: 16 }}>
+      <View
+        style={{
+          position: "absolute", right: 0, top: 0, bottom: 0, width: REVEAL,
+          backgroundColor: "#E84040", alignItems: "center", justifyContent: "center",
+          borderTopRightRadius: 16, borderBottomRightRadius: 16,
+        }}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, width: "100%", alignItems: "center", justifyContent: "center", gap: 4 }}
+          onPress={() => { Animated.spring(tx, { toValue: 0, useNativeDriver: true }).start(); onDelete(); }}
+        >
+          <Feather name="trash-2" size={18} color="#fff" />
+          <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_500Medium" }}>Remove</Text>
+        </TouchableOpacity>
+      </View>
+      <Animated.View style={{ transform: [{ translateX: tx }] }} {...pr.panHandlers}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
 export default function PantryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -113,6 +193,8 @@ export default function PantryScreen() {
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
   const [showLowStockModal, setShowLowStockModal] = useState(false);
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [restoredItems, setRestoredItems] = useState<Set<string>>(new Set());
+  const [showUncheckedWarning, setShowUncheckedWarning] = useState(false);
   const [newItemName, setNewItemName] = useState("");
   const [newItemQty, setNewItemQty] = useState("1");
   const [newItemUnit, setNewItemUnit] = useState("pieces");
@@ -139,8 +221,7 @@ export default function PantryScreen() {
 
   const TAB_BAR_H = Platform.OS === "web" ? 68 : 60;
   const [topH, setTopH] = useState(0);
-  const PANEL_H = 80;
-  const listHeight = topH > 0 ? Math.max(120, SCREEN_HEIGHT - TAB_BAR_H - topH - PANEL_H) : 0;
+  const listHeight = topH > 0 ? Math.max(120, SCREEN_HEIGHT - TAB_BAR_H - topH) : 0;
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   // Animate scan line while camera is live
@@ -164,9 +245,10 @@ export default function PantryScreen() {
     return matchCat && matchSearch;
   });
 
-  const expiringItems = pantryItems.filter((i) => i.status === "Expiring" || i.status === "Expired");
+  const expiringItems = pantryItems.filter(isNearExpiry);
 
   const isLowStock = (item: PantryItem): boolean => {
+    if (item.quantity === 0) return false;
     const unit = item.unit.toLowerCase().trim();
     if (["g", "gram", "grams", "gr"].includes(unit)) return item.quantity < 50;
     if (["kg", "kilogram", "kilograms"].includes(unit)) return item.quantity < 0.2;
@@ -174,7 +256,15 @@ export default function PantryScreen() {
     if (["l", "liter", "liters"].includes(unit)) return item.quantity < 0.25;
     return item.quantity <= 1;
   };
+  const ranOutItems = pantryItems.filter((i) => i.quantity === 0);
   const lowStockItems = pantryItems.filter(isLowStock);
+  const allRestockNeeded = [
+    ...ranOutItems,
+    ...lowStockItems.filter((i) => !ranOutItems.some((r) => r.id === i.id)),
+  ];
+  const needRestockItems = allRestockNeeded.filter((i) => !restoredItems.has(i.id));
+  const activeRanOut = ranOutItems.filter((i) => !restoredItems.has(i.id));
+
   const completeRecipes = liveRecipes.filter((r) => getPantryMatchScore(r) >= 80).length;
   const oneIngredientAway = liveRecipes.filter((r) => {
     const names = pantryItems.map((p) => p.name.toLowerCase());
@@ -183,7 +273,14 @@ export default function PantryScreen() {
     );
     return missing.length === 1;
   }).length;
-  const pantryValue = pantryItems.reduce((acc, item) => acc + item.quantity * 0.5, 0).toFixed(0);
+  const freshPct = pantryItems.length > 0
+    ? Math.round(pantryItems.filter((i) => i.status === "Fresh").length / pantryItems.length * 100)
+    : 100;
+  const expiringWithin3 = pantryItems.filter((i) => {
+    if (!i.expiryDate) return false;
+    const d = getDaysUntilExpiry(i.expiryDate);
+    return d >= 0 && d <= 3;
+  }).length;
   const matchableRecipes = liveRecipes
     .map((r) => ({ recipe: r, score: getPantryMatchScore(r) }))
     .filter(({ score }) => score >= 50)
@@ -386,24 +483,45 @@ export default function PantryScreen() {
         )}
 
         {/* ── LOW STOCK BANNER ── */}
-        {lowStockItems.length > 0 && (
+        {needRestockItems.length > 0 && (
           <TouchableOpacity
             style={styles.lowStockBanner}
-            onPress={() => setShowLowStockModal(true)}
+            onPress={() => { setShowLowStockModal(true); setShowUncheckedWarning(false); }}
             activeOpacity={0.85}
           >
             <View style={styles.lowStockAccent} />
             <View style={styles.lowStockBody}>
-              <Text style={{ fontSize: 14 }}>📉</Text>
+              <Text style={{ fontSize: 14 }}>{activeRanOut.length > 0 ? "⚠️" : "📉"}</Text>
               <Text style={[styles.lowStockText, { fontFamily: "Inter_400Regular" }]}>
                 <Text style={{ fontFamily: "Inter_600SemiBold" }}>
-                  {lowStockItems.length} item{lowStockItems.length > 1 ? "s" : ""} running low
+                  {needRestockItems.length} item{needRestockItems.length !== 1 ? "s" : ""}
+                  {activeRanOut.length > 0 ? ` · ${activeRanOut.length} ran out` : " running low"}
                 </Text>{" "}— tap to build your shopping list
               </Text>
               <Text style={[styles.lowStockLink, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>List →</Text>
             </View>
           </TouchableOpacity>
         )}
+
+        {/* ── WHAT CAN I MAKE (INLINE) ── */}
+        <TouchableOpacity
+          style={[styles.inlineWhatCanIMake, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => { setShowWhatCanIMake(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+          activeOpacity={0.85}
+        >
+          <Text style={{ fontSize: 18 }}>🍳</Text>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={[styles.stickyPanelTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+              What Can I Make?
+            </Text>
+            <Text style={[styles.stickyPanelSub, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+              {matchableRecipes.length} dishes with your pantry
+            </Text>
+          </View>
+          <View style={[styles.stickyChevron, { backgroundColor: colors.primary + "18" }]}>
+            <Feather name="chevron-right" size={16} color={colors.primary} />
+          </View>
+        </TouchableOpacity>
 
         {/* ── CATEGORY TABS ── */}
         <View style={{ height: 50, overflow: "hidden" }}>
@@ -520,40 +638,21 @@ export default function PantryScreen() {
                   </Text>
                 </View>
                 <View style={styles.intelligenceRow}>
-                  <View style={[styles.intelligenceIcon, { backgroundColor: colors.saveBlue + "22" }]}>
-                    <Feather name="dollar-sign" size={14} color={colors.saveBlue} />
+                  <View style={[styles.intelligenceIcon, { backgroundColor: expiringWithin3 > 0 ? "#EF444422" : "#10B98122" }]}>
+                    <Feather name="clock" size={14} color={expiringWithin3 > 0 ? "#EF4444" : "#10B981"} />
                   </View>
                   <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                    Estimated pantry value:{" "}
-                    <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.saveBlue }}>${pantryValue}</Text>
+                    {expiringWithin3 > 0 ? (
+                      <><Text style={{ fontFamily: "Inter_700Bold", color: "#EF4444" }}>{expiringWithin3} item{expiringWithin3 !== 1 ? "s" : ""} expiring</Text>{" "}in the next 3 days — use first</>
+                    ) : (
+                      <>Pantry freshness:{" "}<Text style={{ fontFamily: "Inter_600SemiBold", color: "#10B981" }}>{freshPct}% Fresh</Text></>
+                    )}
                   </Text>
                 </View>
               </View>
             </View>
           )}
         </ScrollView>
-      </View>
-
-      {/* ── STICKY "WHAT CAN I MAKE?" PANEL ── */}
-      <View style={[styles.stickyPanel, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
-        <TouchableOpacity
-          style={[styles.stickyPanelBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => { setShowWhatCanIMake(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-          activeOpacity={0.85}
-        >
-          <Text style={{ fontSize: 20 }}>🍳</Text>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.stickyPanelTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              What Can I Make?
-            </Text>
-            <Text style={[styles.stickyPanelSub, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
-              {matchableRecipes.length} dishes with your pantry
-            </Text>
-          </View>
-          <View style={[styles.stickyChevron, { backgroundColor: colors.primary + "18" }]}>
-            <Feather name="chevron-up" size={16} color={colors.primary} />
-          </View>
-        </TouchableOpacity>
       </View>
 
       {/* ── "WHAT CAN I MAKE?" BOTTOM SHEET ── */}
@@ -695,15 +794,38 @@ export default function PantryScreen() {
           <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
           <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Expiring Soon 🕐</Text>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 24 }}>
-            {expiringItems.map((item) => (
-              <View key={item.id} style={[styles.expiryItem, { backgroundColor: colors.card, borderColor: "#EF444430" }]}>
-                <Text style={{ fontSize: 28 }}>{item.emoji}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.itemName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{item.name}</Text>
-                  <Text style={[styles.itemDetail, { color: "#EF4444", fontFamily: "Inter_400Regular" }]}>{item.status} · {item.quantity} {item.unit}</Text>
-                </View>
-              </View>
-            ))}
+            {expiringItems.map((item) => {
+              const daysLeft = item.expiryDate ? getDaysUntilExpiry(item.expiryDate) : null;
+              return (
+                <SwipeableRow
+                  key={item.id}
+                  colors={colors}
+                  onDelete={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    removeFromPantry(item.id);
+                  }}
+                >
+                  <View style={[styles.expiryItem, { backgroundColor: colors.card, borderColor: "#EF444430" }]}>
+                    <Text style={{ fontSize: 28 }}>{item.emoji}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.itemName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{item.name}</Text>
+                      <Text style={[styles.itemDetail, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>{item.quantity} {item.unit} · {item.category}</Text>
+                      {daysLeft !== null && (
+                        <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", marginTop: 3, color: daysLeft < 0 ? "#9CA3AF" : daysLeft <= 1 ? "#DC2626" : "#EF4444" }}>
+                          {formatCountdown(daysLeft)}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: daysLeft !== null && daysLeft < 0 ? "#F9FAFB" : "#FEF2F2" }]}>
+                      <View style={[styles.statusDot, { backgroundColor: daysLeft !== null && daysLeft < 0 ? "#9CA3AF" : "#EF4444" }]} />
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", color: daysLeft !== null && daysLeft < 0 ? "#6B7280" : "#DC2626" }}>
+                        {daysLeft !== null && daysLeft < 0 ? "Expired" : "Expiring"}
+                      </Text>
+                    </View>
+                  </View>
+                </SwipeableRow>
+              );
+            })}
             <Text style={[styles.expiryHint, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Recipes that use these ingredients:</Text>
             {liveRecipes.filter((r: import("@/data/mockData").Recipe) =>
               r.ingredients.some((ing: { name: string }) => expiringItems.some((e) => e.name.toLowerCase().includes(ing.name.toLowerCase().split(" ")[0])))
@@ -1105,11 +1227,15 @@ export default function PantryScreen() {
         visible={showLowStockModal}
         animationType="slide"
         transparent
-        onRequestClose={() => { setShowLowStockModal(false); setCheckedItems(new Set()); }}
+        onRequestClose={() => {
+          if (checkedItems.size > 0) setRestoredItems((prev) => new Set([...prev, ...checkedItems]));
+          setCheckedItems(new Set());
+          setShowLowStockModal(false);
+          setShowUncheckedWarning(false);
+        }}
       >
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheet, { backgroundColor: colors.background, paddingHorizontal: 20, paddingBottom: 36, maxHeight: "85%" }]}>
-            {/* Handle */}
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
 
             {/* Header row */}
@@ -1119,82 +1245,103 @@ export default function PantryScreen() {
                   Shopping List 🛒
                 </Text>
                 <Text style={{ fontSize: 13, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }}>
-                  {lowStockItems.length - checkedItems.size} item{lowStockItems.length - checkedItems.size !== 1 ? "s" : ""} left to grab
+                  {needRestockItems.filter((i) => !checkedItems.has(i.id)).length} item{needRestockItems.filter((i) => !checkedItems.has(i.id)).length !== 1 ? "s" : ""} left to grab
                 </Text>
               </View>
               {checkedItems.size > 0 && (
                 <TouchableOpacity
                   style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, backgroundColor: colors.muted }}
-                  onPress={() => setCheckedItems(new Set())}
+                  onPress={() => { setCheckedItems(new Set()); setShowUncheckedWarning(false); }}
                 >
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.textSecondary }}>Clear</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.textSecondary }}>Uncheck all</Text>
                 </TouchableOpacity>
               )}
             </View>
 
-            {/* Divider */}
             <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 14 }} />
+
+            {/* Unchecked warning */}
+            {showUncheckedWarning && (
+              <View style={{ backgroundColor: "#FEF3C7", borderRadius: 12, padding: 12, marginBottom: 12, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Text style={{ fontSize: 16 }}>⚠️</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#92400E" }}>
+                    {needRestockItems.filter((i) => !checkedItems.has(i.id)).length} item{needRestockItems.filter((i) => !checkedItems.has(i.id)).length !== 1 ? "s" : ""} still unchecked
+                  </Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: "#78350F", marginTop: 2 }}>
+                    The alert will stay until all items are restocked.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (checkedItems.size > 0) setRestoredItems((prev) => new Set([...prev, ...checkedItems]));
+                    setCheckedItems(new Set());
+                    setShowLowStockModal(false);
+                    setShowUncheckedWarning(false);
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: "#92400E" }}>Close anyway</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Items list */}
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 8 }}>
-              {lowStockItems.map((item) => {
+              {needRestockItems.map((item) => {
                 const isChecked = checkedItems.has(item.id);
+                const isRanOut = item.quantity === 0;
                 return (
-                  <TouchableOpacity
+                  <SwipeableRow
                     key={item.id}
-                    activeOpacity={0.7}
-                    onPress={() => {
+                    colors={colors}
+                    onDelete={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setCheckedItems((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(item.id)) next.delete(item.id);
-                        else next.add(item.id);
-                        return next;
-                      });
+                      setRestoredItems((prev) => new Set([...prev, item.id]));
+                      setCheckedItems((prev) => { const n = new Set(prev); n.delete(item.id); return n; });
                     }}
-                    style={[
-                      styles.shoppingRow,
-                      {
-                        backgroundColor: isChecked ? colors.muted : colors.card,
-                        borderColor: isChecked ? colors.border : colors.border,
-                        opacity: isChecked ? 0.65 : 1,
-                      },
-                    ]}
                   >
-                    {/* Checkbox */}
-                    <View style={[
-                      styles.shoppingCheckbox,
-                      {
-                        backgroundColor: isChecked ? colors.secondary : "transparent",
-                        borderColor: isChecked ? colors.secondary : colors.border,
-                      },
-                    ]}>
-                      {isChecked && <Feather name="check" size={12} color="#fff" />}
-                    </View>
-
-                    {/* Emoji */}
-                    <Text style={{ fontSize: 24, marginRight: 4 }}>{item.emoji}</Text>
-
-                    {/* Info */}
-                    <View style={{ flex: 1 }}>
-                      <Text style={[
-                        { fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.foreground },
-                        isChecked && { textDecorationLine: "line-through", color: colors.textMuted },
-                      ]}>
-                        {item.name}
-                      </Text>
-                      <Text style={{ fontSize: 12, marginTop: 2, color: colors.textMuted, fontFamily: "Inter_400Regular" }}>
-                        {item.quantity} {item.unit} left · {item.category}
-                      </Text>
-                    </View>
-
-                    {/* Low badge */}
-                    {!isChecked && (
-                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: "#E8402215" }}>
-                        <Text style={{ fontSize: 11, color: "#E84040", fontFamily: "Inter_500Medium" }}>Low</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setCheckedItems((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(item.id)) next.delete(item.id);
+                          else next.add(item.id);
+                          return next;
+                        });
+                        setShowUncheckedWarning(false);
+                      }}
+                      style={[
+                        styles.shoppingRow,
+                        {
+                          backgroundColor: isChecked ? colors.muted : colors.card,
+                          borderColor: colors.border,
+                          opacity: isChecked ? 0.6 : 1,
+                        },
+                      ]}
+                    >
+                      <View style={[styles.shoppingCheckbox, { backgroundColor: isChecked ? colors.secondary : "transparent", borderColor: isChecked ? colors.secondary : colors.border }]}>
+                        {isChecked && <Feather name="check" size={12} color="#fff" />}
                       </View>
-                    )}
-                  </TouchableOpacity>
+                      <Text style={{ fontSize: 24, marginRight: 4 }}>{item.emoji}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.foreground }, isChecked && { textDecorationLine: "line-through", color: colors.textMuted }]}>
+                          {item.name}
+                        </Text>
+                        <Text style={{ fontSize: 12, marginTop: 2, color: colors.textMuted, fontFamily: "Inter_400Regular" }}>
+                          {isRanOut ? "Out of stock" : `${item.quantity} ${item.unit} left`} · {item.category}
+                        </Text>
+                      </View>
+                      {!isChecked && (
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: isRanOut ? "#EF444415" : "#E8402215" }}>
+                          <Text style={{ fontSize: 11, color: isRanOut ? "#DC2626" : "#E84040", fontFamily: "Inter_600SemiBold" }}>
+                            {isRanOut ? "Out" : "Low"}
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </SwipeableRow>
                 );
               })}
             </ScrollView>
@@ -1202,7 +1349,17 @@ export default function PantryScreen() {
             {/* Done button */}
             <TouchableOpacity
               style={{ paddingVertical: 16, borderRadius: 14, alignItems: "center", backgroundColor: colors.primary, marginTop: 16 }}
-              onPress={() => { setShowLowStockModal(false); setCheckedItems(new Set()); }}
+              onPress={() => {
+                const uncheckedCount = needRestockItems.filter((i) => !checkedItems.has(i.id)).length;
+                if (checkedItems.size > 0 && uncheckedCount > 0) {
+                  setShowUncheckedWarning(true);
+                } else {
+                  if (checkedItems.size > 0) setRestoredItems((prev) => new Set([...prev, ...checkedItems]));
+                  setCheckedItems(new Set());
+                  setShowLowStockModal(false);
+                  setShowUncheckedWarning(false);
+                }
+              }}
             >
               <Text style={{ fontSize: 16, color: "#fff", fontFamily: "Inter_700Bold" }}>
                 {checkedItems.size > 0 ? `Done — ${checkedItems.size} item${checkedItems.size !== 1 ? "s" : ""} grabbed ✓` : "Done"}
@@ -1259,6 +1416,10 @@ const styles = StyleSheet.create({
   },
   lowStockText: { flex: 1, fontSize: 13, color: "#78180F" },
   lowStockLink: { fontSize: 13 },
+  inlineWhatCanIMake: {
+    flexDirection: "row", alignItems: "center", marginHorizontal: 16,
+    marginBottom: 10, borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 11,
+  },
   shoppingRow: {
     flexDirection: "row", alignItems: "center", gap: 12,
     padding: 14, borderRadius: 16, borderWidth: 1,
