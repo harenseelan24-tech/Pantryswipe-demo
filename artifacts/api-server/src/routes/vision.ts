@@ -22,16 +22,20 @@ function assignEmoji(category: string): string {
 }
 
 // ─── Claude vision call ────────────────────────────────────────────────────────
-async function callClaude(prompt: string, imageBase64: string): Promise<VisionItem[]> {
+async function callClaude(
+  prompt: string,
+  imageBase64: string,
+  mediaType: AnthropicMediaType = "image/jpeg",
+): Promise<VisionItem[]> {
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 2048, // tighter cap — item lists don't need 8192 tokens
+    max_tokens: 2048,
     messages: [{
       role: "user",
       content: [
         {
           type: "image",
-          source: { type: "base64", media_type: "image/jpeg", data: imageBase64 },
+          source: { type: "base64", media_type: mediaType, data: imageBase64 },
         },
         { type: "text", text: prompt },
       ],
@@ -59,8 +63,26 @@ async function callClaude(prompt: string, imageBase64: string): Promise<VisionIt
 }
 
 // ─── Shared request handler logic ─────────────────────────────────────────────
-function parseAndStripImage(rawImage: string): string {
-  return rawImage.replace(/^data:image\/[a-z+]+;base64,/i, "");
+/** Supported media types for Anthropic's vision API */
+type AnthropicMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+
+/**
+ * Strip data-URI prefix and whitespace, then auto-detect the image format
+ * from the base64 magic bytes so Anthropic decodes it correctly.
+ */
+function parseAndStripImage(rawImage: string): { data: string; mediaType: AnthropicMediaType } {
+  const data = rawImage
+    .replace(/^data:image\/[a-z+]+;base64,/i, "")
+    .replace(/\s/g, ""); // remove MIME line-wrap newlines
+
+  // Detect format from base64-encoded magic bytes
+  let mediaType: AnthropicMediaType = "image/jpeg"; // safe default
+  if (data.startsWith("iVBOR")) mediaType = "image/png";   // PNG: 89 50 4E 47
+  else if (data.startsWith("R0lG")) mediaType = "image/gif"; // GIF: 47 49 46
+  else if (data.startsWith("UklG")) mediaType = "image/webp"; // RIFF/WEBP
+  // JPEG starts with /9j/ — already the default
+
+  return { data, mediaType };
 }
 
 // ─── POST /api/vision/scan-pantry ─────────────────────────────────────────────
@@ -74,7 +96,7 @@ router.post("/vision/scan-pantry", visionLimiter, async (req: Request, res: Resp
     return;
   }
 
-  const base64 = parseAndStripImage(parsed.data.image);
+  const { data: base64, mediaType } = parseAndStripImage(parsed.data.image);
 
   const prompt = `You are a pantry inventory AI. Identify every visible food item in this image.
 Return ONLY a valid JSON array, no markdown, no explanation. Each object must have:
@@ -86,7 +108,7 @@ Return ONLY a valid JSON array, no markdown, no explanation. Each object must ha
 If no food items are visible, return [].`;
 
   try {
-    const items = await callClaude(prompt, base64);
+    const items = await callClaude(prompt, base64, mediaType);
     res.json({ items: items.map((item) => ({ ...item, emoji: assignEmoji(item.category) })) });
   } catch (err) {
     logger.error({ err }, "scan-pantry vision error");
@@ -105,7 +127,7 @@ router.post("/vision/scan-receipt", visionLimiter, async (req: Request, res: Res
     return;
   }
 
-  const base64 = parseAndStripImage(parsed.data.image);
+  const { data: base64, mediaType } = parseAndStripImage(parsed.data.image);
 
   const prompt = `You are a grocery receipt parser. Read this receipt image carefully.
 Extract every food and grocery item. Ignore non-food items (bags, batteries, cleaning products).
@@ -119,7 +141,7 @@ Return ONLY a valid JSON array, no markdown, no explanation. Each object must ha
 If the image is not a readable receipt, return [].`;
 
   try {
-    const items = await callClaude(prompt, base64);
+    const items = await callClaude(prompt, base64, mediaType);
     res.json({ items: items.map((item) => ({ ...item, emoji: assignEmoji(item.category) })) });
   } catch (err) {
     logger.error({ err }, "scan-receipt vision error");

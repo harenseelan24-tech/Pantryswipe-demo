@@ -81,7 +81,7 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
 
     let items = await attemptScan();
     if (items === null) items = await attemptScan();
-    if (items === null || items.length < 2) {
+    if (items === null || items.length === 0) {
       setWebPhase("error-unclear");
       return;
     }
@@ -171,7 +171,7 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
       let items = await attemptScan();
       if (items === null) items = await attemptScan();
 
-      if (items === null || items.length < 2) {
+      if (items === null || items.length === 0) {
         setNativePhase("error-unclear");
         return;
       }
@@ -221,7 +221,7 @@ export default function ScanReceiptModal({ visible, onClose, onDone }: Props) {
       const data = (await res.json()) as { items?: DetectedItem[] };
       const items = data.items ?? [];
 
-      if (items.length < 2) { setNativePhase("error-unclear"); return; }
+      if (items.length === 0) { setNativePhase("error-unclear"); return; }
 
       const enriched = items.map((item) => ({
         ...item,

@@ -34,8 +34,12 @@ export const ImageBodySchema = z
       .max(MAX_IMAGE_CHARS, "Image too large — max ~7.5 MB")
       .refine(
         (v) => {
-          const stripped = v.replace(/^data:image\/[a-z+]+;base64,/i, "");
-          return /^[A-Za-z0-9+/]+=*$/.test(stripped);
+          // Strip data-URI prefix then whitespace (MIME base64 wraps at 76 chars)
+          const stripped = v
+            .replace(/^data:image\/[a-z+]+;base64,/i, "")
+            .replace(/\s/g, "");
+          // Validate base64 character set + padding
+          return /^[A-Za-z0-9+/]+=*$/.test(stripped) && stripped.length >= 50;
         },
         { message: "image must be valid base64 data" }
       ),
