@@ -130,13 +130,17 @@ router.post("/vision/scan-receipt", visionLimiter, async (req: Request, res: Res
   const { data: base64, mediaType } = parseAndStripImage(parsed.data.image);
 
   const prompt = `You are a grocery receipt parser. Read this receipt image carefully.
-Extract every food and grocery item. Ignore non-food items (bags, batteries, cleaning products).
+Extract every food and grocery item. Ignore non-food items (bags, batteries, cleaning products, loyalty points, taxes, subtotals).
+IMPORTANT RULES:
+- Preserve the EXACT product name as written on the receipt — do NOT generalise or merge items. "Baby Carrots" must stay "Baby Carrots", not "Carrots". "Whole Milk" must stay "Whole Milk", not "Milk". "Low-Fat Greek Yogurt" must stay as-is.
+- Each line item on the receipt becomes exactly one entry in the JSON array.
+- Do NOT combine similar products — if the receipt has both "Carrots" and "Baby Carrots", they are two separate entries.
 Return ONLY a valid JSON array, no markdown, no explanation. Each object must have:
-- name (string, clean readable product name, max 80 chars — not a barcode or SKU)
-- quantity (number — if receipt shows "2x Milk" use 2, else default to 1)
+- name (string, the exact product name from the receipt, max 80 chars — not a barcode or SKU)
+- quantity (number — use the weight shown for produce e.g. 0.778 kg, or the count if shown as "2x Item", else 1)
 - unit (one of: pieces/g/kg/ml/L/pack/can/bottle/bag/tbsp/tsp/cup/oz/lb)
 - category (one of: dairy/produce/meat/seafood/frozen/grains/condiments/sauces/spices/drinks/snacks/baking/other)
-- location (one of: fridge/freezer/pantry/spice-rack — infer from product)
+- location (one of: fridge/freezer/pantry/spice-rack — infer from product type)
 - estimated_price (number, the price shown next to the item, or null if not visible)
 If the image is not a readable receipt, return [].`;
 

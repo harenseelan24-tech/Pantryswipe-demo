@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useRef } from "react";
 import {
   View, Text, TouchableOpacity, Modal, StyleSheet,
-  ScrollView, TextInput, Animated, Platform,
+  ScrollView, TextInput, Animated,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
 import type { DetectedItem, ScanSource } from "@/types/scanning";
@@ -31,6 +32,7 @@ const PANTRY_CATEGORY_MAP: Record<string, "Fridge" | "Freezer" | "Pantry" | "Spi
 export default function ConfirmationEditScreen({ visible, items, source, onClose, onSuccess }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { addToPantry } = useApp();
   const [editableItems, setEditableItems] = useState<DetectedItem[]>([]);
   const [invalidIds, setInvalidIds] = useState<Set<string>>(new Set());
@@ -38,7 +40,6 @@ export default function ConfirmationEditScreen({ visible, items, source, onClose
   const successAnim = useRef(new Animated.Value(0)).current;
   const nameInputRefs = useRef<Record<string, TextInput | null>>({});
 
-  // Reset when opened
   const prevVisible = useRef(false);
   if (visible && !prevVisible.current) {
     prevVisible.current = true;
@@ -88,69 +89,77 @@ export default function ConfirmationEditScreen({ visible, items, source, onClose
 
     setShowSuccess(true);
     successAnim.setValue(0);
-    Animated.timing(successAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+    Animated.timing(successAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     setTimeout(() => {
       setShowSuccess(false);
       onSuccess();
-    }, 1400);
-  }, [editableItems, addToPantry, onSuccess, successAnim]);
+      router.replace("/(tabs)/pantry");
+    }, 1200);
+  }, [editableItems, addToPantry, onSuccess, successAnim, router]);
 
   const s = styles(colors);
 
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={onClose}>
       <View style={[s.root, { backgroundColor: colors.background }]}>
-        {/* Header */}
+
+        {/* ── Header ── */}
         <View style={[s.header, { paddingTop: insets.top + 12, borderBottomColor: colors.border }]}>
           <TouchableOpacity style={s.backBtn} onPress={onClose}>
-            <Feather name="arrow-left" size={22} color={colors.text} />
+            <Feather name="arrow-left" size={22} color={colors.foreground} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={[s.title, { color: colors.text }]}>Review Items</Text>
+            <Text style={[s.title, { color: colors.foreground }]}>Review Items</Text>
             <Text style={[s.subtitle, { color: colors.textMuted }]}>
               {editableItems.length} item{editableItems.length !== 1 ? "s" : ""} detected · Edit before adding
             </Text>
           </View>
         </View>
 
-        {/* Item list */}
+        {/* ── Item list ── */}
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+          contentContainerStyle={{ padding: 14, paddingBottom: 130 }}
           keyboardShouldPersistTaps="handled"
         >
           {editableItems.map((item) => (
-            <View key={item.id} style={s.card}>
+            <View
+              key={item.id}
+              style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
               {/* Row 1: emoji + name + delete */}
               <View style={s.cardRow1}>
-                <View style={s.emojiBox}>
+                <View style={[s.emojiBox, { backgroundColor: colors.background }]}>
                   <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
                 </View>
                 <TextInput
                   ref={(r) => { nameInputRefs.current[item.id] = r; }}
-                  style={[s.nameInput, { color: colors.text }, invalidIds.has(item.id) && s.nameInputError]}
+                  style={[
+                    s.nameInput,
+                    { color: colors.foreground },
+                    invalidIds.has(item.id) && { borderBottomWidth: 2, borderBottomColor: colors.skipRed },
+                  ]}
                   value={item.name}
                   onChangeText={(t) => updateItem(item.id, { name: t })}
                   placeholder="Item name"
                   placeholderTextColor={colors.textMuted}
                 />
                 <TouchableOpacity onPress={() => removeItem(item.id)} style={s.trashBtn}>
-                  <Feather name="trash-2" size={18} color={colors.textMuted} />
+                  <Feather name="trash-2" size={17} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
 
-              {/* Row 2: qty stepper + unit + category */}
+              {/* Row 2: qty stepper + unit chips */}
               <View style={s.cardRow2}>
-                {/* Qty stepper */}
-                <View style={[s.stepper, { borderColor: colors.border }]}>
+                <View style={[s.stepper, { borderColor: colors.border, backgroundColor: colors.background }]}>
                   <TouchableOpacity
-                    onPress={() => updateItem(item.id, { quantity: Math.max(0.1, item.quantity - 1) })}
+                    onPress={() => updateItem(item.id, { quantity: Math.max(0.1, +(item.quantity - 1).toFixed(3)) })}
                     style={s.stepBtn}
                   >
                     <Text style={[s.stepBtnTxt, { color: colors.primary }]}>−</Text>
                   </TouchableOpacity>
                   <TextInput
-                    style={[s.qtyInput, { color: colors.text }]}
+                    style={[s.qtyInput, { color: colors.foreground }]}
                     value={String(item.quantity)}
                     keyboardType="decimal-pad"
                     onChangeText={(t) => {
@@ -159,81 +168,106 @@ export default function ConfirmationEditScreen({ visible, items, source, onClose
                     }}
                   />
                   <TouchableOpacity
-                    onPress={() => updateItem(item.id, { quantity: item.quantity + 1 })}
+                    onPress={() => updateItem(item.id, { quantity: +(item.quantity + 1).toFixed(3) })}
                     style={s.stepBtn}
                   >
                     <Text style={[s.stepBtnTxt, { color: colors.primary }]}>+</Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Unit picker */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipScroll}>
-                  {SCAN_UNITS.map((u) => (
-                    <TouchableOpacity
-                      key={u}
-                      style={[s.chip, { borderColor: item.unit === u ? colors.primary : colors.border, backgroundColor: item.unit === u ? colors.primary + "22" : "transparent" }]}
-                      onPress={() => updateItem(item.id, { unit: u })}
-                    >
-                      <Text style={[s.chipTxt, { color: item.unit === u ? colors.primary : colors.textMuted }]}>{u}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {SCAN_UNITS.map((u) => {
+                    const active = item.unit === u;
+                    return (
+                      <TouchableOpacity
+                        key={u}
+                        style={[s.chip, {
+                          borderColor: active ? colors.primary : colors.border,
+                          backgroundColor: active ? colors.primary : colors.background,
+                        }]}
+                        onPress={() => updateItem(item.id, { unit: u })}
+                      >
+                        <Text style={[s.chipTxt, { color: active ? "#fff" : colors.textMuted }]}>{u}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </ScrollView>
               </View>
 
-              {/* Row 3: category */}
+              {/* Row 3: category chips */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                {SCAN_CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat.key}
-                    style={[s.chip, { borderColor: item.category === cat.key ? colors.primary : colors.border, backgroundColor: item.category === cat.key ? colors.primary + "22" : "transparent" }]}
-                    onPress={() => updateItem(item.id, {
-                      category: cat.key,
-                      emoji: cat.emoji,
-                    })}
-                  >
-                    <Text style={[s.chipTxt, { color: item.category === cat.key ? colors.primary : colors.textMuted }]}>
-                      {cat.emoji} {cat.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {SCAN_CATEGORIES.map((cat) => {
+                  const active = item.category === cat.key;
+                  return (
+                    <TouchableOpacity
+                      key={cat.key}
+                      style={[s.chip, {
+                        borderColor: active ? colors.primary : colors.border,
+                        backgroundColor: active ? colors.primary : colors.background,
+                      }]}
+                      onPress={() => updateItem(item.id, { category: cat.key, emoji: cat.emoji })}
+                    >
+                      <Text style={[s.chipTxt, { color: active ? "#fff" : colors.textMuted }]}>
+                        {cat.emoji} {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
 
               {/* Row 4: location pills */}
               <View style={[s.locationRow, { marginTop: 8 }]}>
-                {SCAN_LOCATIONS.map((loc) => (
-                  <TouchableOpacity
-                    key={loc.key}
-                    style={[s.locPill, {
-                      backgroundColor: item.location === loc.key ? colors.primary : "transparent",
-                      borderColor: item.location === loc.key ? colors.primary : colors.border,
-                    }]}
-                    onPress={() => updateItem(item.id, { location: loc.key })}
-                  >
-                    <Text style={[s.locPillTxt, { color: item.location === loc.key ? "#fff" : colors.textMuted }]}>
-                      {loc.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {SCAN_LOCATIONS.map((loc) => {
+                  const active = item.location === loc.key;
+                  return (
+                    <TouchableOpacity
+                      key={loc.key}
+                      style={[s.locPill, {
+                        backgroundColor: active ? colors.primary : colors.background,
+                        borderColor: active ? colors.primary : colors.border,
+                      }]}
+                      onPress={() => updateItem(item.id, { location: loc.key })}
+                    >
+                      <Text style={[s.locPillTxt, { color: active ? "#fff" : colors.textMuted }]}>
+                        {loc.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              {/* Receipt price if available */}
+              {/* Price hint */}
               {source === "receipt-scan" && item.estimatedPrice != null && (
-                <Text style={[s.priceHint, { color: colors.textMuted }]}>~${item.estimatedPrice.toFixed(2)}</Text>
+                <Text style={[s.priceHint, { color: colors.textMuted }]}>
+                  ~${item.estimatedPrice.toFixed(2)}
+                </Text>
               )}
             </View>
           ))}
 
-          {/* Add missed item */}
-          <TouchableOpacity style={[s.addMissedBtn, { borderColor: colors.border }]} onPress={addBlankItem}>
-            <Text style={[s.addMissedTxt, { color: colors.primary }]}>＋ Add an item we missed</Text>
+          <TouchableOpacity
+            style={[s.addMissedBtn, { borderColor: colors.border }]}
+            onPress={addBlankItem}
+          >
+            <Feather name="plus" size={15} color={colors.primary} style={{ marginRight: 6 }} />
+            <Text style={[s.addMissedTxt, { color: colors.primary }]}>Add an item we missed</Text>
           </TouchableOpacity>
         </ScrollView>
 
-        {/* Footer */}
-        <View style={[s.footer, { borderTopColor: colors.border, paddingBottom: insets.bottom + 12 }]}>
-          <Text style={[s.footerCount, { color: colors.textMuted }]}>{editableItems.length} item{editableItems.length !== 1 ? "s" : ""} ready to add</Text>
+        {/* ── Footer ── */}
+        <View style={[s.footer, {
+          borderTopColor: colors.border,
+          backgroundColor: colors.background,
+          paddingBottom: insets.bottom + 12,
+        }]}>
+          <Text style={[s.footerCount, { color: colors.textMuted }]}>
+            {editableItems.length} item{editableItems.length !== 1 ? "s" : ""} ready to add
+          </Text>
           <TouchableOpacity
-            style={[s.addBtn, { backgroundColor: editableItems.length === 0 ? colors.border : colors.primary }]}
+            style={[s.addBtn, {
+              backgroundColor: editableItems.length === 0 ? colors.border : colors.primary,
+              opacity: editableItems.length === 0 ? 0.5 : 1,
+            }]}
             onPress={handleConfirm}
             disabled={editableItems.length === 0}
           >
@@ -241,13 +275,19 @@ export default function ConfirmationEditScreen({ visible, items, source, onClose
           </TouchableOpacity>
         </View>
 
-        {/* Success overlay */}
+        {/* ── Success overlay ── */}
         {showSuccess && (
-          <Animated.View style={[s.successOverlay, { opacity: successAnim }]}>
+          <Animated.View style={[s.successOverlay, {
+            backgroundColor: colors.background,
+            opacity: successAnim,
+          }]}>
             <Animated.Text style={[s.successEmoji, {
               transform: [{ scale: successAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 1.2, 1] }) }],
             }]}>✅</Animated.Text>
-            <Text style={s.successTxt}>{editableItems.length} item{editableItems.length !== 1 ? "s" : ""} added to your pantry!</Text>
+            <Text style={[s.successTxt, { color: colors.foreground }]}>
+              {editableItems.length} item{editableItems.length !== 1 ? "s" : ""} added!
+            </Text>
+            <Text style={[s.successSub, { color: colors.textMuted }]}>Taking you to your pantry…</Text>
           </Animated.View>
         )}
       </View>
@@ -263,19 +303,19 @@ function styles(c: ReturnType<typeof useColors>) {
       paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, gap: 8,
     },
     backBtn: { paddingTop: 2, paddingRight: 4 },
-    title: { fontSize: 22, fontWeight: "700" },
-    subtitle: { fontSize: 13, marginTop: 2 },
+    title: { fontSize: 22, fontFamily: "Fraunces_700Bold" },
+    subtitle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
     card: {
-      backgroundColor: "#F0F6FF", borderWidth: 1, borderColor: "#E2EAFF",
-      borderRadius: 16, padding: 14, marginBottom: 10,
+      borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 10,
     },
     cardRow1: { flexDirection: "row", alignItems: "center", gap: 10 },
     emojiBox: {
       width: 44, height: 44, borderRadius: 12,
-      backgroundColor: "#fff", alignItems: "center", justifyContent: "center",
+      alignItems: "center", justifyContent: "center",
     },
-    nameInput: { flex: 1, fontSize: 16, fontWeight: "600", paddingVertical: 4 },
-    nameInputError: { borderBottomWidth: 2, borderBottomColor: "#E84040" },
+    nameInput: {
+      flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold", paddingVertical: 4,
+    },
     trashBtn: { padding: 4 },
     cardRow2: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
     stepper: {
@@ -283,37 +323,44 @@ function styles(c: ReturnType<typeof useColors>) {
       borderWidth: 1, borderRadius: 10, overflow: "hidden",
     },
     stepBtn: { width: 32, height: 36, alignItems: "center", justifyContent: "center" },
-    stepBtnTxt: { fontSize: 20, fontWeight: "600" },
-    qtyInput: { width: 44, textAlign: "center", fontSize: 15, fontWeight: "600", paddingVertical: 4 },
+    stepBtnTxt: { fontSize: 20, fontFamily: "Inter_600SemiBold" },
+    qtyInput: {
+      width: 48, textAlign: "center", fontSize: 15,
+      fontFamily: "Inter_600SemiBold", paddingVertical: 4,
+    },
     chipScroll: { flex: 1 },
     chip: {
       paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1,
       marginRight: 6, alignSelf: "flex-start",
     },
-    chipTxt: { fontSize: 12, fontWeight: "500" },
+    chipTxt: { fontSize: 12, fontFamily: "Inter_500Medium" },
     locationRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
     locPill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
-    locPillTxt: { fontSize: 12, fontWeight: "600" },
-    priceHint: { fontSize: 12, marginTop: 6 },
+    locPillTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+    priceHint: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 6 },
     addMissedBtn: {
       borderWidth: 1.5, borderStyle: "dashed", borderRadius: 14,
-      paddingVertical: 14, alignItems: "center", marginTop: 4,
+      paddingVertical: 14, alignItems: "center", flexDirection: "row",
+      justifyContent: "center", marginTop: 4,
     },
-    addMissedTxt: { fontSize: 15, fontWeight: "600" },
+    addMissedTxt: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
     footer: {
       position: "absolute", bottom: 0, left: 0, right: 0,
-      backgroundColor: "#fff", borderTopWidth: 1, padding: 16,
+      borderTopWidth: 1, padding: 16,
       flexDirection: "row", alignItems: "center", gap: 12,
     },
-    footerCount: { flex: 1, fontSize: 13 },
-    addBtn: { height: 52, paddingHorizontal: 24, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-    addBtnTxt: { color: "#fff", fontSize: 16, fontWeight: "700" },
+    footerCount: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
+    addBtn: {
+      height: 52, paddingHorizontal: 24, borderRadius: 14,
+      alignItems: "center", justifyContent: "center",
+    },
+    addBtnTxt: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
     successOverlay: {
       position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: "rgba(255,255,255,0.97)",
-      alignItems: "center", justifyContent: "center", gap: 16,
+      alignItems: "center", justifyContent: "center", gap: 12,
     },
     successEmoji: { fontSize: 72 },
-    successTxt: { fontSize: 20, fontWeight: "700", color: "#1a1a1a", textAlign: "center" },
+    successTxt: { fontSize: 22, fontFamily: "Fraunces_700Bold", textAlign: "center" },
+    successSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
   });
 }

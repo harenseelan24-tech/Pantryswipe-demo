@@ -24,6 +24,7 @@ import { useApp } from "@/context/AppContext";
 import { PantryItem, Recipe } from "@/data/mockData";
 import { lookupBarcode, type BarcodeProduct } from "@/services/barcodeService";
 import ScanReceiptModal from "@/components/ScanReceiptModal";
+import ConfirmationEditScreen from "@/components/ConfirmationEditScreen";
 import type { DetectedItem } from "@/types/scanning";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -105,6 +106,8 @@ export default function PantryScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddChoiceModal, setShowAddChoiceModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showReceiptConfirm, setShowReceiptConfirm] = useState(false);
+  const [scannedReceiptItems, setScannedReceiptItems] = useState<DetectedItem[]>([]);
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
   const [newItemName, setNewItemName] = useState("");
@@ -276,19 +279,9 @@ export default function PantryScreen() {
   };
 
   const handleReceiptScanDone = (items: DetectedItem[]) => {
-    items.forEach((item) => {
-      addToPantry({
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
-        name: item.name,
-        quantity: item.quantity,
-        unit: item.unit,
-        category: mapToAppCategory(item.category),
-        status: "Fresh",
-        emoji: item.emoji || categoryToEmoji(mapToAppCategory(item.category)),
-      });
-    });
     setShowReceiptModal(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setScannedReceiptItems(items);
+    setShowReceiptConfirm(true);
   };
 
   const handleAddManual = () => {
@@ -1060,6 +1053,18 @@ export default function PantryScreen() {
         visible={showReceiptModal}
         onClose={() => setShowReceiptModal(false)}
         onDone={handleReceiptScanDone}
+      />
+
+      {/* ── RECEIPT REVIEW/CONFIRM ── */}
+      <ConfirmationEditScreen
+        visible={showReceiptConfirm}
+        items={scannedReceiptItems}
+        source="receipt-scan"
+        onClose={() => setShowReceiptConfirm(false)}
+        onSuccess={() => {
+          setShowReceiptConfirm(false);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }}
       />
     </View>
   );
