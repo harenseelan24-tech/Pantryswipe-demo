@@ -1,3 +1,5 @@
+const base = import.meta.env.BASE_URL;
+
 export default function Slide01Title() {
   return (
     <div
@@ -83,40 +85,20 @@ export default function Slide01Title() {
           >
             2026
           </span>
-          {/* PantrySwipe app icon badge */}
-          <div
+          {/* PantrySwipe app logo */}
+          <img
+            src={`${base}app-logo.png`}
+            alt="PantrySwipe logo"
             style={{
-              width: "3.2vw",
-              height: "3.2vw",
-              borderRadius: "0.7vw",
-              background: "linear-gradient(135deg, #F5A623 0%, #E8891A 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 0 1.5vw rgba(245,166,35,0.45), 0 0.3vw 0.8vw rgba(0,0,0,0.5)",
+              width: "4.5vw",
+              height: "4.5vw",
+              borderRadius: "50%",
+              objectFit: "cover",
               flexShrink: 0,
+              boxShadow: "0 0 1.8vw rgba(245,166,35,0.35), 0 0.3vw 1vw rgba(0,0,0,0.6)",
+              border: "1px solid rgba(245,166,35,0.25)",
             }}
-          >
-            <svg
-              width="55%"
-              height="55%"
-              viewBox="0 0 36 36"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {/* Fork tines */}
-              <line x1="10" y1="4" x2="10" y2="13" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
-              <line x1="14" y1="4" x2="14" y2="13" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
-              <line x1="18" y1="4" x2="18" y2="13" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
-              {/* Fork neck */}
-              <path d="M10 13 Q10 17 14 17 Q18 17 18 13" stroke="white" strokeWidth="2.2" fill="none" strokeLinecap="round" />
-              {/* Fork handle */}
-              <line x1="14" y1="17" x2="14" y2="30" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
-              {/* Swipe arrow — right */}
-              <path d="M22 16 L29 16" stroke="white" strokeWidth="2" strokeLinecap="round" />
-              <path d="M26 12 L30 16 L26 20" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            </svg>
-          </div>
+          />
         </div>
       </div>
 
