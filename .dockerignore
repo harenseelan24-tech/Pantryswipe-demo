@@ -1,0 +1,30 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# All node_modules — builder installs fresh inside the container
+node_modules
+**/node_modules
+
+# Compiled output — builder produces its own
+**/dist
+**/.cache
+**/*.tsbuildinfo
+
+# Expo / mobile app — not part of the API server image
+artifacts/pantryswipe
+artifacts/mockup-sandbox
+
+# Environment files — secrets must be injected at runtime, never baked in
+.env
+.env.*
+!.env.example
+
+# Dev / editor artefacts
+*.local
+*.log
+.DS_Store
+.vscode
+.idea
+coverage

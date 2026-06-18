@@ -1,0 +1,52 @@
+# Local development stack — mirrors the production topology without TLS.
+# Usage:
+#   docker compose up          # start all services
+#   docker compose up --build  # rebuild the API image after code changes
+#   docker compose down -v     # stop and remove volumes (wipes the DB)
+
+services:
+  # ── API server ────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: artifacts/api-server/Dockerfile
+      target: runner
+    ports:
+      - '8080:8080'
+    env_file:
+      - .env                           # local overrides (gitignored)
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://dev:dev@postgres:5432/pantryswipe_dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    # Surface logs with colour in local dev.
+    # Remove in production — pino emits JSON which log shippers parse directly.
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - '5432:5432'           # expose for psql / TablePlus / pgAdmin access
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: pantryswipe_dev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'dev']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:   # persist data across `docker compose down` (without -v)
