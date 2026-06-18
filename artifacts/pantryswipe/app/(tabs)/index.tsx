@@ -18,6 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import SwipeCard from "@/components/SwipeCard";
+import { BlurText } from "@/components/BlurText";
 import { useColors } from "@/hooks/useColors";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useApp } from "@/context/AppContext";
@@ -384,9 +385,12 @@ export default function HomeScreen() {
           <Text style={[styles.greeting, { color: colors.textMuted, fontFamily: "Inter_500Medium" }]}>
             {greeting}, {userProfile.name} 👋
           </Text>
-          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
-            What are we cooking?
-          </Text>
+          <BlurText
+            text="What are we cooking?"
+            delay={120}
+            direction="top"
+            style={{ fontSize: 22, letterSpacing: -0.4, color: colors.foreground, fontFamily: "Fraunces_700Bold" }}
+          />
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.aiChefBtn} onPress={() => router.push("/ai-chef")}>
