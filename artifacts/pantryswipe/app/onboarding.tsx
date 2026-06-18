@@ -14,11 +14,18 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
+import { STORAGE_KEYS } from "@/constants/storageKeys";
 import ScanReceiptModal from "@/components/ScanReceiptModal";
 import ConfirmationEditScreen from "@/components/ConfirmationEditScreen";
 import type { DetectedItem, ScanSource } from "@/types/scanning";
+
+const API_BASE =
+  Platform.OS !== "web"
+    ? `https://${process.env.EXPO_PUBLIC_API_DOMAIN ?? "zip-repl-cactusussy24.replit.app"}/api`
+    : "/api";
 
 const { width } = Dimensions.get("window");
 const TOTAL_STEPS = 9;
@@ -327,7 +334,25 @@ export default function OnboardingScreen() {
     setTimeout(() => {
       clearInterval(interval);
       setLoadingDone(true);
-      setTimeout(() => {
+      setTimeout(async () => {
+        // Register account on backend — non-blocking, app works even if offline
+        try {
+          const res = await fetch(`${API_BASE}/auth/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: name.trim(),
+              email: email.trim(),
+              password,
+            }),
+          });
+          const data = await res.json();
+          if (data.token) {
+            await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, data.token);
+          }
+        } catch {
+          // API unavailable — continue without token
+        }
         updateProfile({ name: name.trim(), email: email.trim(), skillLevel, dietType: dietTypes, allergies, goal, cuisinePreferences: selectedCuisines, householdSize, weeklyBudget });
         completeSetup();
         router.replace("/(tabs)");

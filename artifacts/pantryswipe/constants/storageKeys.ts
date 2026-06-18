@@ -10,4 +10,5 @@ export const STORAGE_KEYS = {
   SETTINGS:        "pantryswipe_settings",
   TUTORIAL_SEEN:   "swipeTutorialSeen",
   PENDING_INTENT:  "@pantryswipe:pendingIntent",
+  AUTH_TOKEN:      "pantryswipe_auth_token",
 } as const;

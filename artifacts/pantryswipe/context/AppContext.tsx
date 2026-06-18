@@ -203,6 +203,7 @@ interface AppContextType {
   recipesLoading: boolean;
   updateProfile: (profile: Partial<UserProfile>) => void;
   completeSetup: () => void;
+  signOut: () => Promise<void>;
   addToPantry: (item: PantryItem) => void;
   removeFromPantry: (id: string) => void;
   updatePantryItem: (id: string, updates: Partial<PantryItem>) => void;
@@ -361,6 +362,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       fetchLiveRecipes(updated);
       return updated;
     });
+  };
+
+  const signOut = async (): Promise<void> => {
+    try {
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.AUTH_TOKEN,
+        STORAGE_KEYS.SETUP_COMPLETE,
+        STORAGE_KEYS.PROFILE,
+        STORAGE_KEYS.PANTRY,
+        STORAGE_KEYS.SAVED,
+        STORAGE_KEYS.COOKED,
+        STORAGE_KEYS.STATS,
+        STORAGE_KEYS.COOKING_HISTORY,
+        STORAGE_KEYS.LEARNING,
+      ]);
+    } catch { /* ignore storage errors */ }
+    setUserProfile(defaultProfile);
+    setPantryItems(INITIAL_PANTRY);
+    setSavedRecipes([]);
+    setCookedRecipes([]);
+    setCookingHistory([]);
+    setStats(defaultStats);
+    setIsSetupComplete(false);
+    setLearningProfile(defaultLearning);
   };
 
   const addToPantry = (item: PantryItem) => {
@@ -617,7 +642,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         userProfile, pantryItems, savedRecipes, cookedRecipes, cookingHistory,
         stats, isSetupComplete, liveRecipes, recipesLoading,
-        updateProfile, completeSetup,
+        updateProfile, completeSetup, signOut,
         addToPantry, removeFromPantry, updatePantryItem,
         saveRecipe, unsaveRecipe, markCooked, cookDish,
         getMatchingRecipes, getPantryMatchScore, getIngredientMatches, refreshRecipes,

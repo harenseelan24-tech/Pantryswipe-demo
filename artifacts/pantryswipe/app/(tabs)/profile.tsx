@@ -58,7 +58,7 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { userProfile, stats, savedRecipes, cookedRecipes, liveRecipes } = useApp();
+  const { userProfile, stats, savedRecipes, cookedRecipes, liveRecipes, signOut } = useApp();
   const { isSubscribed } = useSubscription();
   const scrollRef = useRef<ScrollView>(null);
   const [activeTab, setActiveTab] = useState<(typeof PROFILE_TABS)[number]>("Recipes");
@@ -66,6 +66,14 @@ export default function ProfileScreen() {
   const [showAllergies, setShowAllergies] = useState(false);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    await signOut();
+    router.replace("/welcome");
+  };
 
   const savedRecipesList = liveRecipes.filter((r) => savedRecipes.includes(r.id));
   const cookedRecipesList = liveRecipes.filter((r) => cookedRecipes.includes(r.id));
@@ -93,6 +101,13 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={[styles.coverActionBtn, { backgroundColor: colors.card }]} onPress={() => router.push("/settings")}>
                 <Feather name="settings" size={14} color={colors.foreground} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.coverActionBtn, { backgroundColor: colors.card }]}
+                onPress={handleSignOut}
+                disabled={signingOut}
+              >
+                <Feather name="log-out" size={14} color={signingOut ? colors.textSecondary : "#E84040"} />
               </TouchableOpacity>
             </View>
           </View>
