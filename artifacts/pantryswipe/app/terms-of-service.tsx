@@ -55,7 +55,7 @@ export default function TermsOfServiceScreen() {
         >
           <Feather name="arrow-left" size={20} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
           Terms of Service
         </Text>
         <View style={{ width: 40 }} />

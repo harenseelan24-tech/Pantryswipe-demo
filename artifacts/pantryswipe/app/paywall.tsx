@@ -69,7 +69,7 @@ function PurchaseConfirmModal({
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.modalOverlay}>
         <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+          <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
             Start Premium?
           </Text>
           <Text style={[styles.modalBody, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
@@ -161,7 +161,7 @@ export default function PaywallScreen() {
         >
           <Feather name="arrow-left" size={20} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
           PantrySwipe Premium
         </Text>
         <View style={{ width: 40 }} />
@@ -174,7 +174,7 @@ export default function PaywallScreen() {
         {/* Hero */}
         <View style={[styles.hero, { backgroundColor: HERB + "12" }]}>
           <Text style={styles.heroEmoji}>✨</Text>
-          <Text style={[styles.heroTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+          <Text style={[styles.heroTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
             Save more than {price} every month
           </Text>
           <Text style={[styles.heroSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingTop: 16, gap: 16 },
   hero: { borderRadius: 16, padding: 20, alignItems: "center", gap: 8 },
   heroEmoji: { fontSize: 40 },
-  heroTitle: { fontSize: 22, letterSpacing: -0.4, textAlign: "center", lineHeight: 30 },
+  heroTitle: { fontSize: 24, letterSpacing: -0.6, textAlign: "center", lineHeight: 32 },
   heroSub: { fontSize: 14, textAlign: "center", lineHeight: 21 },
   priceCard: {
     borderRadius: 16,
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
   priceLabel: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#fff" },
   priceSub: { fontSize: 12, color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular", marginTop: 2 },
   priceRight: { alignItems: "flex-end" },
-  priceAmount: { fontSize: 28, fontFamily: "Fraunces_700Bold", color: "#fff", letterSpacing: -1 },
+  priceAmount: { fontSize: 30, fontFamily: "SpaceGrotesk_600SemiBold", color: "#fff", letterSpacing: -1 },
   pricePer: { fontSize: 12, color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular" },
   sectionLabel: { fontSize: 11, letterSpacing: 0.8, marginTop: 4 },
   featuresCard: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },

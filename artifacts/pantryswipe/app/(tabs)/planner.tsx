@@ -152,7 +152,7 @@ export default function PlannerScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPadding + 6 }]}>
         <View>
-          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Meal Planner</Text>
+          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Meal Planner</Text>
           <Text style={[styles.headerSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{formatWeekRange(weekDates)}</Text>
         </View>
         <TouchableOpacity
@@ -263,7 +263,7 @@ export default function PlannerScreen() {
         {/* ── DAY VIEW ── */}
         {view === "Day" && (
           <View style={styles.dayView}>
-            <Text style={[styles.dayViewTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Today — {DAYS_FULL[todayIndex]}</Text>
+            <Text style={[styles.dayViewTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Today — {DAYS_FULL[todayIndex]}</Text>
             {(activeMealType ? [activeMealType] : MEALS).map((meal) => {
               const recipeId = mealPlan[todayKey]?.[meal];
               const recipe = recipeId ? findRecipe(recipeId) : null;
@@ -298,7 +298,7 @@ export default function PlannerScreen() {
             {isPlanEmpty && (
               <View style={[styles.emptyState, { backgroundColor: colors.primary + "0D", borderColor: colors.primary + "30" }]}>
                 <Text style={styles.emptyStateEmoji}>🗓️</Text>
-                <Text style={[styles.emptyStateTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Your week is wide open</Text>
+                <Text style={[styles.emptyStateTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Your week is wide open</Text>
                 <Text style={[styles.emptyStateText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
                   Cook meals and tap <Text style={{ fontFamily: "Inter_700Bold", color: colors.primary }}>Auto-Fill</Text> above — we'll fill in everything you've actually cooked this week.
                 </Text>
@@ -360,7 +360,7 @@ export default function PlannerScreen() {
         {/* ── MONTH VIEW ── */}
         {view === "Month" && (
           <View style={styles.monthView}>
-            <Text style={[styles.monthTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+            <Text style={[styles.monthTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
             </Text>
             <View style={styles.monthGrid}>
@@ -395,7 +395,7 @@ export default function PlannerScreen() {
               <Text style={[styles.mealDetailMealType, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
                 {selectedMeal?.meal} · {selectedMeal?.day}
               </Text>
-              <Text style={[styles.mealDetailTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>{selectedRecipe.title}</Text>
+              <Text style={[styles.mealDetailTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{selectedRecipe.title}</Text>
               <View style={styles.mealDetailStats}>
                 {[
                   { label: "Calories", value: `${selectedRecipe.calories}`, icon: "zap" },

@@ -303,7 +303,7 @@ function styles(c: ReturnType<typeof useColors>) {
       paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, gap: 8,
     },
     backBtn: { paddingTop: 2, paddingRight: 4 },
-    title: { fontSize: 22, fontFamily: "Fraunces_700Bold" },
+    title: { fontSize: 22, fontFamily: "Inter_700Bold" },
     subtitle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
     card: {
       borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 10,
@@ -360,7 +360,7 @@ function styles(c: ReturnType<typeof useColors>) {
       alignItems: "center", justifyContent: "center", gap: 12,
     },
     successEmoji: { fontSize: 72 },
-    successTxt: { fontSize: 22, fontFamily: "Fraunces_700Bold", textAlign: "center" },
+    successTxt: { fontSize: 22, fontFamily: "Inter_700Bold", textAlign: "center" },
     successSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
   });
 }

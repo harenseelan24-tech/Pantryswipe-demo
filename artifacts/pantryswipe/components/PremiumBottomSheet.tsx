@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   title: {
     color: "#F0EDE8",
     fontSize: 21,
-    fontFamily: "Fraunces_700Bold",
+    fontFamily: "Inter_700Bold",
     letterSpacing: -0.3,
   },
   usagePill: { flexDirection: "row", gap: 6, alignItems: "center" },
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     alignItems: "center", gap: 4,
     marginBottom: 16,
   },
-  priceText: { fontSize: 22, fontFamily: "Fraunces_700Bold", letterSpacing: -0.5 },
+  priceText: { fontSize: 24, fontFamily: "SpaceGrotesk_600SemiBold", letterSpacing: -0.8 },
   pricePer: { fontSize: 13, fontFamily: "Inter_400Regular" },
   priceCompare: { color: "#9E9E9E", fontSize: 12, fontFamily: "Inter_400Regular" },
 

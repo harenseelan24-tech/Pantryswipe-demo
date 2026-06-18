@@ -393,7 +393,7 @@ export default function HomeScreen() {
             text="What are we cooking?"
             delay={120}
             direction="top"
-            style={{ fontSize: 22, letterSpacing: -0.4, color: colors.foreground, fontFamily: "Fraunces_700Bold" }}
+            style={{ fontSize: 22, letterSpacing: -0.4, color: colors.foreground, fontFamily: "Inter_700Bold" }}
           />
         </View>
         <View style={styles.headerRight}>
@@ -547,7 +547,7 @@ export default function HomeScreen() {
         {noMoreCards ? (
           <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={{ fontSize: 48 }}>🍽</Text>
-            <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+            <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               All caught up!
             </Text>
             <Text style={[styles.emptyText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
@@ -797,7 +797,7 @@ export default function HomeScreen() {
         <View style={styles.servingsOverlay}>
           <View style={[styles.servingsSheet, { backgroundColor: colors.background }]}>
             <View style={[styles.servingsHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.servingsTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+            <Text style={[styles.servingsTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               How many people? 👨‍🍳
             </Text>
             <Text style={[styles.servingsSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
@@ -1068,7 +1068,7 @@ const styles = StyleSheet.create({
   tutTitle: {
     fontSize: 22,
     color: "#fff",
-    fontFamily: "Fraunces_700Bold",
+    fontFamily: "Inter_700Bold",
     textAlign: "center",
     letterSpacing: -0.3,
   },
@@ -1129,7 +1129,7 @@ const styles = StyleSheet.create({
   tutCardTitle: {
     color: "#fff",
     fontSize: 16,
-    fontFamily: "Fraunces_700Bold",
+    fontFamily: "Inter_700Bold",
   },
   tutCardMeta: {
     color: "rgba(255,255,255,0.55)",

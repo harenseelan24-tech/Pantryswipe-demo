@@ -832,7 +832,7 @@ export default function RecipeDetailScreen() {
         <View style={styles.servingsOverlay}>
           <View style={[styles.servingsSheet, { backgroundColor: colors.background }]}>
             <View style={[styles.servingsHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.servingsTitleText, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+            <Text style={[styles.servingsTitleText, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               How many people? 🧑‍🍳
             </Text>
             <Text style={[styles.servingsSubText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
@@ -911,7 +911,7 @@ export default function RecipeDetailScreen() {
         >
           <Animated.View style={[styles.celebrationCard, { transform: [{ scale: celebrationScale }] }]}>
             <Text style={styles.celebrationEmoji}>🎉</Text>
-            <Text style={[styles.celebrationTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+            <Text style={[styles.celebrationTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               You nailed it!
             </Text>
             <Text style={[styles.celebrationRecipe, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -1010,7 +1010,7 @@ const styles = StyleSheet.create({
   pillDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: "rgba(255,255,255,0.5)" },
 
   content: { paddingHorizontal: 20, paddingTop: 20 },
-  recipeTitle: { fontSize: 26, letterSpacing: -0.5, marginBottom: 12, fontFamily: "Fraunces_700Bold" },
+  recipeTitle: { fontSize: 28, letterSpacing: -0.7, marginBottom: 12, fontFamily: "Inter_700Bold" },
   creatorRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 },
   creatorAvatar: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   creatorAvatarText: { fontSize: 16 },
@@ -1048,7 +1048,7 @@ const styles = StyleSheet.create({
   },
 
   section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 18, fontFamily: "Fraunces_700Bold", marginBottom: 14, letterSpacing: -0.3 },
+  sectionTitle: { fontSize: 17, fontFamily: "Inter_700Bold", marginBottom: 14, letterSpacing: -0.3 },
 
   matchPanel: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 20 },
   matchScore: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100 },
@@ -1111,7 +1111,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 20, paddingBottom: 12,
   },
-  cookModeTitle: { color: "#F0EDE8", fontSize: 18, fontFamily: "Fraunces_700Bold" },
+  cookModeTitle: { color: "#F0EDE8", fontSize: 17, fontFamily: "Inter_600SemiBold" },
   cookModeProgress: { color: "#9E9E9E", fontSize: 14, fontFamily: "Inter_500Medium" },
   cookModeTimerPill: {
     flexDirection: "row", alignItems: "center", gap: 8,
@@ -1125,7 +1125,7 @@ const styles = StyleSheet.create({
   cookModeStepNum: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", marginBottom: 24 },
   cookModeStepNumText: { color: "#fff", fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" },
   cookModeBulletDot: { fontSize: 22, lineHeight: 30, flexShrink: 0 },
-  cookModeInstruction: { color: "#F0EDE8", fontSize: 20, lineHeight: 30, fontFamily: "Fraunces_700Bold", letterSpacing: -0.2 },
+  cookModeInstruction: { color: "#F0EDE8", fontSize: 19, lineHeight: 29, fontFamily: "Inter_600SemiBold", letterSpacing: -0.1 },
   cookModeFooter: { flexDirection: "row", gap: 12, paddingHorizontal: 20, paddingTop: 12 },
   cookModeBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 16, borderRadius: 14 },
   cookModeNextBtn: { flex: 1, justifyContent: "center" },

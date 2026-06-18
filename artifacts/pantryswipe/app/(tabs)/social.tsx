@@ -180,7 +180,7 @@ export default function SocialScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPadding + 6, borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Social</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Social</Text>
         <View style={styles.headerRight}>
           <TouchableOpacity style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="camera" size={18} color={colors.foreground} />
@@ -230,7 +230,7 @@ export default function SocialScreen() {
       <Modal visible={!!commentModalPost} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setCommentModalPost(null)}>
         <View style={[styles.commentModal, { backgroundColor: colors.background }]}>
           <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-          <Text style={[styles.commentModalTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Comments</Text>
+          <Text style={[styles.commentModalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Comments</Text>
 
           <FlatList
             data={comments[commentModalPost?.id || ""] || []}

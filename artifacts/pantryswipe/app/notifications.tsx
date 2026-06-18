@@ -169,7 +169,7 @@ export default function NotificationsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
           Notifications
         </Text>
         <TouchableOpacity onPress={handleClearAll} style={styles.clearBtn}>
@@ -183,7 +183,7 @@ export default function NotificationsScreen() {
       {cleared ? (
         <View style={styles.emptyState}>
           <Text style={{ fontSize: 52, marginBottom: 14 }}>🔔</Text>
-          <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+          <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
             All caught up!
           </Text>
           <Text style={[styles.emptyBody, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>

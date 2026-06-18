@@ -425,7 +425,7 @@ export default function PantryScreen() {
         {/* ── HEADER ── */}
         <View style={[styles.header, { paddingTop: topPadding + 6 }]}>
           <View>
-            <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+            <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               My Pantry
             </Text>
             <Text style={[styles.headerSub, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
@@ -664,7 +664,7 @@ export default function PantryScreen() {
           <View style={[styles.sheet, { backgroundColor: colors.background }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
             <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+              <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
                 What Can I Make?
               </Text>
               <View style={[styles.sheetCountPill, { backgroundColor: colors.primary + "18" }]}>
@@ -723,7 +723,7 @@ export default function PantryScreen() {
       <Modal visible={showAddModal} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowAddModal(false)}>
         <View style={[styles.modal, { backgroundColor: colors.background }]}>
           <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-          <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Add Pantry Item</Text>
+          <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Add Pantry Item</Text>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalForm}>
             <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Ingredient name</Text>
             <TextInput
@@ -789,7 +789,7 @@ export default function PantryScreen() {
       <Modal visible={showExpiryModal} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowExpiryModal(false)}>
         <View style={[styles.modal, { backgroundColor: colors.background }]}>
           <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-          <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>Expiring Soon 🕐</Text>
+          <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Expiring Soon 🕐</Text>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 24 }}>
             {expiringItems.map((item) => {
               const daysLeft = item.expiryDate ? getDaysUntilExpiry(item.expiryDate) : null;
@@ -857,7 +857,7 @@ export default function PantryScreen() {
 
           {/* Header row */}
           <View style={styles.barcodeHeader}>
-            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold", marginBottom: 0 }]}>
+            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 0 }]}>
               {barcodePhase === "found" ? "Product Found 🎉" :
                barcodePhase === "not_found" ? "Product Not Found" :
                barcodePhase === "loading" ? "Looking Up Barcode" :
@@ -908,7 +908,7 @@ export default function PantryScreen() {
                 </Text>
               </View>
 
-              <Text style={[styles.foundProductName, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+              <Text style={[styles.foundProductName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
                 {foundProduct.name}
               </Text>
               {foundProduct.brand && (
@@ -1108,7 +1108,7 @@ export default function PantryScreen() {
                   <View style={[styles.permissionIconWrap, { backgroundColor: colors.primary + "18" }]}>
                     <Feather name="camera" size={36} color={colors.primary} />
                   </View>
-                  <Text style={[styles.permissionTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+                  <Text style={[styles.permissionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
                     Camera Access Needed
                   </Text>
                   <Text style={[styles.permissionText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
@@ -1165,7 +1165,7 @@ export default function PantryScreen() {
           <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowAddChoiceModal(false)} activeOpacity={1} />
           <View style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: 48, paddingHorizontal: 20, gap: 12 }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold", paddingBottom: 8 }]}>Add to Pantry</Text>
+            <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", paddingBottom: 8 }]}>Add to Pantry</Text>
 
             <TouchableOpacity
               style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }}
@@ -1238,7 +1238,7 @@ export default function PantryScreen() {
             {/* Header row */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 4 }}>
               <View>
-                <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold", fontSize: 22 }]}>
+                <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 22 }]}>
                   Shopping List 🛒
                 </Text>
                 <Text style={{ fontSize: 13, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }}>

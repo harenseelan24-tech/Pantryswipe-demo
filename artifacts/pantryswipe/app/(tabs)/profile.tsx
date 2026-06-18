@@ -99,7 +99,7 @@ export default function ProfileScreen() {
           {/* Avatar */}
           <View style={styles.avatarRow}>
             <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.avatarText, { fontFamily: "Fraunces_700Bold" }]}>{userProfile.name[0]?.toUpperCase()}</Text>
+              <Text style={[styles.avatarText, { fontFamily: "Inter_700Bold" }]}>{userProfile.name[0]?.toUpperCase()}</Text>
             </View>
             <TouchableOpacity style={[styles.editProfileBtn, { borderColor: colors.border }]}>
               <Feather name="edit-2" size={13} color={colors.foreground} />
@@ -110,7 +110,7 @@ export default function ProfileScreen() {
           {/* Info */}
           <View style={styles.profileInfo}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text style={[styles.displayName, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>{userProfile.name}</Text>
+              <Text style={[styles.displayName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{userProfile.name}</Text>
               {isSubscribed && (
                 <View style={[styles.premiumBadge, { backgroundColor: "#4CAF76" }]}>
                   <Feather name="zap" size={9} color="#fff" />
@@ -229,7 +229,7 @@ export default function ProfileScreen() {
               <View style={styles.upgradeLeft}>
                 <Text style={styles.upgradeEmoji}>✨</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.upgradeTitle, { color: "#141210", fontFamily: "Fraunces_700Bold" }]}>Unlock Premium</Text>
+                  <Text style={[styles.upgradeTitle, { color: "#141210", fontFamily: "Inter_700Bold" }]}>Unlock Premium</Text>
                   <Text style={[styles.upgradeSub, { fontFamily: "Inter_400Regular" }]}>Unlimited AI · Smart expiry · S$4.99/mo</Text>
                 </View>
               </View>
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
   editProfileBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 100, borderWidth: 1.5, marginBottom: 4 },
   editProfileText: { fontSize: 13 },
   profileInfo: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4, gap: 8 },
-  displayName: { fontSize: 22, letterSpacing: -0.3 },
+  displayName: { fontSize: 24, letterSpacing: -0.5 },
   username: { fontSize: 14, marginTop: -4 },
   dietTags: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   dietTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100 },
