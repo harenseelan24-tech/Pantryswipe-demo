@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   SETUP_COMPLETE:  "pantryswipe_setup_complete",
   COOKING_HISTORY: "pantryswipe_cooking_history",
   LEARNING:        "pantryswipe_learning",
+  SETTINGS:        "pantryswipe_settings",
   TUTORIAL_SEEN:   "swipeTutorialSeen",
   PENDING_INTENT:  "@pantryswipe:pendingIntent",
 } as const;

@@ -412,11 +412,11 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
   },
   recipeTitle: {
-    fontSize: 22,
+    fontSize: 21,
     color: "#fff",
-    lineHeight: 28,
-    letterSpacing: -0.3,
-    fontFamily: "Fraunces_700Bold",
+    lineHeight: 27,
+    letterSpacing: -0.5,
+    fontFamily: "Inter_700Bold",
   },
   metaRow: {
     color: "rgba(255,255,255,0.65)",
