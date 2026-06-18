@@ -93,10 +93,11 @@ export default function WelcomeScreen() {
             key={`tagline-${screenKey}`}
             text="Cook what you already have."
             animateOn="view"
-            speed={120}
+            speed={90}
             maxIterations={14}
             sequential={true}
             revealDirection="start"
+            characters="abcdefghijklmnopqrstuvwxyz"
             style={styles.tagline}
           />
         </View>
