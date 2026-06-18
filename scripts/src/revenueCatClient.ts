@@ -10,7 +10,7 @@ export async function getUncachableRevenueCatClient() {
       const url = new URL(request.url);
       const path = url.pathname + url.search;
 
-      const init: RequestInit = { method: request.method };
+      const init: { method: string; headers?: Record<string, string>; body?: string } = { method: request.method };
 
       if (request.method !== "GET" && request.method !== "HEAD") {
         const body = await request.text();
