@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "arKiDGL9-dQ3x2S74b2Be"
@@ -36,3 +35,9 @@ id = "WMyooxFBfGE3zkhQqX4NT"
 uri = "file://artifacts/pantryswipe-pitch/public/bg-texture.png"
 type = "image"
 title = "generated_image"
+
+[[outputs]]
+id = "MEtNMd95peMH6ip4gb1zx"
+uri = "file://.local/outputs/pantryswipe.pptx"
+type = "slides"
+title = "pantryswipe.pptx"
