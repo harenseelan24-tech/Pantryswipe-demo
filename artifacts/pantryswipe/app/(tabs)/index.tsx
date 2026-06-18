@@ -152,6 +152,7 @@ export default function HomeScreen() {
   const [customServingMode, setCustomServingMode] = useState(false);
   const [customServingInput, setCustomServingInput] = useState("");
   const [programmaticSwipe, setProgrammaticSwipe] = useState<"left" | "right" | "up" | null>(null);
+  const [focusKey, setFocusKey] = useState(0);
 
   // ── Tutorial state ──
   const [showTutorial, setShowTutorial] = useState(false);
@@ -358,6 +359,7 @@ export default function HomeScreen() {
         } catch {}
       };
       applyIntent();
+      setFocusKey((k) => k + 1);
     }, [liveRecipes])
   );
 
@@ -386,6 +388,7 @@ export default function HomeScreen() {
             {greeting}, {userProfile.name} 👋
           </Text>
           <BlurText
+            key={focusKey}
             text="What are we cooking?"
             delay={120}
             direction="top"
