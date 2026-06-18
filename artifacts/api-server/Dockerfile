@@ -14,8 +14,12 @@ COPY tsconfig.base.json tsconfig.json ./
 COPY lib/ ./lib/
 COPY artifacts/api-server/ ./artifacts/api-server/
 
-# Frozen lockfile = reproducible installs; fails fast if lockfile is stale.
-RUN pnpm install --frozen-lockfile
+# Install deps reproducibly.  --ignore-scripts suppresses ERR_PNPM_IGNORED_BUILDS
+# (pnpm 9+ blocks unapproved postinstall scripts on fresh CI containers).
+# pnpm rebuild esbuild then runs esbuild's own postinstall so its native binary
+# is available for the build step that follows.
+RUN pnpm install --frozen-lockfile --ignore-scripts \
+ && pnpm rebuild esbuild
 
 # esbuild bundles all dependencies into a single ESM file — no node_modules
 # are needed in the production image.
