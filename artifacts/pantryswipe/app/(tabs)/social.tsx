@@ -188,8 +188,23 @@ export default function SocialScreen() {
       {/* Discovery tabs */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.discoveryTabs}>
         {DISCOVERY_TABS.map((tab) => (
-          <TouchableOpacity key={tab} style={[styles.discoveryTab, { borderBottomColor: activeTab === tab ? colors.primary : "transparent" }]} onPress={() => setActiveTab(tab)}>
-            <Text style={[styles.discoveryTabText, { color: activeTab === tab ? colors.foreground : colors.textSecondary, fontFamily: activeTab === tab ? "Inter_700Bold" : "Inter_500Medium" }]}>{tab}</Text>
+          <TouchableOpacity
+            key={tab}
+            style={[
+              styles.discoveryTab,
+              activeTab === tab
+                ? { backgroundColor: colors.primary }
+                : { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+            ]}
+            onPress={() => setActiveTab(tab)}
+          >
+            <Text style={[
+              styles.discoveryTabText,
+              {
+                color: activeTab === tab ? colors.primaryForeground : colors.foreground,
+                fontFamily: activeTab === tab ? "Inter_700Bold" : "Inter_500Medium",
+              },
+            ]}>{tab}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -282,9 +297,9 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 26, letterSpacing: -0.3 },
   headerRight: { flexDirection: "row", gap: 10 },
   iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  discoveryTabs: { paddingHorizontal: 20, paddingBottom: 0, borderBottomWidth: 1, borderBottomColor: "transparent" },
-  discoveryTab: { paddingVertical: 12, paddingHorizontal: 4, marginRight: 24, borderBottomWidth: 2 },
-  discoveryTabText: { fontSize: 15 },
+  discoveryTabs: { paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: "center" },
+  discoveryTab: { paddingVertical: 7, paddingHorizontal: 16, borderRadius: 100 },
+  discoveryTabText: { fontSize: 14 },
   cuisineFilters: { paddingHorizontal: 20, gap: 8, paddingVertical: 10, alignItems: "center", height: 50 },
   cuisineFilter: { height: 30, paddingHorizontal: 14, borderRadius: 100, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   cuisineFilterText: { fontSize: 12 },
