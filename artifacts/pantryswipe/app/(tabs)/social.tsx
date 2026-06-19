@@ -19,11 +19,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
 import { MOCK_SOCIAL_POSTS, SocialPost } from "@/data/mockData";
-import { getSocialImageSource } from "@/constants/recipeImages";
+import { getSocialImageSource, getRecipeImageSource } from "@/constants/recipeImages";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const DISCOVERY_TABS = ["For You", "Following", "Trending", "Near Me"] as const;
@@ -91,7 +92,7 @@ export default function SocialScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { liveRecipes, followingList, followUser, isFollowing, toggleSavePost, isPostSaved } = useApp();
+  const { liveRecipes, savedRecipes, followingList, followUser, isFollowing, toggleSavePost, isPostSaved } = useApp();
 
   // Feed state
   const [posts, setPosts] = useState<SocialPost[]>(MOCK_SOCIAL_POSTS);
@@ -115,6 +116,10 @@ export default function SocialScreen() {
   const [newCaption, setNewCaption] = useState("");
   const [newCuisine, setNewCuisine] = useState<string | undefined>(undefined);
   const [showCuisineSheet, setShowCuisineSheet] = useState(false);
+  const [composerPhotos, setComposerPhotos] = useState<string[]>([]);
+  const [composerRecipe, setComposerRecipe] = useState<{ id: string; title: string; image: string | null } | null>(null);
+  const [composerLocation, setComposerLocation] = useState(false);
+  const [showRecipeSheet, setShowRecipeSheet] = useState(false);
 
   // Follow flash confirmations {handle: boolean}
   const [followedHandles, setFollowedHandles] = useState<Record<string, boolean>>({});
@@ -273,6 +278,70 @@ export default function SocialScreen() {
       setRefreshing(false);
     }, 900);
   }, []);
+
+  const openCompose = () => {
+    setNewCaption("");
+    setNewCuisine(undefined);
+    setComposerPhotos([]);
+    setComposerRecipe(null);
+    setComposerLocation(false);
+    setShowCreatePost(true);
+  };
+
+  const handlePickPhoto = async () => {
+    if (composerPhotos.length >= 4) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      setShareToast("Photo library access denied");
+      setTimeout(() => setShareToast(""), 2000);
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: false,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setComposerPhotos((prev) => [...prev, result.assets[0].uri]);
+    }
+  };
+
+  const handleAISuggest = () => {
+    setShareToast("AI suggestion unavailable — add an API key to enable ✨");
+    setTimeout(() => setShareToast(""), 2800);
+  };
+
+  const handleSubmitPost = () => {
+    if (!newCaption.trim()) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const newPost: SocialPost = {
+      id: `s_user_${Date.now()}`,
+      username: "you",
+      userAvatar: "Y",
+      image: composerPhotos[0] ?? null,
+      caption: newCaption.trim() + (composerLocation ? ` 📍 ${NEAR_ME_SUBURB}` : ""),
+      likes: 0,
+      comments: 0,
+      timeAgo: "just now",
+      liked: false,
+      saved: false,
+      cuisine: newCuisine,
+      recipeName: composerRecipe?.title,
+      recipeId: composerRecipe?.id,
+    };
+    setPosts((prev) => [newPost, ...prev]);
+    setShowCreatePost(false);
+    setNewCaption("");
+    setNewCuisine(undefined);
+    setComposerPhotos([]);
+    setComposerRecipe(null);
+    setComposerLocation(false);
+    setActiveTab("For You");
+    setShareToast("Post shared! 🎉");
+    setTimeout(() => setShareToast(""), 2500);
+  };
+
+  const savedRecipesList = liveRecipes.filter((r) => savedRecipes.includes(r.id));
 
   const formatCount = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString();
 
@@ -520,7 +589,7 @@ export default function SocialScreen() {
       <View style={[styles.header, { paddingTop: topPadding + 6, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={[styles.iconBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
-          onPress={() => { setNewCaption(""); setNewCuisine(undefined); setShowCreatePost(true); }}
+          onPress={openCompose}
         >
           <Feather name="plus" size={20} color={colors.primaryForeground} />
         </TouchableOpacity>
@@ -615,86 +684,160 @@ export default function SocialScreen() {
 
       {/* ── Create Post Modal ─────────────────────────────────────────────────── */}
       <Modal visible={showCreatePost} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowCreatePost(false)}>
-        <View style={[styles.commentModal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-          <View style={styles.createPostHeader}>
-            <TouchableOpacity onPress={() => setShowCreatePost(false)}>
-              <Text style={[styles.createPostCancel, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>Cancel</Text>
+        <View style={[composeStyles.container, { backgroundColor: colors.background }]}>
+          {/* Header */}
+          <View style={[composeStyles.header, { borderBottomColor: colors.border }]}>
+            <TouchableOpacity onPress={() => setShowCreatePost(false)} style={composeStyles.headerSide}>
+              <Text style={[composeStyles.cancelText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={[styles.commentModalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 0 }]}>New Post</Text>
-            <TouchableOpacity
-              onPress={() => {
-                if (!newCaption.trim()) return;
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                const newPost: SocialPost = {
-                  id: `s_user_${Date.now()}`,
-                  username: "you",
-                  userAvatar: "Y",
-                  image: null,
-                  caption: newCaption.trim(),
-                  likes: 0,
-                  comments: 0,
-                  timeAgo: "just now",
-                  liked: false,
-                  saved: false,
-                  cuisine: newCuisine,
-                };
-                setPosts((prev) => [newPost, ...prev]);
-                setShowCreatePost(false);
-                setNewCaption("");
-                setNewCuisine(undefined);
-                setActiveTab("For You");
-                setShareToast("Post shared! 🎉");
-                setTimeout(() => setShareToast(""), 2500);
-              }}
-            >
-              <Text style={[styles.createPostShare, { color: newCaption.trim() ? colors.primary : colors.textMuted, fontFamily: "Inter_700Bold" }]}>
-                Share
-              </Text>
+            <Text style={[composeStyles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>New Post</Text>
+            <TouchableOpacity onPress={handleSubmitPost} style={[composeStyles.headerSide, { alignItems: "flex-end" }]}>
+              <View style={[composeStyles.shareBtn, { backgroundColor: newCaption.trim() ? colors.primary : colors.muted }]}>
+                <Text style={[composeStyles.shareBtnText, { color: newCaption.trim() ? colors.primaryForeground : colors.textMuted, fontFamily: "Inter_700Bold" }]}>
+                  Share
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
 
-          <View style={[styles.createPostBody, { borderColor: colors.border }]}>
-            <View style={[styles.createPostAvatar, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.userAvatarText, { fontFamily: "Inter_700Bold" }]}>Y</Text>
-            </View>
-            <TextInput
-              style={[styles.createPostInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
-              placeholder="Share what you cooked…"
-              placeholderTextColor={colors.textMuted}
-              value={newCaption}
-              onChangeText={setNewCaption}
-              multiline
-              autoFocus
-              maxLength={280}
-            />
-          </View>
-
-          {/* Selected cuisine tag */}
-          {newCuisine && (
-            <View style={styles.selectedCuisineRow}>
-              <View style={[styles.selectedCuisineTag, { backgroundColor: colors.primary + "20", borderColor: colors.primary + "50" }]}>
-                <Text>{CUISINE_EMOJIS[newCuisine] ?? "🍽️"}</Text>
-                <Text style={[{ fontSize: 13, color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>{newCuisine}</Text>
-                <TouchableOpacity onPress={() => setNewCuisine(undefined)}>
-                  <Feather name="x" size={14} color={colors.primary} />
-                </TouchableOpacity>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={composeStyles.body} keyboardShouldPersistTaps="handled">
+            {/* Avatar + Input row */}
+            <View style={composeStyles.inputRow}>
+              <View style={[composeStyles.avatar, { backgroundColor: colors.primary }]}>
+                <Text style={[{ color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" }]}>Y</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextInput
+                  style={[composeStyles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                  placeholder="Share what you cooked…"
+                  placeholderTextColor={colors.textMuted}
+                  value={newCaption}
+                  onChangeText={setNewCaption}
+                  multiline
+                  autoFocus
+                  maxLength={280}
+                  textAlignVertical="top"
+                />
+                {/* AI + char counter row */}
+                <View style={composeStyles.inputFooter}>
+                  <TouchableOpacity onPress={handleAISuggest} style={[composeStyles.aiBtn, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={{ fontSize: 13 }}>✨</Text>
+                    <Text style={[{ fontSize: 11, color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>AI caption</Text>
+                  </TouchableOpacity>
+                  <Text style={[composeStyles.charCount, {
+                    color: newCaption.length >= 270 ? "#E84040" : newCaption.length >= 240 ? "#F5A623" : colors.textMuted,
+                    fontFamily: "Inter_400Regular",
+                  }]}>{newCaption.length}/280</Text>
+                </View>
               </View>
             </View>
-          )}
 
-          <View style={[styles.createPostFooter, { borderTopColor: colors.border }]}>
-            <TouchableOpacity style={[styles.createPostChip, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => setShowCuisineSheet(true)}>
-              <Text style={{ fontSize: 13 }}>🏷️</Text>
-              <Text style={[{ fontSize: 13, color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>Cuisine</Text>
+            {/* Photo thumbnails */}
+            {composerPhotos.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeStyles.photosRow}>
+                {composerPhotos.map((uri, i) => (
+                  <View key={i} style={composeStyles.photoThumb}>
+                    <Image source={{ uri }} style={composeStyles.photoThumbImg} resizeMode="cover" />
+                    <TouchableOpacity
+                      style={composeStyles.photoRemove}
+                      onPress={() => setComposerPhotos((prev) => prev.filter((_, j) => j !== i))}
+                    >
+                      <Feather name="x" size={12} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            {/* Tags row — cuisine + recipe + location */}
+            {(newCuisine || composerRecipe || composerLocation) && (
+              <View style={composeStyles.tagsRow}>
+                {newCuisine && (
+                  <View style={[composeStyles.tag, { backgroundColor: colors.primary + "20", borderColor: colors.primary + "50" }]}>
+                    <Text style={{ fontSize: 13 }}>{CUISINE_EMOJIS[newCuisine] ?? "🍽️"}</Text>
+                    <Text style={[composeStyles.tagText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>{newCuisine}</Text>
+                    <TouchableOpacity onPress={() => setNewCuisine(undefined)}>
+                      <Feather name="x" size={13} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {composerLocation && (
+                  <View style={[composeStyles.tag, { backgroundColor: "#4CAF7620", borderColor: "#4CAF7650" }]}>
+                    <Feather name="map-pin" size={12} color="#4CAF76" />
+                    <Text style={[composeStyles.tagText, { color: "#4CAF76", fontFamily: "Inter_600SemiBold" }]}>{NEAR_ME_SUBURB}</Text>
+                    <TouchableOpacity onPress={() => setComposerLocation(false)}>
+                      <Feather name="x" size={13} color="#4CAF76" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Linked recipe card */}
+            {composerRecipe && (
+              <View style={[composeStyles.recipeCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={[composeStyles.recipeCardThumb, { backgroundColor: colors.primary + "20" }]}>
+                  {composerRecipe.image ? (
+                    <Image source={getRecipeImageSource(composerRecipe.image, composerRecipe.id) as any} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                  ) : (
+                    <Text style={{ fontSize: 22 }}>🍽</Text>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }]} numberOfLines={1}>{composerRecipe.title}</Text>
+                  <Text style={[{ fontSize: 11, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }]}>Linked recipe</Text>
+                </View>
+                <TouchableOpacity onPress={() => setComposerRecipe(null)}>
+                  <Feather name="x" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Toolbar */}
+            <View style={[composeStyles.toolbar, { borderTopColor: colors.border }]}>
+              <TouchableOpacity
+                style={[composeStyles.toolBtn, { backgroundColor: composerPhotos.length >= 4 ? colors.muted : colors.card, borderColor: colors.border, opacity: composerPhotos.length >= 4 ? 0.5 : 1 }]}
+                onPress={handlePickPhoto}
+                disabled={composerPhotos.length >= 4}
+              >
+                <Feather name="camera" size={15} color={colors.foreground} />
+                <Text style={[composeStyles.toolBtnText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+                  {composerPhotos.length >= 4 ? "Max photos" : "Photo"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[composeStyles.toolBtn, { backgroundColor: newCuisine ? colors.primary + "20" : colors.card, borderColor: newCuisine ? colors.primary + "50" : colors.border }]}
+                onPress={() => setShowCuisineSheet(true)}
+              >
+                <Text style={{ fontSize: 14 }}>🏷️</Text>
+                <Text style={[composeStyles.toolBtnText, { color: newCuisine ? colors.primary : colors.foreground, fontFamily: "Inter_500Medium" }]}>Cuisine</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[composeStyles.toolBtn, { backgroundColor: composerRecipe ? colors.saveBlue + "20" : colors.card, borderColor: composerRecipe ? colors.saveBlue + "50" : colors.border }]}
+                onPress={() => setShowRecipeSheet(true)}
+              >
+                <Feather name="book-open" size={15} color={composerRecipe ? colors.saveBlue : colors.foreground} />
+                <Text style={[composeStyles.toolBtnText, { color: composerRecipe ? colors.saveBlue : colors.foreground, fontFamily: "Inter_500Medium" }]}>Recipe</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Location toggle row */}
+            <TouchableOpacity
+              style={[composeStyles.locationRow, { borderTopColor: colors.border }]}
+              onPress={() => setComposerLocation((v) => !v)}
+            >
+              <Feather name="map-pin" size={15} color={composerLocation ? "#4CAF76" : colors.textSecondary} />
+              <Text style={[composeStyles.locationText, { color: composerLocation ? "#4CAF76" : colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
+                {composerLocation ? `📍 ${NEAR_ME_SUBURB}` : "Add location"}
+              </Text>
+              {composerLocation && <Feather name="check-circle" size={15} color="#4CAF76" style={{ marginLeft: "auto" }} />}
             </TouchableOpacity>
-            <Text style={[{ fontSize: 12, color: newCaption.length >= 270 ? "#E84040" : newCaption.length >= 240 ? "#F5A623" : colors.textMuted, fontFamily: "Inter_400Regular", marginLeft: "auto" }]}>
-              {newCaption.length}/280
-            </Text>
-          </View>
+          </ScrollView>
         </View>
 
-        {/* Cuisine picker sheet (modal inside modal) */}
+        {/* Cuisine picker sheet */}
         <Modal visible={showCuisineSheet} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowCuisineSheet(false)}>
           <View style={[styles.commentModal, { backgroundColor: colors.background }]}>
             <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
@@ -705,21 +848,79 @@ export default function SocialScreen() {
               <Text style={[styles.commentModalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 0 }]}>Tag Cuisine</Text>
               <View style={{ width: 60 }} />
             </View>
-            <View style={styles.cuisineGrid}>
-              {COMPOSE_CUISINES.map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  style={[styles.cuisineGridItem, {
-                    backgroundColor: newCuisine === c ? colors.primary : colors.card,
-                    borderColor: newCuisine === c ? colors.primary : colors.border,
-                  }]}
-                  onPress={() => { setNewCuisine(c); setShowCuisineSheet(false); }}
-                >
-                  <Text style={{ fontSize: 20 }}>{CUISINE_EMOJIS[c] ?? "🍽️"}</Text>
-                  <Text style={[{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: newCuisine === c ? colors.primaryForeground : colors.foreground }]}>{c}</Text>
-                </TouchableOpacity>
-              ))}
+            <ScrollView>
+              <View style={styles.cuisineGrid}>
+                {COMPOSE_CUISINES.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[styles.cuisineGridItem, {
+                      backgroundColor: newCuisine === c ? colors.primary : colors.card,
+                      borderColor: newCuisine === c ? colors.primary : colors.border,
+                    }]}
+                    onPress={() => { setNewCuisine(c); setShowCuisineSheet(false); }}
+                  >
+                    <Text style={{ fontSize: 20 }}>{CUISINE_EMOJIS[c] ?? "🍽️"}</Text>
+                    <Text style={[{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: newCuisine === c ? colors.primaryForeground : colors.foreground }]}>{c}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        </Modal>
+
+        {/* Recipe picker sheet */}
+        <Modal visible={showRecipeSheet} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowRecipeSheet(false)}>
+          <View style={[styles.commentModal, { backgroundColor: colors.background }]}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            <View style={[styles.createPostHeader, { marginBottom: 8 }]}>
+              <TouchableOpacity onPress={() => setShowRecipeSheet(false)}>
+                <Text style={[{ color: colors.textSecondary, fontFamily: "Inter_500Medium", fontSize: 15 }]}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={[styles.commentModalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 0 }]}>Link a Recipe</Text>
+              <View style={{ width: 60 }} />
             </View>
+            <Text style={[{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_400Regular", marginBottom: 14 }]}>
+              Linking a recipe is optional — you can always edit your post and add it later.
+            </Text>
+            {savedRecipesList.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={{ fontSize: 32 }}>📖</Text>
+                <Text style={[styles.emptyStateTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 16 }]}>No saved recipes yet</Text>
+                <Text style={[styles.emptyStateText, { color: colors.textSecondary, fontSize: 13 }]}>Save recipes from the Discover tab to link them here</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={savedRecipesList}
+                keyExtractor={(r) => r.id}
+                contentContainerStyle={{ gap: 10 }}
+                renderItem={({ item }) => {
+                  const imgSrc = getRecipeImageSource(item.image, item.id);
+                  const isSelected = composerRecipe?.id === item.id;
+                  return (
+                    <TouchableOpacity
+                      style={[composeStyles.recipePickerItem, {
+                        backgroundColor: isSelected ? colors.primary + "15" : colors.card,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                      }]}
+                      onPress={() => { setComposerRecipe({ id: item.id, title: item.title, image: item.image }); setShowRecipeSheet(false); }}
+                    >
+                      <View style={[composeStyles.recipePickerThumb, { backgroundColor: colors.muted, overflow: "hidden" }]}>
+                        {imgSrc ? (
+                          <Image source={imgSrc} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                        ) : (
+                          <Text style={{ fontSize: 20 }}>🍽</Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground }]} numberOfLines={2}>{item.title}</Text>
+                        <Text style={[{ fontSize: 12, color: colors.textSecondary, fontFamily: "Inter_400Regular", marginTop: 3 }]}>{item.cuisine} · {item.prepTime + item.cookTime}m</Text>
+                      </View>
+                      {isSelected && <Feather name="check-circle" size={20} color={colors.primary} />}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
           </View>
         </Modal>
       </Modal>
@@ -922,4 +1123,67 @@ const styles = StyleSheet.create({
   commentInput: { flexDirection: "row", alignItems: "flex-end", gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, marginTop: 8 },
   commentInputText: { flex: 1, fontSize: 15, maxHeight: 80 },
   commentSendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+});
+
+// ─── Compose screen styles ────────────────────────────────────────────────────
+const composeStyles = StyleSheet.create({
+  container: { flex: 1 },
+  header: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerSide: { minWidth: 70 },
+  title: { fontSize: 17, letterSpacing: -0.2 },
+  cancelText: { fontSize: 16 },
+  shareBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 100, alignSelf: "flex-end" },
+  shareBtnText: { fontSize: 15 },
+
+  body: { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 6 },
+
+  inputRow: { flexDirection: "row", gap: 13, paddingVertical: 16, alignItems: "flex-start" },
+  avatar: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", marginTop: 2 },
+  input: { fontSize: 17, lineHeight: 24, minHeight: 100 },
+  inputFooter: { flexDirection: "row", alignItems: "center", marginTop: 10, gap: 8 },
+  aiBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, borderWidth: 1 },
+  charCount: { fontSize: 13, marginLeft: "auto" },
+
+  photosRow: { gap: 10, paddingVertical: 8, paddingBottom: 12 },
+  photoThumb: { width: 90, height: 90, borderRadius: 12, overflow: "hidden", position: "relative" },
+  photoThumbImg: { width: "100%", height: "100%" },
+  photoRemove: {
+    position: "absolute", top: 5, right: 5, width: 22, height: 22, borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center",
+  },
+
+  tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingVertical: 6 },
+  tag: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 100, borderWidth: 1 },
+  tagText: { fontSize: 13 },
+
+  recipeCard: {
+    flexDirection: "row", alignItems: "center", gap: 12, padding: 12,
+    borderRadius: 14, borderWidth: 1, marginVertical: 8,
+  },
+  recipeCardThumb: { width: 50, height: 50, borderRadius: 10, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+
+  toolbar: {
+    flexDirection: "row", gap: 8, paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8,
+  },
+  toolBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 100, borderWidth: 1,
+  },
+  toolBtnText: { fontSize: 14 },
+
+  locationRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  locationText: { fontSize: 14 },
+
+  recipePickerItem: {
+    flexDirection: "row", alignItems: "center", gap: 12, padding: 12,
+    borderRadius: 14, borderWidth: 1,
+  },
+  recipePickerThumb: { width: 56, height: 56, borderRadius: 10, alignItems: "center", justifyContent: "center" },
 });
