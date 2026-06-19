@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   FlatList,
   Image,
@@ -58,6 +58,18 @@ export default function SocialScreen() {
   const [shareToast, setShareToast] = useState(false);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+
+  const FOLLOWING_IDS = ["s2", "s4", "s7", "s10", "s12", "s14"];
+  const NEAR_ME_IDS = ["s1", "s3", "s5", "s6", "s11", "s13"];
+
+  const filteredPosts = useMemo(() => {
+    let result = [...posts];
+    if (activeTab === "Following") result = result.filter((p) => FOLLOWING_IDS.includes(p.id));
+    else if (activeTab === "Trending") result = result.sort((a, b) => b.likes - a.likes);
+    else if (activeTab === "Near Me") result = result.filter((p) => NEAR_ME_IDS.includes(p.id));
+    if (activeCuisine !== "All") result = result.filter((p) => p.cuisine === activeCuisine);
+    return result;
+  }, [posts, activeTab, activeCuisine]);
 
   const toggleLike = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -186,7 +198,7 @@ export default function SocialScreen() {
       </View>
 
       {/* Discovery tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.discoveryTabs}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.discoveryTabsRow} contentContainerStyle={styles.discoveryTabs}>
         {DISCOVERY_TABS.map((tab) => (
           <TouchableOpacity
             key={tab}
@@ -210,7 +222,7 @@ export default function SocialScreen() {
       </ScrollView>
 
       {/* Cuisine filter */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cuisineFilters}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cuisineFiltersRow} contentContainerStyle={styles.cuisineFilters}>
         {CUISINE_FILTERS.map((c) => (
           <TouchableOpacity
             key={c}
@@ -223,11 +235,18 @@ export default function SocialScreen() {
       </ScrollView>
 
       <FlatList
-        data={posts}
+        data={filteredPosts}
         keyExtractor={(i) => i.id}
         renderItem={renderPost}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.feedContent}
+        ListEmptyComponent={
+          <View style={styles.emptyFeed}>
+            <Text style={[styles.emptyFeedText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
+              No {activeCuisine !== "All" ? activeCuisine : ""} posts yet
+            </Text>
+          </View>
+        }
       />
 
       {/* Share toast */}
@@ -297,13 +316,17 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 26, letterSpacing: -0.3 },
   headerRight: { flexDirection: "row", gap: 10 },
   iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  discoveryTabs: { paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: "center" },
+  discoveryTabsRow: { height: 52, flexShrink: 0 },
+  discoveryTabs: { paddingHorizontal: 16, paddingVertical: 8, gap: 8, flexDirection: "row", alignItems: "center" },
   discoveryTab: { paddingVertical: 7, paddingHorizontal: 16, borderRadius: 100 },
   discoveryTabText: { fontSize: 14 },
-  cuisineFilters: { paddingHorizontal: 20, gap: 8, paddingVertical: 10, alignItems: "center", height: 50 },
-  cuisineFilter: { height: 30, paddingHorizontal: 14, borderRadius: 100, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  cuisineFiltersRow: { height: 46, flexShrink: 0 },
+  cuisineFilters: { paddingHorizontal: 16, gap: 8, paddingVertical: 7, flexDirection: "row", alignItems: "center" },
+  cuisineFilter: { height: 32, paddingHorizontal: 14, borderRadius: 100, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   cuisineFilterText: { fontSize: 12 },
   feedContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100, gap: 16 },
+  emptyFeed: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
+  emptyFeedText: { fontSize: 15 },
   postCard: { borderRadius: 18, overflow: "hidden" },
   postHeader: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   userAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },

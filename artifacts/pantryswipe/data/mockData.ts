@@ -46,6 +46,7 @@ export interface SocialPost {
   recipeName?: string;
   liked: boolean;
   saved: boolean;
+  cuisine?: string;
 }
 
 export const MOCK_RECIPES: Recipe[] = [
@@ -1370,6 +1371,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeName: "Spaghetti Carbonara",
     liked: false,
     saved: false,
+    cuisine: "Italian",
   },
   {
     id: "s2",
@@ -1384,6 +1386,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeName: "Garlic Butter Salmon",
     liked: true,
     saved: true,
+    cuisine: "Japanese",
   },
   {
     id: "s3",
@@ -1398,6 +1401,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeName: "Buddha Bowl",
     liked: false,
     saved: false,
+    cuisine: "Vegan",
   },
   {
     id: "s4",
@@ -1412,6 +1416,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeName: "Beef Bibimbap",
     liked: true,
     saved: false,
+    cuisine: "Korean",
   },
   {
     id: "s5",
@@ -1426,6 +1431,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeName: "Beef Ramen",
     liked: false,
     saved: true,
+    cuisine: "Japanese",
   },
   {
     id: "s6",
@@ -1454,6 +1460,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeName: "Thai Green Curry",
     liked: true,
     saved: true,
+    cuisine: "Thai",
   },
   {
     id: "s8",
@@ -1468,6 +1475,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeName: "Creamy Tomato Pasta",
     liked: false,
     saved: true,
+    cuisine: "Italian",
   },
   {
     id: "s9",
@@ -1496,6 +1504,77 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeName: "Teriyaki Chicken Bowl",
     liked: false,
     saved: true,
+    cuisine: "Japanese",
+  },
+  {
+    id: "s11",
+    username: "spice_lab",
+    userAvatar: "S",
+    image: null,
+    caption: "Butter chicken that took 3 years to perfect. The trick is toasting the whole spices before grinding. Absolutely worth it. 🫙",
+    likes: 4820,
+    comments: 243,
+    timeAgo: "3d ago",
+    recipeName: "Butter Chicken",
+    liked: false,
+    saved: false,
+    cuisine: "Indian",
+  },
+  {
+    id: "s12",
+    username: "dal_daily",
+    userAvatar: "D",
+    image: null,
+    caption: "Dal makhani that simmered for 4 hours. The colour says it all. Paired with fresh roti from scratch 🫓",
+    likes: 2930,
+    comments: 118,
+    timeAgo: "4d ago",
+    recipeName: "Dal Makhani",
+    liked: true,
+    saved: true,
+    cuisine: "Indian",
+  },
+  {
+    id: "s13",
+    username: "taco_tues",
+    userAvatar: "T",
+    image: null,
+    caption: "Al pastor tacos with homemade pineapple salsa. Every Tuesday. No exceptions. 🌮🍍",
+    likes: 3760,
+    comments: 174,
+    timeAgo: "4d ago",
+    recipeName: "Al Pastor Tacos",
+    liked: false,
+    saved: true,
+    cuisine: "Mexican",
+  },
+  {
+    id: "s14",
+    username: "guac_god",
+    userAvatar: "G",
+    image: null,
+    caption: "Birria quesatacos with consommé for dipping. Changed my life. The crispy cheese edge is unmatched 🧀🔥",
+    likes: 6100,
+    comments: 389,
+    timeAgo: "5d ago",
+    recipeName: "Birria Quesatacos",
+    liked: true,
+    saved: false,
+    cuisine: "Mexican",
+  },
+  {
+    id: "s15",
+    username: "kimchi2",
+    userAvatar: "K",
+    image: null,
+    caption: "Tteokbokki with extra fishcake and a runny egg. The spice level is real but so is the reward 🌶️",
+    likes: 3340,
+    comments: 161,
+    timeAgo: "5d ago",
+    recipeName: "Tteokbokki",
+    liked: false,
+    saved: true,
+    cuisine: "Korean",
   },
 ];
 
