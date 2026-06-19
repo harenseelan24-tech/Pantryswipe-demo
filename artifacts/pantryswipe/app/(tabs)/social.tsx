@@ -59,7 +59,7 @@ export default function SocialScreen() {
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [newCaption, setNewCaption] = useState("");
-  const [notifCount] = useState(3);
+  const [notifCount, setNotifCount] = useState(3);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
@@ -217,7 +217,7 @@ export default function SocialScreen() {
         {/* Right — heart notifications */}
         <TouchableOpacity
           style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => setShowNotifications(true)}
+          onPress={() => { setShowNotifications(true); setNotifCount(0); }}
         >
           <Feather name="heart" size={18} color={colors.foreground} />
           {notifCount > 0 && (
