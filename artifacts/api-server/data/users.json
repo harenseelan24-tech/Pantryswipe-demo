@@ -5,5 +5,12 @@
     "name": "Test User",
     "passwordHash": "$2b$10$x1xPpl.Fquq/JFR921Re1.SFXsOByIEB.AFTCfHwP9ASvGMm3GbfO",
     "createdAt": "2026-06-18T18:32:42.698Z"
+  },
+  {
+    "id": "e33ee6c1-d11e-447a-a908-da7791d8a285",
+    "email": "harenseelan24@gmail.com",
+    "name": "haren",
+    "passwordHash": "$2b$10$KL2GtIehG9SIMq54hl/FTe9jpJOtFLtENe4srY0PDeLylei4501wy",
+    "createdAt": "2026-06-18T19:26:43.876Z"
   }
 ]
