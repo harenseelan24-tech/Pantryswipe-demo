@@ -91,8 +91,8 @@ const TUTORIAL_STEPS = [
     arrow: "↑",
     title: "Swipe UP to save",
     subtitle: "Looks great but not now? Save it for later.",
-    color: "#2B7FFF",
-    tint: "rgba(43,127,255,0.18)",
+    color: "#5B8EF5",
+    tint: "rgba(91,142,245,0.18)",
     stamp: "SAVED 🔖",
     targetX: 0,
     targetY: -300,
@@ -414,7 +414,7 @@ export default function HomeScreen() {
           >
             <Feather name="bell" size={18} color={colors.primary} />
             {unreadCount > 0 && (
-              <View style={[styles.notifBadge, { backgroundColor: "#EF4444" }]}>
+              <View style={[styles.notifBadge, { backgroundColor: colors.danger }]}>
                 <Text style={styles.notifBadgeText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
               </View>
             )}
@@ -954,9 +954,9 @@ const styles = StyleSheet.create({
   headerRight: { flexDirection: "row", alignItems: "center", gap: 10 },
   aiChefBtn: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: "#2B7FFF",
+    backgroundColor: "#F5A623",
     alignItems: "center", justifyContent: "center",
-    shadowColor: "#2B7FFF",
+    shadowColor: "#F5A623",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.38, shadowRadius: 10, elevation: 6,
   },
@@ -1119,7 +1119,7 @@ const styles = StyleSheet.create({
   // ── Tutorial overlay ──
   tutOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(7, 16, 30, 0.88)",
+    backgroundColor: "rgba(20, 14, 10, 0.92)",
     zIndex: 1000,
     alignItems: "center",
     justifyContent: "center",
@@ -1176,7 +1176,7 @@ const styles = StyleSheet.create({
     height: 210,
     borderRadius: 20,
     overflow: "hidden",
-    backgroundColor: "#0D1A30",
+    backgroundColor: "#1C1410",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
@@ -1185,14 +1185,14 @@ const styles = StyleSheet.create({
   },
   tutCardImage: {
     height: 120,
-    backgroundColor: "#1A2436",
+    backgroundColor: "#241A12",
     alignItems: "center",
     justifyContent: "center",
   },
   tutCardEmoji: { fontSize: 56 },
   tutCardInfo: {
     flex: 1,
-    backgroundColor: "#0D1A30",
+    backgroundColor: "#1C1410",
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 4,
@@ -1223,11 +1223,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   tutSkipBtn: {
-    backgroundColor: "#2B7FFF",
+    backgroundColor: "#F5A623",
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 100,
-    shadowColor: "#2B7FFF",
+    shadowColor: "#F5A623",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,

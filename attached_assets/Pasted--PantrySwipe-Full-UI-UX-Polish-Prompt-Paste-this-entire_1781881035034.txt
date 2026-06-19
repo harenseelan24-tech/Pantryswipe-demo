@@ -1,0 +1,381 @@
+# PantrySwipe — Full UI/UX Polish Prompt
+> Paste this entire prompt into Replit Agent to make the app look clean, consistent, and professional.
+
+---
+
+## Context
+
+You are improving the visual design and UX consistency of **PantrySwipe** — an AI-powered cooking app with Tinder-style recipe swiping, pantry management, a weekly meal planner, a social food feed, an AI chef chat, a party planner, and a gamified profile. The stack is **Expo SDK 54 + React Native 0.81 + expo-router + @expo/vector-icons (Feather) + react-native-reanimated**.
+
+This app uses a **ui-ux-pro-max** skill installed in the project. Before making any changes, run the design system generator:
+
+```bash
+python3 skills/ui-ux-pro-max/scripts/search.py "food lifestyle social discovery gamified mobile app vibrant warm" --design-system -p "PantrySwipe"
+```
+
+Then run these supplemental searches:
+
+```bash
+python3 skills/ui-ux-pro-max/scripts/search.py "swipe card interaction animation gesture feedback" --domain ux
+python3 skills/ui-ux-pro-max/scripts/search.py "social feed gamification warm vibrant" --domain color
+python3 skills/ui-ux-pro-max/scripts/search.py "food lifestyle modern playful" --domain typography
+python3 skills/ui-ux-pro-max/scripts/search.py "list performance navigation bottom-tab" --stack react-native
+```
+
+Read and apply ALL outputs from these commands before writing a single line of code.
+
+---
+
+## Brand Tokens (Do Not Change These)
+
+These are fixed. Everything you build must use them via `constants/colors.ts` — never hardcode hex values anywhere else.
+
+| Token | Value | Usage |
+|---|---|---|
+| `primary` | `#F5A623` | Saffron — CTAs, active states, highlights |
+| `secondary` | `#4CAF76` | Herb Green — success, pantry match, streak |
+| `danger` | `#E84040` | Skip Red — destructive, skip action |
+| `accent` | `#5B8EF5` | Save Blue — save action, links |
+| `backgroundLight` | `#FAFAF8` | Light mode background |
+| `backgroundDark` | `#141210` | Dark mode background |
+
+Add these semantic tokens to `constants/colors.ts` if not already present:
+
+```ts
+surface: { light: '#FFFFFF', dark: '#1E1C1A' },
+surfaceElevated: { light: '#F0EEE8', dark: '#272421' },
+textPrimary: { light: '#1A1714', dark: '#F5F3EF' },
+textSecondary: { light: '#6B6560', dark: '#A09890' },
+border: { light: '#E8E4DC', dark: '#2E2B27' },
+overlay: 'rgba(0,0,0,0.5)',
+```
+
+---
+
+## Typography System
+
+Set up a consistent type scale. Create or update `constants/typography.ts`:
+
+```ts
+export const typography = {
+  displayLG: { fontSize: 32, fontWeight: '700', lineHeight: 40 },
+  displayMD: { fontSize: 24, fontWeight: '700', lineHeight: 32 },
+  headingLG: { fontSize: 20, fontWeight: '600', lineHeight: 28 },
+  headingMD: { fontSize: 18, fontWeight: '600', lineHeight: 24 },
+  headingSM: { fontSize: 16, fontWeight: '600', lineHeight: 22 },
+  bodyLG:   { fontSize: 16, fontWeight: '400', lineHeight: 24 },
+  bodyMD:   { fontSize: 14, fontWeight: '400', lineHeight: 20 },
+  bodySM:   { fontSize: 12, fontWeight: '400', lineHeight: 16 },
+  labelLG:  { fontSize: 14, fontWeight: '500', lineHeight: 20 },
+  labelMD:  { fontSize: 12, fontWeight: '500', lineHeight: 16 },
+  caption:  { fontSize: 11, fontWeight: '400', lineHeight: 14 },
+};
+```
+
+**Rules:**
+- Body text minimum 16px on mobile (never below 12px anywhere)
+- Line height always ≥ 1.5× font size
+- Never use `fontSize` raw numbers in components — always reference `typography.*`
+
+---
+
+## Spacing & Layout System
+
+Create or update `constants/spacing.ts`:
+
+```ts
+export const spacing = {
+  xs:  4,
+  sm:  8,
+  md:  12,
+  lg:  16,
+  xl:  20,
+  xxl: 24,
+  section: 32,
+  page: 20, // horizontal page padding
+};
+
+export const radius = {
+  sm:   8,
+  md:   12,
+  lg:   16,
+  xl:   20,
+  xxl:  28,
+  full: 999,
+};
+```
+
+Every component must use `spacing.*` and `radius.*` — no magic numbers.
+
+---
+
+## Global Changes (Apply to Every Screen)
+
+### 1. Safe Areas
+- Every screen must wrap content in `<SafeAreaView>` with correct edges
+- No tappable element should be within 16px of the screen edge
+- Bottom tab bar must add `paddingBottom` equal to the safe area bottom inset
+
+### 2. Background & Surface Hierarchy
+- Page background: `colors.backgroundLight` / `colors.backgroundDark`
+- Cards / elevated surfaces: `colors.surface`
+- Modals / sheets: `colors.surfaceElevated`
+- Consistent shadow for cards (light mode only):
+  ```ts
+  shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.08, shadowRadius: 8, elevation: 3
+  ```
+
+### 3. No Raw Hex or Magic Numbers
+- Remove every hardcoded `#hex` color from components — replace with `colors.*`
+- Remove every raw `fontSize`, `padding`, `margin` number — replace with `typography.*` and `spacing.*`
+
+### 4. Icons
+- All icons must use `@expo/vector-icons` Feather set at consistent sizes: 20 (inline), 24 (nav/action), 28 (hero)
+- No emoji used as structural icons — replace any emoji icons with Feather equivalents
+- Icon color must always come from `colors.textPrimary` or a semantic token, never hardcoded
+
+### 5. Touch Targets
+- Every tappable element must have a minimum hit area of 44×44pt
+- Use `hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}` on small icons
+- All `Pressable` / `TouchableOpacity` must show pressed feedback: `activeOpacity: 0.72` or a subtle scale (0.97) via `Animated`
+
+---
+
+## Tab Bar
+
+- 5 tabs: Home, Pantry, Planner, Social, Profile
+- Each tab must have: Feather icon (24pt) + label (12px, `labelMD`)
+- Active tab: `colors.primary` (saffron) for icon + label
+- Inactive tab: `colors.textSecondary`
+- Tab bar background: `colors.surface` with top border `colors.border`
+- Add `paddingBottom` = safe area inset + 8px
+- Tab icons: home, shopping-bag, calendar, users, user (Feather names)
+- No emoji in the tab bar at all
+
+---
+
+## Screen-by-Screen Improvements
+
+### Home / Discover (Swipe Screen)
+
+**Header:**
+- App wordmark "PantrySwipe" in `displayMD` weight 700, `colors.primary`
+- Right side: notification bell icon (Feather `bell`, 24pt) with optional badge dot
+
+**Swipe Card (`SwipeCard.tsx`):**
+- Card must fill ~78% of the screen height, rounded corners `radius.xxl` (28)
+- Recipe image fills top 60% of card with `borderTopLeftRadius` + `borderTopRightRadius` = 28
+- Gradient overlay on bottom half of image (transparent → `rgba(0,0,0,0.7)`) for text legibility
+- Recipe name in `headingLG` weight 700, white, positioned over gradient
+- Pantry match % shown as a pill badge: green background (`colors.secondary`), white label `labelMD`
+- Card stack effect: show 2 cards behind the top card, scaled to 0.95 and 0.90 with slight y-offset (8px, 16px)
+- Action buttons (Skip ✕, Save ♡, Cook ▶) must be 56×56pt circles with proper colours (danger, accent, primary)
+- Swipe directional hint labels: "COOK" (green, left edge), "SKIP" (red, right edge) — visible at 0 opacity, fade to 1 as the card is dragged in that direction using `Animated.multiply`
+
+**Below the card:**
+- Show current card count (e.g. "3 of 12") in `caption` `colors.textSecondary`, centred
+
+---
+
+### Pantry Screen
+
+**Header:**
+- Title "My Pantry" in `headingLG`
+- Add button (Feather `plus`, 24pt) in top-right, tappable with `colors.primary` tint
+
+**Category Tabs (horizontal scroll):**
+- Pill-shaped tabs: selected = `colors.primary` bg + white text, unselected = `colors.surfaceElevated` + `colors.textSecondary`
+- `labelMD` text, `spacing.sm` horizontal padding, `radius.full`, `spacing.xs` gap between pills
+- No underline-style tabs — pill style only
+
+**Ingredient Cards:**
+- Grid layout: 2 columns, `spacing.md` gap
+- Each card: `radius.lg`, `colors.surface`, shadow (see Global §2)
+- Ingredient name: `labelLG` `colors.textPrimary`
+- Expiry: `bodySM` — if expiring within 3 days use `colors.danger`, else `colors.textSecondary`
+- Quantity badge: top-right corner, `colors.primary` bg, white `labelMD`
+
+**Empty State:**
+- Feather `shopping-bag` icon (48pt, `colors.textSecondary`)
+- Heading: "Your pantry is empty" `headingMD` `colors.textPrimary`
+- Body: "Add ingredients to start getting personalised recipes" `bodyMD` `colors.textSecondary`
+- CTA button: full-width, `colors.primary` bg, white text, `radius.lg`, 52px height
+
+---
+
+### Planner Screen
+
+**Header:**
+- "Meal Planner" title `headingLG`
+- Week range shown `bodySM` `colors.textSecondary`
+
+**Week Grid:**
+- 7 columns (Mon–Sun), each day is a card
+- Today's column: `colors.primary` tinted header, `radius.md`
+- Meal slots (Breakfast / Lunch / Dinner): each is a mini card inside the day column, `radius.sm`, `colors.surfaceElevated`
+- Meal card with recipe: shows thumbnail (32×32, `radius.sm`) + recipe name `bodySM`
+- Empty slot: dashed border `colors.border`, `+` icon centred, `colors.textSecondary`
+
+**Nutrition Summary Bar:**
+- Horizontal card at bottom of screen: Calories, Protein, Carbs, Fat
+- Each metric: number in `headingMD` `colors.textPrimary`, label in `caption` `colors.textSecondary`
+- Dividers between metrics using `colors.border`
+
+**Auto-Generate Button:**
+- Full-width, `colors.primary`, `radius.lg`, 52px height, Feather `zap` icon left of label
+
+---
+
+### Social Screen
+
+**Stories Row:**
+- Horizontal scroll, circular avatars (52px diameter), `radius.full`
+- Active story ring: 2.5px gradient stroke (saffron → herb green)
+- Username below: `caption` `colors.textSecondary`, max 8 chars then ellipsis
+
+**Feed Cards:**
+- Full-width cards with `spacing.page` horizontal padding
+- Recipe image: 16:9 aspect ratio, `radius.lg` corners
+- Author row: avatar (36px) + name `labelLG` + timestamp `caption` `colors.textSecondary`
+- Action row: Feather icons — `heart`, `bookmark`, `share-2` — all 20pt, `spacing.xl` between each
+- Like count: `labelMD` `colors.textPrimary` beside the heart
+
+**Tabs (Discover / Following):**
+- Pill tabs same style as Pantry (see above), centred in header
+
+---
+
+### Profile Screen
+
+**Hero Section:**
+- Avatar: 80px circle, `radius.full`, 3px border `colors.primary`
+- Username: `headingLG` `colors.textPrimary`
+- Level badge: `colors.primary` bg pill, Feather `award` icon + "Level 7" `labelMD` white
+- XP bar: full-width, height 8px, `radius.full`, track = `colors.border`, fill = linear gradient (saffron → herb green)
+- XP label: `caption` `colors.textSecondary` right-aligned
+
+**Stats Row:**
+- 3 stats: Recipes Cooked / Streak Days / Saved
+- Each: number `displayMD` `colors.textPrimary`, label `caption` `colors.textSecondary`
+- Vertical dividers `colors.border`
+
+**Achievements:**
+- Horizontal scroll of badge cards: 72×72px, `radius.xl`, `colors.surfaceElevated`
+- Earned badges: full colour icon; unearned: 40% opacity + lock icon overlay
+- Badge name: `caption` below card
+
+**Recipe Grids (Saved / Cooked tabs):**
+- 2-column grid, square thumbnails with `radius.md`
+- Pill tab switcher above the grid
+
+---
+
+### AI Chef Screen
+
+**Header:**
+- "AI Chef" title `headingLG`
+- Subtitle "Powered by your pantry" `bodySM` `colors.textSecondary`
+
+**Chat Bubbles:**
+- User messages: right-aligned, `colors.primary` bg, white text `bodyMD`, `radius.xl` with flat bottom-right corner
+- AI messages: left-aligned, `colors.surfaceElevated` bg, `colors.textPrimary` text, `radius.xl` with flat bottom-left corner
+- Avatar for AI: 32px circle with chef hat icon (Feather `coffee` or similar), `colors.secondary` bg
+
+**Quick Prompt Chips:**
+- Horizontal scroll above the input
+- Pill chips: `colors.surfaceElevated` bg, `colors.textPrimary` `labelMD`, `radius.full`
+- Active/selected chip: `colors.primary` bg + white text
+
+**Input Bar:**
+- Floating bar pinned to keyboard with `KeyboardAvoidingView`
+- `radius.xxl` input, `colors.surfaceElevated` bg, `colors.border` border 1px
+- Send button: 40×40 circle, `colors.primary` bg, Feather `send` icon white 18pt
+- Disable send button (opacity 0.4) when input is empty
+
+---
+
+### Party Planner Screen (Multi-Step Wizard)
+
+**Progress Indicator:**
+- Top: step dots (e.g. ● ● ○ ○) — filled `colors.primary`, empty `colors.border`
+- Step label: "Step 2 of 4 — Guest Count" `labelMD` `colors.textSecondary`
+
+**Step Cards:**
+- Full-width, single card visible at a time, `radius.xl`, `colors.surface`, shadow
+- Question in `headingMD`, helper text in `bodyMD` `colors.textSecondary`
+
+**Selection Items:**
+- Option rows: `radius.lg`, border 1.5px `colors.border` unselected; `colors.primary` border + light saffron tint bg when selected
+- Feather checkmark icon (right side) appears on selected state
+
+**Navigation Buttons:**
+- Back: outlined, `colors.border` border, `colors.textPrimary` text
+- Next / Generate: filled `colors.primary`, white text, `radius.lg`, 52px height
+
+---
+
+## Animation Standards (Apply Globally)
+
+- All state transitions: 200ms, `Easing.out(Easing.cubic)`
+- Swipe card throw: 350ms with spring physics (`useSpring` or `Animated.spring`)
+- Tab switch: fade crossfade 150ms
+- Card entrance (lists): stagger 40ms per item, translate Y from +16px → 0 + fade in
+- Loading skeletons: shimmer animation using `Animated.loop` on opacity (0.4 → 0.8 → 0.4), 1200ms duration
+- Button press: scale 0.97 on `pressIn`, 1.0 on `pressOut`, 120ms spring
+- All `Animated` values must use `useNativeDriver: true` (except layout properties)
+- Respect `AccessibilityInfo.isReduceMotionEnabled()` — skip animations when true
+
+---
+
+## Empty & Loading States
+
+Every list/feed/grid must handle 3 states:
+
+**Loading:** Show skeleton cards (same shape as real cards, grey shimmer blocks)
+
+**Empty:** Centred illustration area with:
+- Feather icon 48pt `colors.textSecondary`
+- Heading `headingMD` `colors.textPrimary`
+- Body `bodyMD` `colors.textSecondary`
+- Primary CTA button (when relevant)
+
+**Error:** Same layout as empty but with Feather `alert-circle` icon + retry button
+
+---
+
+## Accessibility Checklist (Must Pass)
+
+- [ ] Every icon-only button has `accessibilityLabel` prop
+- [ ] All `Pressable` elements have `accessibilityRole="button"` (or correct role)
+- [ ] Text contrast ≥ 4.5:1 for body text, ≥ 3:1 for large headings — verify in both light and dark mode
+- [ ] All form inputs have visible labels (not placeholder-only)
+- [ ] Focus order matches visual order
+- [ ] Dynamic Type supported — no truncation when system font scale is 1.5×
+- [ ] Reduce Motion respected via `AccessibilityInfo.isReduceMotionEnabled()`
+- [ ] Touch targets ≥ 44×44pt everywhere
+
+---
+
+## Final Pre-Delivery Checklist
+
+Before finishing, verify:
+
+- [ ] Zero hardcoded hex values in any component file
+- [ ] Zero magic padding/margin numbers — all use `spacing.*`
+- [ ] Zero emoji used as structural UI icons
+- [ ] All screens tested at 375px width (iPhone SE)
+- [ ] Tab bar correct in both light and dark mode
+- [ ] Swipe card stack renders correctly with shadow and scale effect
+- [ ] All empty states implemented (no blank screens)
+- [ ] Loading skeletons shown while data resolves
+- [ ] Button press feedback working on every tappable element
+- [ ] Safe area insets respected on all screens (especially bottom)
+- [ ] Run the ui-ux-pro-max pre-delivery checklist:
+  ```bash
+  python3 skills/ui-ux-pro-max/scripts/search.py "animation accessibility z-index loading" --domain ux
+  ```
+
+---
+
+*Generated using the ui-ux-pro-max skill for PantrySwipe — Expo + React Native.*

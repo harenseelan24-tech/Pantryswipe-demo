@@ -1,65 +1,103 @@
 const colors = {
   light: {
-    text: "#0F1C2E",
-    tint: "#2B7FFF",
-    background: "#FFFFFF",
-    foreground: "#0F1C2E",
-    card: "#F0F6FF",
-    cardForeground: "#0F1C2E",
-    cardElevated: "#E3EEFF",
-    primary: "#2B7FFF",
-    primaryForeground: "#FFFFFF",
-    secondary: "#5A9FFF",
-    secondaryForeground: "#FFFFFF",
-    muted: "#EBF3FF",
-    mutedForeground: "#4A5568",
-    accent: "#EBF3FF",
-    accentForeground: "#0F1C2E",
-    destructive: "#EF4444",
-    destructiveForeground: "#FFFFFF",
-    save: "#5A9FFF",
-    border: "#E2EAFF",
-    input: "#E2EAFF",
-    saffron: "#F59E0B",
-    herbGreen: "#10B981",
-    skipRed: "#EF4444",
-    saveBlue: "#2B7FFF",
-    overlay: "rgba(0,0,0,0.4)",
-    tabBar: "#FFFFFF",
-    textPrimary: "#0F1C2E",
-    textSecondary: "#4A5568",
-    textMuted: "#94A3B8",
+    // ── Brand primaries ──────────────────────────────────────────────
+    primary:              "#F5A623",  // Saffron — CTAs, active states
+    primaryForeground:    "#1A1714",  // Dark text on saffron
+    secondary:            "#4CAF76",  // Herb Green — success, match, streak
+    secondaryForeground:  "#FFFFFF",
+    danger:               "#E84040",  // Skip Red — destructive
+    dangerForeground:     "#FFFFFF",
+    accent:               "#5B8EF5",  // Save Blue — links, save action
+    accentForeground:     "#FFFFFF",
+
+    // ── Backgrounds ──────────────────────────────────────────────────
+    background:           "#FAFAF8",
+    foreground:           "#1A1714",
+
+    // ── Surface hierarchy ────────────────────────────────────────────
+    surface:              "#FFFFFF",
+    surfaceElevated:      "#F0EEE8",
+    card:                 "#FFFFFF",
+    cardForeground:       "#1A1714",
+    cardElevated:         "#F0EEE8",
+
+    // ── Text ─────────────────────────────────────────────────────────
+    text:                 "#1A1714",
+    textPrimary:          "#1A1714",
+    textSecondary:        "#6B6560",
+    textMuted:            "#A09890",
+
+    // ── Borders & inputs ─────────────────────────────────────────────
+    border:               "#E8E4DC",
+    input:                "#E8E4DC",
+
+    // ── Muted surfaces ───────────────────────────────────────────────
+    muted:                "#F0EEE8",
+    mutedForeground:      "#6B6560",
+
+    // ── Semantic / action aliases (backward compat) ──────────────────
+    tint:                 "#F5A623",
+    saffron:              "#F5A623",
+    herbGreen:            "#4CAF76",
+    skipRed:              "#E84040",
+    saveBlue:             "#5B8EF5",
+    save:                 "#5B8EF5",
+    destructive:          "#E84040",
+    destructiveForeground:"#FFFFFF",
+
+    // ── Overlay & tab bar ────────────────────────────────────────────
+    overlay:              "rgba(0,0,0,0.45)",
+    tabBar:               "#FFFFFF",
   },
   dark: {
-    text: "#E8F0FF",
-    tint: "#4D8FFF",
-    background: "#07101E",
-    foreground: "#E8F0FF",
-    card: "#0E1929",
-    cardForeground: "#E8F0FF",
-    cardElevated: "#152236",
-    primary: "#4D8FFF",
-    primaryForeground: "#FFFFFF",
-    secondary: "#6BA3FF",
-    secondaryForeground: "#FFFFFF",
-    muted: "#0A1520",
-    mutedForeground: "#5A7090",
-    accent: "#0A1520",
-    accentForeground: "#E8F0FF",
-    destructive: "#EF4444",
-    destructiveForeground: "#FFFFFF",
-    save: "#6BA3FF",
-    border: "#18293F",
-    input: "#18293F",
-    saffron: "#F59E0B",
-    herbGreen: "#10B981",
-    skipRed: "#EF4444",
-    saveBlue: "#4D8FFF",
-    overlay: "rgba(0,0,0,0.7)",
-    tabBar: "#07101E",
-    textPrimary: "#E8F0FF",
-    textSecondary: "#8BAAC8",
-    textMuted: "#3D5468",
+    // ── Brand primaries ──────────────────────────────────────────────
+    primary:              "#F5A623",
+    primaryForeground:    "#1A1714",
+    secondary:            "#4CAF76",
+    secondaryForeground:  "#FFFFFF",
+    danger:               "#E84040",
+    dangerForeground:     "#FFFFFF",
+    accent:               "#5B8EF5",
+    accentForeground:     "#FFFFFF",
+
+    // ── Backgrounds ──────────────────────────────────────────────────
+    background:           "#141210",
+    foreground:           "#F5F3EF",
+
+    // ── Surface hierarchy ────────────────────────────────────────────
+    surface:              "#1E1C1A",
+    surfaceElevated:      "#272421",
+    card:                 "#1E1C1A",
+    cardForeground:       "#F5F3EF",
+    cardElevated:         "#272421",
+
+    // ── Text ─────────────────────────────────────────────────────────
+    text:                 "#F5F3EF",
+    textPrimary:          "#F5F3EF",
+    textSecondary:        "#A09890",
+    textMuted:            "#6B6560",
+
+    // ── Borders & inputs ─────────────────────────────────────────────
+    border:               "#2E2B27",
+    input:                "#2E2B27",
+
+    // ── Muted surfaces ───────────────────────────────────────────────
+    muted:                "#272421",
+    mutedForeground:      "#A09890",
+
+    // ── Semantic / action aliases (backward compat) ──────────────────
+    tint:                 "#F5A623",
+    saffron:              "#F5A623",
+    herbGreen:            "#4CAF76",
+    skipRed:              "#E84040",
+    saveBlue:             "#5B8EF5",
+    save:                 "#5B8EF5",
+    destructive:          "#E84040",
+    destructiveForeground:"#FFFFFF",
+
+    // ── Overlay & tab bar ────────────────────────────────────────────
+    overlay:              "rgba(0,0,0,0.65)",
+    tabBar:               "#141210",
   },
   radius: 16,
 };

@@ -36,28 +36,28 @@ const UNITS = ["g", "kg", "ml", "L", "cups", "pieces", "tbsp", "tsp", "cans", "s
 const CATEGORY_ITEMS = ["Fridge", "Freezer", "Pantry", "Spices", "Sauces", "Produce"] as const;
 
 const STATUS_BG: Record<string, string> = {
-  Fresh: "#ECFDF5",
-  "Use Soon": "#FFFBEB",
-  Expiring: "#FEF2F2",
-  Expired: "#F9FAFB",
+  Fresh: "#E8F7EF",
+  "Use Soon": "#FFF8EB",
+  Expiring: "#FDEAEA",
+  Expired: "#F5F3EF",
 };
 const STATUS_BG_DARK: Record<string, string> = {
-  Fresh: "rgba(16,185,129,0.18)",
-  "Use Soon": "rgba(245,158,11,0.18)",
-  Expiring: "rgba(239,68,68,0.18)",
-  Expired: "rgba(148,163,184,0.12)",
+  Fresh: "rgba(76,175,118,0.18)",
+  "Use Soon": "rgba(245,166,35,0.18)",
+  Expiring: "rgba(232,64,64,0.18)",
+  Expired: "rgba(160,152,144,0.12)",
 };
 const STATUS_TEXT: Record<string, string> = {
-  Fresh: "#059669",
-  "Use Soon": "#D97706",
-  Expiring: "#DC2626",
-  Expired: "#6B7280",
+  Fresh: "#2E8A57",
+  "Use Soon": "#B87A10",
+  Expiring: "#C43030",
+  Expired: "#6B6560",
 };
 const STATUS_DOT: Record<string, string> = {
-  Fresh: "#10B981",
-  "Use Soon": "#F59E0B",
-  Expiring: "#EF4444",
-  Expired: "#9CA3AF",
+  Fresh: "#4CAF76",
+  "Use Soon": "#F5A623",
+  Expiring: "#E84040",
+  Expired: "#A09890",
 };
 
 const CUISINE_EMOJIS: Record<string, string> = {

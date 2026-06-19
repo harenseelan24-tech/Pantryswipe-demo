@@ -18,10 +18,20 @@ const SWIPE_UP_THRESHOLD = -70;
 const MAX_ROTATION = 12;
 const CARD_BASE_WIDTH = SCREEN_WIDTH - 16;
 
+// ── Brand constants ────────────────────────────────────────────────────────
+const C = {
+  saffron:   "#F5A623",
+  green:     "#4CAF76",
+  red:       "#E84040",
+  blue:      "#5B8EF5",
+  darkWarm:  "#1C1410",   // warm dark base for card info section
+  darkWarm2: "#241A12",   // slightly lighter warm dark
+};
+
 const RECIPE_IMAGES: Record<string, ReturnType<typeof require>> = {
-  "recipe-pasta": require("@/assets/images/recipe-pasta.png"),
-  "recipe-salmon": require("@/assets/images/recipe-salmon.png"),
-  "recipe-bowl": require("@/assets/images/recipe-bowl.png"),
+  "recipe-pasta":    require("@/assets/images/recipe-pasta.png"),
+  "recipe-salmon":   require("@/assets/images/recipe-salmon.png"),
+  "recipe-bowl":     require("@/assets/images/recipe-bowl.png"),
   "recipe-bibimbap": require("@/assets/images/recipe-bibimbap.png"),
 };
 
@@ -65,7 +75,6 @@ export default function SwipeCard({
   const pan = useRef(new Animated.ValueXY()).current;
   const cardHeight = containerHeight > 0 ? containerHeight - 8 : SCREEN_HEIGHT * 0.62;
 
-  // Mirror dynamic props into refs so the frozen PanResponder closure always reads live values
   const isTopRef = useRef(isTop);
   isTopRef.current = isTop;
   const onSwipeLeftRef = useRef(onSwipeLeft);
@@ -75,7 +84,7 @@ export default function SwipeCard({
   const onSwipeUpRef = useRef(onSwipeUp);
   onSwipeUpRef.current = onSwipeUp;
 
-  // ── Programmatic swipe (for action buttons on web) ──────────────────────────
+  // ── Programmatic swipe ──────────────────────────────────────────────────
   useEffect(() => {
     if (!programmaticSwipe || !isTopRef.current) return;
     const targets = {
@@ -88,16 +97,14 @@ export default function SwipeCard({
       duration: programmaticSwipe === "up" ? 260 : 240,
       useNativeDriver: false,
     }).start(() => {
-      if (programmaticSwipe === "left")  onSwipeLeftRef.current();
+      if (programmaticSwipe === "left")       onSwipeLeftRef.current();
       else if (programmaticSwipe === "right") onSwipeRightRef.current();
-      else if (programmaticSwipe === "up")   onSwipeUpRef.current();
+      else if (programmaticSwipe === "up")    onSwipeUpRef.current();
     });
-  // Only fire when programmaticSwipe value changes to a non-null direction
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [programmaticSwipe]);
 
-  // Image section = top 58%, info section = bottom 42%
-  const imageSectionH = cardHeight * 0.58;
+  const imageSectionH = cardHeight * 0.62;
 
   const rotate = pan.x.interpolate({
     inputRange: [-SCREEN_WIDTH * 0.5, 0, SCREEN_WIDTH * 0.5],
@@ -105,31 +112,17 @@ export default function SwipeCard({
     extrapolate: "clamp",
   });
 
-  // Simplified: 3 overlay opacities (one per direction)
-  const cookOpacity = pan.x.interpolate({
-    inputRange: [20, 70],
-    outputRange: [0, 1],
-    extrapolate: "clamp",
-  });
-  const nopeOpacity = pan.x.interpolate({
-    inputRange: [-70, -20],
-    outputRange: [1, 0],
-    extrapolate: "clamp",
-  });
-  const saveOpacity = pan.y.interpolate({
-    inputRange: [-100, -25],
-    outputRange: [1, 0],
-    extrapolate: "clamp",
-  });
+  // Stamp overlay opacities
+  const cookOpacity = pan.x.interpolate({ inputRange: [20, 70],   outputRange: [0, 1], extrapolate: "clamp" });
+  const nopeOpacity = pan.x.interpolate({ inputRange: [-70, -20], outputRange: [1, 0], extrapolate: "clamp" });
+  const saveOpacity = pan.y.interpolate({ inputRange: [-100, -25], outputRange: [1, 0], extrapolate: "clamp" });
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => isTopRef.current,
       onMoveShouldSetPanResponder: (_, gs) =>
         isTopRef.current && (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5),
-      onPanResponderGrant: () => {
-        pan.extractOffset();
-      },
+      onPanResponderGrant: () => { pan.extractOffset(); },
       onPanResponderMove: Animated.event(
         [null, { dx: pan.x, dy: pan.y }],
         { useNativeDriver: false }
@@ -137,47 +130,29 @@ export default function SwipeCard({
       onPanResponderRelease: (_, gs) => {
         pan.flattenOffset();
         if (gs.vx > 0.5 || gs.dx > SWIPE_THRESHOLD) {
-          Animated.timing(pan, {
-            toValue: { x: SCREEN_WIDTH * 1.5, y: gs.dy * 1.2 },
-            duration: 240,
-            useNativeDriver: false,
-          }).start(() => onSwipeRightRef.current());
+          Animated.timing(pan, { toValue: { x: SCREEN_WIDTH * 1.5, y: gs.dy * 1.2 }, duration: 240, useNativeDriver: false })
+            .start(() => onSwipeRightRef.current());
         } else if (gs.vx < -0.5 || gs.dx < -SWIPE_THRESHOLD) {
-          Animated.timing(pan, {
-            toValue: { x: -SCREEN_WIDTH * 1.5, y: gs.dy * 1.2 },
-            duration: 240,
-            useNativeDriver: false,
-          }).start(() => onSwipeLeftRef.current());
+          Animated.timing(pan, { toValue: { x: -SCREEN_WIDTH * 1.5, y: gs.dy * 1.2 }, duration: 240, useNativeDriver: false })
+            .start(() => onSwipeLeftRef.current());
         } else if (gs.vy < -0.5 || gs.dy < SWIPE_UP_THRESHOLD) {
-          Animated.timing(pan, {
-            toValue: { x: gs.dx, y: -SCREEN_HEIGHT },
-            duration: 260,
-            useNativeDriver: false,
-          }).start(() => onSwipeUpRef.current());
+          Animated.timing(pan, { toValue: { x: gs.dx, y: -SCREEN_HEIGHT }, duration: 260, useNativeDriver: false })
+            .start(() => onSwipeUpRef.current());
         } else {
-          Animated.spring(pan, {
-            toValue: { x: 0, y: 0 },
-            friction: 7,
-            tension: 50,
-            useNativeDriver: false,
-          }).start();
+          Animated.spring(pan, { toValue: { x: 0, y: 0 }, friction: 7, tension: 50, useNativeDriver: false }).start();
         }
       },
       onPanResponderTerminate: () => {
-        Animated.spring(pan, {
-          toValue: { x: 0, y: 0 },
-          friction: 7,
-          tension: 50,
-          useNativeDriver: false,
-        }).start();
+        Animated.spring(pan, { toValue: { x: 0, y: 0 }, friction: 7, tension: 50, useNativeDriver: false }).start();
       },
     })
   ).current;
 
-  const stackScale = index === 0 ? 1 : index === 1 ? 0.94 : 0.88;
-  const stackOffsetY = index === 0 ? 0 : index === 1 ? 10 : 22;
-  const cardOpacity = index === 0 ? 1 : index === 1 ? 0.75 : 0.45;
-  const stackWidthReduction = index === 0 ? 0 : index === 1 ? 20 : 36;
+  // Card stack effect
+  const stackScale         = index === 0 ? 1    : index === 1 ? 0.94 : 0.88;
+  const stackOffsetY       = index === 0 ? 0    : index === 1 ? 10   : 22;
+  const cardOpacity        = index === 0 ? 1    : index === 1 ? 0.75 : 0.45;
+  const stackWidthReduction = index === 0 ? 0   : index === 1 ? 20   : 36;
   const cardWidth = CARD_BASE_WIDTH - stackWidthReduction;
 
   const { getIngredientMatches } = useApp();
@@ -185,18 +160,26 @@ export default function SwipeCard({
   const matchedCount = enrichedIngredients.filter((i) => i.inPantry).length;
   const missingCount = enrichedIngredients.filter((i) => !i.inPantry).length;
 
+  // Brand-aligned difficulty colors
   const difficultyColor =
-    recipe.difficulty === "Easy" ? "#10B981"
-      : recipe.difficulty === "Medium" ? "#2B7FFF"
-        : "#EF4444";
+    recipe.difficulty === "Easy"   ? C.green :
+    recipe.difficulty === "Medium" ? C.saffron : C.red;
 
-  const cuisineFlag = CUISINE_FLAGS[recipe.cuisine] ?? "🌍";
+  const cuisineFlag  = CUISINE_FLAGS[recipe.cuisine]  ?? "🌍";
   const cuisineEmoji = CUISINE_EMOJIS[recipe.cuisine] ?? "🍽";
-  const imageSource = recipe.image
+  const imageSource  = recipe.image
     ? recipe.image.startsWith("http")
       ? { uri: recipe.image }
       : (RECIPE_IMAGES[recipe.image] ?? null)
     : null;
+
+  // Pantry match pill color
+  const matchColor  = pantryMatchScore >= 70 ? C.green : pantryMatchScore >= 40 ? C.saffron : "#888";
+  const matchBgRgba = pantryMatchScore >= 70
+    ? "rgba(76,175,118,0.20)"
+    : pantryMatchScore >= 40
+    ? "rgba(245,166,35,0.20)"
+    : "rgba(136,136,136,0.18)";
 
   return (
     <Animated.View
@@ -206,33 +189,28 @@ export default function SwipeCard({
           width: cardWidth,
           height: cardHeight,
           opacity: cardOpacity,
-          shadowColor: "#2B7FFF",
+          shadowColor: C.saffron,
           transform: isTop
             ? [{ translateX: pan.x }, { translateY: pan.y }, { rotate }]
             : [{ scale: stackScale }, { translateY: stackOffsetY }],
         },
-        // On web: prevent browser text/image selection from stealing drag events
         Platform.OS === "web" && isTop
           ? ({ userSelect: "none", WebkitUserSelect: "none", cursor: "grab" } as object)
           : null,
       ]}
       {...(isTop ? panResponder.panHandlers : {})}
     >
-      {/* ── IMAGE SECTION (top 58%) ── */}
-      <View style={{ height: imageSectionH, width: "100%", overflow: "hidden", backgroundColor: "#1A2436" }}>
+      {/* ── IMAGE SECTION (top 62%) ── */}
+      <View style={{ height: imageSectionH, width: "100%", overflow: "hidden", backgroundColor: C.darkWarm }}>
         {imageSource ? (
-          <Image
-            source={imageSource}
-            style={{ width: "100%", height: "100%" }}
-            resizeMode="cover"
-          />
+          <Image source={imageSource} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
         ) : (
-          <View style={styles.emojiPlaceholder}>
+          <View style={[styles.emojiPlaceholder, { backgroundColor: C.darkWarm }]}>
             <Text style={styles.placeholderEmoji}>{cuisineEmoji}</Text>
           </View>
         )}
 
-        {/* Top badges row (cuisine + difficulty) */}
+        {/* Top badges row */}
         <View style={styles.topRow}>
           <View style={styles.cuisineBadge}>
             <Text style={styles.cuisineBadgeText}>{cuisineFlag} {recipe.cuisine}</Text>
@@ -242,15 +220,15 @@ export default function SwipeCard({
           </View>
         </View>
 
-        {/* Bottom fade from image into dark info section */}
+        {/* Gradient fade from photo into dark info section */}
         <View style={styles.imageFade} />
       </View>
 
-      {/* ── INFO SECTION (bottom 42%) ── */}
-      <View style={styles.infoSection}>
+      {/* ── INFO SECTION (bottom 38%) ── */}
+      <View style={[styles.infoSection, { backgroundColor: C.darkWarm }]}>
         {/* Pantry match pill */}
-        <View style={styles.matchPill}>
-          <View style={styles.matchDot} />
+        <View style={[styles.matchPill, { backgroundColor: matchBgRgba, borderColor: matchColor + "55" }]}>
+          <View style={[styles.matchDot, { backgroundColor: matchColor }]} />
           <Text style={styles.matchPillText}>{pantryMatchScore}% pantry match</Text>
         </View>
 
@@ -268,52 +246,43 @@ export default function SwipeCard({
             <Text style={styles.tagText}>✓ {matchedCount}/{recipe.ingredients.length} in pantry</Text>
           </View>
           {missingCount > 0 && (
-            <View style={styles.tagPillAmber}>
+            <View style={[styles.tagPillAmber, { backgroundColor: "rgba(245,166,35,0.18)", borderColor: "rgba(245,166,35,0.40)" }]}>
               <Text style={styles.tagText}>+{missingCount} to buy</Text>
             </View>
           )}
         </View>
       </View>
 
-      {/* ── SWIPE STAMP OVERLAYS (full card) ── */}
+      {/* ── SWIPE STAMP OVERLAYS ── */}
       {isTop && (
         <>
           {/* COOK → (swipe right) */}
           <Animated.View
-            style={[
-              StyleSheet.absoluteFill,
-              styles.stampOverlay,
-              { backgroundColor: "rgba(16,185,129,0.22)", opacity: cookOpacity, pointerEvents: "none" },
-            ]}
+            style={[StyleSheet.absoluteFill, styles.stampOverlay,
+              { backgroundColor: "rgba(76,175,118,0.22)", opacity: cookOpacity, pointerEvents: "none" }]}
           >
             <View style={[styles.stampWrap, styles.stampLeft]}>
-              <Text style={[styles.stamp, { color: "#10B981", borderColor: "#10B981" }]}>COOK ✓</Text>
+              <Text style={[styles.stamp, { color: C.green, borderColor: C.green }]}>COOK ✓</Text>
             </View>
           </Animated.View>
 
           {/* NOPE ← (swipe left) */}
           <Animated.View
-            style={[
-              StyleSheet.absoluteFill,
-              styles.stampOverlay,
-              { backgroundColor: "rgba(239,68,68,0.22)", opacity: nopeOpacity, pointerEvents: "none" },
-            ]}
+            style={[StyleSheet.absoluteFill, styles.stampOverlay,
+              { backgroundColor: "rgba(232,64,64,0.22)", opacity: nopeOpacity, pointerEvents: "none" }]}
           >
             <View style={[styles.stampWrap, styles.stampRight]}>
-              <Text style={[styles.stamp, { color: "#EF4444", borderColor: "#EF4444" }]}>NOPE ✗</Text>
+              <Text style={[styles.stamp, { color: C.red, borderColor: C.red }]}>NOPE ✗</Text>
             </View>
           </Animated.View>
 
           {/* SAVED ↑ (swipe up) */}
           <Animated.View
-            style={[
-              StyleSheet.absoluteFill,
-              styles.stampOverlay,
-              { backgroundColor: "rgba(43,127,255,0.22)", opacity: saveOpacity, pointerEvents: "none" },
-            ]}
+            style={[StyleSheet.absoluteFill, styles.stampOverlay,
+              { backgroundColor: "rgba(91,142,245,0.22)", opacity: saveOpacity, pointerEvents: "none" }]}
           >
             <View style={[styles.stampWrap, styles.stampCenter]}>
-              <Text style={[styles.stamp, { color: "#5A9FFF", borderColor: "#5A9FFF" }]}>SAVED 🔖</Text>
+              <Text style={[styles.stamp, { color: C.blue, borderColor: C.blue }]}>SAVED 🔖</Text>
             </View>
           </Animated.View>
         </>
@@ -326,16 +295,15 @@ const styles = StyleSheet.create({
   card: {
     position: "absolute",
     top: 0,
-    borderRadius: 24,
+    borderRadius: 28,
     overflow: "hidden",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    elevation: 12,
   },
   emojiPlaceholder: {
     flex: 1,
-    backgroundColor: "#0D1A30",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -350,9 +318,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cuisineBadge: {
-    backgroundColor: "rgba(0,0,0,0.42)",
+    backgroundColor: "rgba(0,0,0,0.45)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
+    borderColor: "rgba(255,255,255,0.20)",
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -377,12 +345,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 48,
-    backgroundColor: "rgba(13,26,48,0.6)",
+    height: 72,
+    backgroundColor: "rgba(28,20,16,0.72)",
   },
   infoSection: {
     flex: 1,
-    backgroundColor: "#0D1A30",
     paddingHorizontal: 18,
     paddingTop: 14,
     paddingBottom: 16,
@@ -393,9 +360,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     alignSelf: "flex-start",
-    backgroundColor: "rgba(16,185,129,0.18)",
     borderWidth: 1,
-    borderColor: "rgba(16,185,129,0.38)",
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -404,7 +369,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#10B981",
   },
   matchPillText: {
     color: "#fff",
@@ -419,7 +383,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
   },
   metaRow: {
-    color: "rgba(255,255,255,0.65)",
+    color: "rgba(255,255,255,0.62)",
     fontSize: 13,
     fontFamily: "Inter_400Regular",
   },
@@ -431,15 +395,13 @@ const styles = StyleSheet.create({
   tagPill: {
     backgroundColor: "rgba(255,255,255,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: "rgba(255,255,255,0.20)",
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 3,
   },
   tagPillAmber: {
-    backgroundColor: "rgba(245,158,11,0.18)",
     borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.35)",
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 3,
@@ -450,7 +412,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
   },
   stampOverlay: {
-    borderRadius: 24,
+    borderRadius: 28,
     zIndex: 10,
   },
   stampWrap: {
