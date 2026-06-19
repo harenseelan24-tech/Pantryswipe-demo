@@ -410,9 +410,9 @@ export default function PantryScreen() {
     resetBarcodeModal();
   };
 
-  const itemCardBg = isDark ? colors.card : "#FFFFFF";
-  const itemCardBorder = isDark ? colors.border : "#E8EFFE";
-  const iconBoxBg = isDark ? colors.cardElevated : "#EEF4FF";
+  const itemCardBg = colors.card;
+  const itemCardBorder = colors.border;
+  const iconBoxBg = colors.muted;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -428,7 +428,7 @@ export default function PantryScreen() {
             <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               My Pantry
             </Text>
-            <Text style={[styles.headerSub, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+            <Text style={[styles.headerSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
               {pantryItems.length} items tracked
             </Text>
           </View>
@@ -517,7 +517,7 @@ export default function PantryScreen() {
             <Text style={[styles.stickyPanelTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
               What Can I Make?
             </Text>
-            <Text style={[styles.stickyPanelSub, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+            <Text style={[styles.stickyPanelSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
               {matchableRecipes.length} dishes with your pantry
             </Text>
           </View>
@@ -595,7 +595,7 @@ export default function PantryScreen() {
                     <Text style={[styles.itemName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
                       {item.name}
                     </Text>
-                    <Text style={[styles.itemDetail, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+                    <Text style={[styles.itemDetail, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
                       {item.quantity} {item.unit} · {item.category}
                     </Text>
                   </View>
@@ -1432,7 +1432,7 @@ const styles = StyleSheet.create({
   pantryItem: {
     flexDirection: "row", alignItems: "center", padding: 12, paddingRight: 14,
     borderRadius: 16, borderWidth: 1, gap: 12, minHeight: 70,
-    shadowColor: "#2B7FFF", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
   },
   itemIconBox: { width: 48, height: 48, minWidth: 48, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   itemEmoji: { fontSize: 24 },
