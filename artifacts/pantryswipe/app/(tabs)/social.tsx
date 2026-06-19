@@ -114,7 +114,7 @@ export default function SocialScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Image */}
+        {/* Image with overlaid actions */}
         <View style={[styles.postImageContainer, { backgroundColor: colors.muted }]}>
           {imageSource ? (
             <Image source={imageSource} style={styles.postImage} resizeMode="cover" />
@@ -124,24 +124,33 @@ export default function SocialScreen() {
               <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: "Inter_500Medium" }}>{item.recipeName ?? "Food"}</Text>
             </View>
           )}
-        </View>
-
-        {/* Actions */}
-        <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.actionItem} onPress={() => toggleLike(item.id)}>
-            <Feather name="heart" size={22} color={item.liked ? "#E84040" : colors.foreground} />
-            <Text style={[styles.actionCount, { color: colors.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{formatCount(item.likes)}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={() => { setCommentModalPost(item); }}>
-            <Feather name="message-circle" size={22} color={colors.foreground} />
-            <Text style={[styles.actionCount, { color: colors.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{(postComments.length || item.comments)}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={handleShare}>
-            <Feather name="share-2" size={22} color={colors.foreground} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={() => toggleSave(item.id)}>
-            <Feather name="bookmark" size={22} color={item.saved ? colors.saveBlue : colors.foreground} />
-          </TouchableOpacity>
+          {/* Actions overlaid on bottom of image */}
+          <View style={styles.actionsOverlay}>
+            <View style={styles.actionsRow}>
+              <TouchableOpacity style={styles.actionItem} onPress={() => toggleLike(item.id)}>
+                <View style={[styles.actionPill, { backgroundColor: item.liked ? "#E84040" : "rgba(0,0,0,0.45)" }]}>
+                  <Feather name="heart" size={18} color="#fff" />
+                  <Text style={[styles.actionCount, { fontFamily: "SpaceGrotesk_600SemiBold" }]}>{formatCount(item.likes)}</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionItem} onPress={() => { setCommentModalPost(item); }}>
+                <View style={[styles.actionPill, { backgroundColor: "rgba(0,0,0,0.45)" }]}>
+                  <Feather name="message-circle" size={18} color="#fff" />
+                  <Text style={[styles.actionCount, { fontFamily: "SpaceGrotesk_600SemiBold" }]}>{(postComments.length || item.comments)}</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionItem} onPress={handleShare}>
+                <View style={[styles.actionPill, { backgroundColor: "rgba(0,0,0,0.45)" }]}>
+                  <Feather name="share-2" size={18} color="#fff" />
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionItem} onPress={() => toggleSave(item.id)}>
+                <View style={[styles.actionPill, { backgroundColor: item.saved ? colors.saveBlue : "rgba(0,0,0,0.45)" }]}>
+                  <Feather name="bookmark" size={18} color="#fff" />
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         {/* Caption */}
@@ -288,11 +297,13 @@ const styles = StyleSheet.create({
   timeAgo: { fontSize: 12 },
   followBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 100, borderWidth: 1.5 },
   followBtnText: { fontSize: 13 },
-  postImageContainer: { width: "100%", aspectRatio: 4 / 5, alignItems: "center", justifyContent: "center" },
-  postImage: { width: "100%", height: "100%" },
-  actionsRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, gap: 18 },
-  actionItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  actionCount: { fontSize: 14 },
+  postImageContainer: { width: "100%", aspectRatio: 4 / 3, alignItems: "center", justifyContent: "center" },
+  postImage: { width: "100%", height: "100%", position: "absolute" },
+  actionsOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 14, paddingBottom: 12, paddingTop: 40 },
+  actionsRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  actionItem: { flexDirection: "row", alignItems: "center" },
+  actionPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 100 },
+  actionCount: { fontSize: 13, color: "#fff" },
   captionContainer: { paddingHorizontal: 16, paddingBottom: 14, gap: 8 },
   caption: { fontSize: 14, lineHeight: 20 },
   captionUsername: { fontSize: 14 },
