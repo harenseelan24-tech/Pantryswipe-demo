@@ -174,6 +174,7 @@ interface UserProfile {
   skillLevel: string;
   dietType: string[];
   allergies: string[];
+  proteinPreferences: string[];
   householdSize: number;
   cuisinePreferences: string[];
   goal: string;
@@ -246,6 +247,7 @@ const defaultProfile: UserProfile = {
   skillLevel: "Home Cook",
   dietType: ["Omnivore"],
   allergies: [],
+  proteinPreferences: [],
   householdSize: 2,
   cuisinePreferences: [],
   goal: "Eat Healthier",
@@ -573,6 +575,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+// ─── Protein keyword map ──────────────────────────────────────────────────────
+const PROTEIN_KEYWORDS: Record<string, string[]> = {
+  Chicken:  ["chicken", "poultry"],
+  Beef:     ["beef", "steak", "mince", "ground beef", "ribeye", "sirloin", "brisket", "veal"],
+  Pork:     ["pork", "bacon", "ham", "pancetta", "prosciutto", "chorizo", "sausage"],
+  Fish:     ["fish", "salmon", "tuna", "cod", "tilapia", "snapper", "halibut", "mackerel", "sardine"],
+  Lamb:     ["lamb", "mutton"],
+  Seafood:  ["prawn", "shrimp", "crab", "lobster", "squid", "scallop", "mussel"],
+  Turkey:   ["turkey"],
+  Tofu:     ["tofu", "tempeh", "seitan"],
+  Eggs:     ["egg", "eggs"],
+  Duck:     ["duck"],
+};
+
+function recipeContainsProtein(recipe: Recipe, protein: string): boolean {
+  const keywords = PROTEIN_KEYWORDS[protein] ?? [protein.toLowerCase()];
+  const title = recipe.title.toLowerCase();
+  const ingredientText = recipe.ingredients.map((i) => i.name.toLowerCase()).join(" ");
+  const searchText = `${title} ${ingredientText}`;
+  return keywords.some((kw) => searchText.includes(kw));
+}
+
   const getPersonalizedRecipes = useCallback((pool?: Recipe[]): Recipe[] => {
     const source = pool ?? liveRecipes;
     const prefs = userProfile;
@@ -598,6 +622,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
       // Safety: if all recipes are filtered out, show unfiltered pool
       if (filtered.length === 0) filtered = [...source];
+    }
+
+    // 3b. Protein preference filter — only show recipes with at least one selected protein.
+    // Empty = no restriction (show all proteins).
+    if (prefs.proteinPreferences?.length > 0) {
+      const proteinFiltered = filtered.filter((r) =>
+        prefs.proteinPreferences.some((p) => recipeContainsProtein(r, p))
+      );
+      if (proteinFiltered.length > 0) filtered = proteinFiltered;
     }
 
     // 4. Skill level filter

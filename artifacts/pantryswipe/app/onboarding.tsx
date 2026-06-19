@@ -28,7 +28,7 @@ const API_BASE =
     : "/api";
 
 const { width } = Dimensions.get("window");
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 10;
 
 type PantryFlow = "fridge" | "receipt" | "manual" | null;
 type UnitOption = "pieces" | "g" | "kg" | "ml" | "L" | "pack" | "can" | "bunch" | "tbsp" | "cup";
@@ -82,6 +82,19 @@ const ALLERGY_OPTIONS = [
   { id: "Gluten", emoji: "🌾" }, { id: "Eggs", emoji: "🥚" }, { id: "Shellfish", emoji: "🦐" },
   { id: "Fish", emoji: "🐟" }, { id: "Soy", emoji: "🫘" }, { id: "Sesame", emoji: "🌻" },
   { id: "Sulphites", emoji: "🐝" }, { id: "Corn", emoji: "🌽" }, { id: "Fruit", emoji: "🍓" },
+];
+
+const PROTEIN_OPTIONS = [
+  { id: "Chicken",  emoji: "🍗", desc: "Breast, thigh, wings, whole" },
+  { id: "Beef",     emoji: "🥩", desc: "Steak, mince, brisket, ribs" },
+  { id: "Pork",     emoji: "🐷", desc: "Chops, bacon, ham, belly" },
+  { id: "Fish",     emoji: "🐟", desc: "Salmon, tuna, cod, snapper" },
+  { id: "Lamb",     emoji: "🐑", desc: "Chops, shoulder, mince" },
+  { id: "Seafood",  emoji: "🦐", desc: "Prawns, crab, squid, scallops" },
+  { id: "Turkey",   emoji: "🦃", desc: "Breast, mince, roast" },
+  { id: "Tofu",     emoji: "🌿", desc: "Firm, silken, tempeh, seitan" },
+  { id: "Eggs",     emoji: "🥚", desc: "Fried, boiled, scrambled, baked" },
+  { id: "Duck",     emoji: "🦆", desc: "Breast, confit, whole" },
 ];
 
 const ALLERGY_SWAPS: Record<string, { title: string; swaps: string[] }> = {
@@ -208,6 +221,7 @@ export default function OnboardingScreen() {
   const [weeklyBudget, setWeeklyBudget] = useState(0);
   const [dietTypes, setDietTypes] = useState<string[]>(["Omnivore"]);
   const [allergies, setAllergies] = useState<string[]>([]);
+  const [proteinPreferences, setProteinPreferences] = useState<string[]>([]);
   const [goal, setGoal] = useState("");
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   const [cuisineError, setCuisineError] = useState(false);
@@ -287,9 +301,10 @@ export default function OnboardingScreen() {
       case 3: return !!weeklyBudget;
       case 4: return dietTypes.length > 0;
       case 5: return true;
-      case 6: return !!goal;
-      case 7: return selectedCuisines.length > 0;
-      case 8: return true;
+      case 6: return true;
+      case 7: return !!goal;
+      case 8: return selectedCuisines.length > 0;
+      case 9: return true;
       default: return true;
     }
   };
@@ -353,7 +368,7 @@ export default function OnboardingScreen() {
         } catch {
           // API unavailable — continue without token
         }
-        updateProfile({ name: name.trim(), email: email.trim(), skillLevel, dietType: dietTypes, allergies, goal, cuisinePreferences: selectedCuisines, householdSize, weeklyBudget });
+        updateProfile({ name: name.trim(), email: email.trim(), skillLevel, dietType: dietTypes, allergies, proteinPreferences, goal, cuisinePreferences: selectedCuisines, householdSize, weeklyBudget });
         completeSetup();
         router.replace("/(tabs)");
       }, 700);
@@ -368,8 +383,11 @@ export default function OnboardingScreen() {
   };
 
   const pct: `${number}%` = `${Math.round(((step + 1) / TOTAL_STEPS) * 100)}%`;
-  const ctaLabel = step === TOTAL_STEPS - 1 ? "Let's Go! 🍳" : step === 5 && allergies.length === 0 ? "Skip — No Allergies" : "Continue";
-  const ctaEnabled = isStepValid(step) || step === 5 || step === 8;
+  const ctaLabel = step === TOTAL_STEPS - 1 ? "Let's Go! 🍳"
+    : step === 5 && allergies.length === 0 ? "Skip — No Allergies"
+    : step === 6 && proteinPreferences.length === 0 ? "Skip — Show All Proteins"
+    : "Continue";
+  const ctaEnabled = isStepValid(step) || step === 5 || step === 6 || step === 9;
 
   return (
     <View style={[styles.container, { backgroundColor: OB.bg }]}>
@@ -590,7 +608,43 @@ export default function OnboardingScreen() {
           <View style={{ height: 32 }} />
         </ScrollView>
 
-        {/* ── STEP 6: Goal ── */}
+        {/* ── STEP 6: Protein Preferences ── */}
+        <ScrollView style={styles.slide} showsVerticalScrollIndicator={false} contentContainerStyle={styles.slideContent}>
+          <Text style={styles.bigEmoji}>🍗</Text>
+          <Text style={styles.stepTitle}>What proteins{"\n"}do you eat?</Text>
+          <Text style={styles.stepSub}>We'll filter your recipes to match. Leave blank to see everything.</Text>
+          <View style={styles.proteinHeader}>
+            {proteinPreferences.length > 0
+              ? <Text style={[styles.proteinCount, { color: OB.blue }]}>{proteinPreferences.length} selected</Text>
+              : <Text style={styles.proteinCount}>All proteins shown when blank</Text>
+            }
+            {proteinPreferences.length > 0 && (
+              <TouchableOpacity onPress={() => setProteinPreferences([])}>
+                <Text style={[styles.cuisineAction, { color: OB.muted }]}>Clear</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.proteinGrid}>
+            {PROTEIN_OPTIONS.map((p) => {
+              const on = proteinPreferences.includes(p.id);
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[styles.proteinCard, on && styles.proteinCardOn]}
+                  onPress={() => setProteinPreferences((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id])}
+                >
+                  {on && <View style={styles.proteinCheckBadge}><Feather name="check" size={10} color="#fff" /></View>}
+                  <Text style={{ fontSize: 28, marginBottom: 4 }}>{p.emoji}</Text>
+                  <Text style={[styles.proteinLabel, { color: on ? OB.blue : OB.text }]}>{p.id}</Text>
+                  <Text style={styles.proteinDesc}>{p.desc}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View style={{ height: 32 }} />
+        </ScrollView>
+
+        {/* ── STEP 7: Goal ── */}
         <ScrollView style={styles.slide} showsVerticalScrollIndicator={false} contentContainerStyle={styles.slideContent}>
           <Text style={styles.bigEmoji}>🎯</Text>
           <Text style={styles.stepTitle}>What do you want{"\n"}to achieve?</Text>
@@ -900,6 +954,15 @@ function makeStyles(OB: OBType) {
   cuisineCardOn: { borderColor: OB.blue, backgroundColor: OB.blueLight },
   cuisineCheckBadge: { position: "absolute", top: 8, right: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: OB.blue, alignItems: "center", justifyContent: "center" },
   cuisineName: { fontSize: 12, fontWeight: "600", color: OB.text, textAlign: "center" },
+
+  proteinHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  proteinCount: { fontSize: 14, fontWeight: "600", color: OB.muted },
+  proteinGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  proteinCard: { width: (width - 68) / 2, paddingVertical: 16, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1.5, borderColor: OB.border, backgroundColor: OB.card, alignItems: "center", position: "relative" },
+  proteinCardOn: { borderColor: OB.blue, backgroundColor: OB.blueLight },
+  proteinCheckBadge: { position: "absolute", top: 8, right: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: OB.blue, alignItems: "center", justifyContent: "center" },
+  proteinLabel: { fontSize: 14, fontWeight: "700", marginBottom: 2, textAlign: "center" },
+  proteinDesc: { fontSize: 11, color: OB.muted, textAlign: "center", lineHeight: 15 },
 
   pantryList: { gap: 12 },
   pantryOption: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 18, borderWidth: 1.5, borderColor: OB.border, backgroundColor: OB.card },
