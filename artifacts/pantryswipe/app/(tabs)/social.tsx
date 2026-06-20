@@ -639,12 +639,9 @@ export default function SocialScreen() {
           <Feather name="plus" size={20} color={colors.primaryForeground} />
         </TouchableOpacity>
 
-        <View style={{ alignItems: "center", gap: 1 }}>
-          <Text style={{ fontSize: 9, letterSpacing: 1.5, fontFamily: "Inter_600SemiBold", color: colors.textMuted, textTransform: "uppercase" }}>
-            Food Community
-          </Text>
-          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Social</Text>
-        </View>
+        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+          FOOD COMMUNITY
+        </Text>
 
         <TouchableOpacity
           style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -1082,7 +1079,7 @@ export default function SocialScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
-  headerTitle: { fontSize: 20, letterSpacing: -0.3 },
+  headerTitle: { fontSize: 26, letterSpacing: 1.2 },
   iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   notifBadge: { position: "absolute", top: -3, right: -3, width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   notifBadgeText: { fontSize: 9, color: "#fff" },
