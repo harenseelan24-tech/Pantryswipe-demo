@@ -142,15 +142,14 @@ function PostCard({ post, index, accent, colors, isLast }: PostCardProps) {
 
   return (
     <View style={[styles.postItem, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-      {/* Header row */}
+
+      {/* ── Header: avatar + username + follow ── */}
       <View style={styles.postHeader}>
-        <View style={[styles.postAvatarRing, { borderColor: avatarBg + "55" }]}>
-          <View style={[styles.postAvatar, { backgroundColor: avatarBg }]}>
-            <Text style={styles.postAvatarText}>{post.userAvatar}</Text>
-          </View>
+        <View style={[styles.postAvatar, { backgroundColor: avatarBg }]}>
+          <Text style={styles.postAvatarText}>{post.userAvatar}</Text>
         </View>
         <View style={styles.postMeta}>
-          <Text style={[styles.postUsername, { color: colors.foreground }]}>{post.username}</Text>
+          <Text style={[styles.postUsername, { color: colors.foreground }]}>@{post.username}</Text>
           <Text style={[styles.postTime, { color: colors.textMuted }]}>{post.timeAgo}</Text>
         </View>
         <TouchableOpacity
@@ -170,52 +169,67 @@ function PostCard({ post, index, accent, colors, isLast }: PostCardProps) {
         </TouchableOpacity>
       </View>
 
-      {/* Caption */}
-      <Text style={[styles.postCaption, { color: colors.textSecondary }]} numberOfLines={3}>
-        {post.caption}
-      </Text>
-
-      {/* Image */}
+      {/* ── Image with overlaid trending badge + action pills ── */}
       {imgSrc != null && (
-        <Image source={imgSrc} style={styles.postImage} resizeMode="cover" />
+        <View style={styles.postImageWrap}>
+          <Image source={imgSrc} style={styles.postImage} resizeMode="cover" />
+
+          {/* Trending badge top-left */}
+          <View style={styles.trendingBadge}>
+            <Text style={styles.trendingText}>🔥 Trending</Text>
+          </View>
+
+          {/* Action pill row bottom of image */}
+          <View style={styles.actionsOverlay}>
+            <TouchableOpacity style={[styles.actionPill, { backgroundColor: liked ? "#E84040" : "rgba(0,0,0,0.52)" }]} onPress={handleLike} activeOpacity={0.8}>
+              <Feather name="heart" size={15} color="#fff" />
+              <Text style={styles.actionPillText}>{formatCount(likeCount)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionPill, { backgroundColor: "rgba(0,0,0,0.52)" }]} onPress={handleOpenComments} activeOpacity={0.8}>
+              <Feather name="message-circle" size={15} color="#fff" />
+              <Text style={styles.actionPillText}>{formatCount(commentCount)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionPill, { backgroundColor: "rgba(0,0,0,0.52)" }]} onPress={handleShare} activeOpacity={0.8}>
+              <Feather name="share-2" size={15} color="#fff" />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity style={[styles.actionPill, { backgroundColor: saved ? "#5B8EF5" : "rgba(0,0,0,0.52)" }]} onPress={handleSave} activeOpacity={0.8}>
+              <Feather name="bookmark" size={15} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
 
-      {/* Recipe chip — taps directly to recipe screen */}
-      {post.recipeName != null && post.recipeId != null && (
-        <TouchableOpacity
-          style={[styles.recipeChip, { backgroundColor: accent + "14", borderColor: accent + "35" }]}
-          onPress={handleRecipe}
-          activeOpacity={0.75}
-        >
-          <Feather name="book-open" size={11} color={accent} />
-          <Text style={[styles.recipeChipText, { color: accent }]} numberOfLines={1}>
-            {post.recipeName}
-          </Text>
-          <Feather name="chevron-right" size={11} color={accent} />
-        </TouchableOpacity>
-      )}
+      {/* ── Caption + chips ── */}
+      <View style={styles.postBody}>
+        <Text style={[styles.postCaption, { color: colors.foreground }]} numberOfLines={3}>
+          <Text style={[styles.postCaptionUser, { color: colors.foreground }]}>@{post.username} </Text>
+          {post.caption}
+        </Text>
 
-      {/* Actions */}
-      <View style={styles.postActions}>
-        <TouchableOpacity style={styles.actionBtn} onPress={handleLike} activeOpacity={0.7}>
-          <Feather name="heart" size={18} color={liked ? "#E84040" : colors.textMuted} />
-          <Text style={[styles.actionCount, { color: liked ? "#E84040" : colors.textMuted }]}>
-            {formatCount(likeCount)}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={handleOpenComments} activeOpacity={0.7}>
-          <Feather name="message-circle" size={18} color={colors.textMuted} />
-          <Text style={[styles.actionCount, { color: colors.textMuted }]}>
-            {formatCount(commentCount)}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={handleShare} activeOpacity={0.7}>
-          <Feather name="share-2" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity style={styles.actionBtn} onPress={handleSave} activeOpacity={0.7}>
-          <Feather name="bookmark" size={18} color={saved ? accent : colors.textMuted} />
-        </TouchableOpacity>
+        {/* Recipe + cuisine chips */}
+        {(post.recipeName != null || post.cuisine != null) && (
+          <View style={styles.chipRow}>
+            {post.recipeName != null && post.recipeId != null && (
+              <TouchableOpacity
+                style={[styles.chip, { backgroundColor: accent + "18", borderColor: accent + "40" }]}
+                onPress={handleRecipe}
+                activeOpacity={0.75}
+              >
+                <Feather name="book-open" size={11} color={accent} />
+                <Text style={[styles.chipText, { color: accent }]} numberOfLines={1}>
+                  {post.recipeName}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {post.cuisine != null && (
+              <View style={[styles.chip, { backgroundColor: colors.accent + "18", borderColor: colors.accent + "40" }]}>
+                <Text style={styles.chipEmoji}>{CUISINE_EMOJIS[post.cuisine] ?? "🍽️"}</Text>
+                <Text style={[styles.chipText, { color: colors.accent }]}>{post.cuisine}</Text>
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       {/* ── Comment modal — same pattern as social.tsx ── */}
@@ -645,76 +659,115 @@ const styles = StyleSheet.create({
   },
   recipeCardCal: { fontSize: 11, fontFamily: "Inter_400Regular" },
 
-  // Post items
+  // Post items — image-first, actions overlaid (matches social.tsx style)
   postItem: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingTop: 16,
+    paddingBottom: 4,
   },
   postHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    paddingHorizontal: 16,
     marginBottom: 10,
   },
-  postAvatarRing: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   postAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
   postAvatarText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" },
   postMeta: { flex: 1 },
-  postUsername: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  postUsername: { fontSize: 13, fontFamily: "Inter_700Bold" },
   postTime: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
   followBtn: {
     borderWidth: 1,
     borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
   followBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  postCaption: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 20,
-    marginBottom: 12,
+
+  // Image with overlays
+  postImageWrap: {
+    position: "relative",
+    marginBottom: 0,
   },
   postImage: {
     width: "100%",
     aspectRatio: 4 / 3,
-    borderRadius: 12,
-    marginBottom: 12,
-    overflow: "hidden",
   },
-  recipeChip: {
+  trendingBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    backgroundColor: "rgba(0,0,0,0.58)",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  trendingText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
+  actionsOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    alignSelf: "flex-start",
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: 12,
+    paddingHorizontal: 10,
+    paddingBottom: 12,
+    paddingTop: 32,
   },
-  recipeChipText: {
+  actionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  actionPillText: {
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
-    maxWidth: 200,
+    color: "#fff",
   },
-  postActions: { flexDirection: "row", alignItems: "center", gap: 20 },
-  actionBtn: { flexDirection: "row", alignItems: "center", gap: 5 },
-  actionCount: { fontSize: 13, fontFamily: "Inter_400Regular" },
+
+  // Caption + chips below image
+  postBody: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
+  },
+  postCaption: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+  postCaptionUser: { fontFamily: "Inter_700Bold" },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  chipText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  chipEmoji: { fontSize: 12 },
 
   // Comment modal
   commentModal: { flex: 1, padding: 20 },
