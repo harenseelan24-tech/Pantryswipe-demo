@@ -453,7 +453,7 @@ export default function PantryScreen() {
           <Feather name="search" size={15} color={colors.textMuted} />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
-            placeholder="Search pantry..."
+            placeholder="Search ingredients…"
             placeholderTextColor={colors.textMuted}
             value={search}
             onChangeText={setSearch}
@@ -506,21 +506,32 @@ export default function PantryScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── WHAT CAN I MAKE (INLINE) ── */}
+        {/* ── WHAT CAN I MAKE (FEATURE HERO CARD) ── */}
         <TouchableOpacity
-          style={[styles.inlineWhatCanIMake, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[styles.whatCanIMakeCard, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "28" }]}
           onPress={() => { setShowWhatCanIMake(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
           activeOpacity={0.85}
         >
-          <Text style={{ fontSize: 18 }}>🍳</Text>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.stickyPanelTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+          {/* Left icon block */}
+          <View style={[styles.whatCanIMakeIcon, { backgroundColor: colors.primary + "20" }]}>
+            <Text style={{ fontSize: 22 }}>🍳</Text>
+          </View>
+          {/* Text block */}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.whatCanIMakeEyebrow, { color: colors.primary }]}>PANTRY MATCH</Text>
+            <Text style={[styles.whatCanIMakeTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               What Can I Make?
             </Text>
-            <Text style={[styles.stickyPanelSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-              {matchableRecipes.length} dishes with your pantry
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4, marginTop: 2 }}>
+              <Text style={[styles.whatCanIMakeCount, { color: colors.primary, fontFamily: "SpaceGrotesk_700Bold" }]}>
+                {matchableRecipes.length}
+              </Text>
+              <Text style={[styles.whatCanIMakeSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                dishes you can cook now
+              </Text>
+            </View>
           </View>
+          {/* Chevron */}
           <View style={[styles.stickyChevron, { backgroundColor: colors.primary + "18" }]}>
             <Feather name="chevron-right" size={16} color={colors.primary} />
           </View>
@@ -536,13 +547,24 @@ export default function PantryScreen() {
           >
             {CATEGORIES.map((cat) => {
               const isActive = activeCategory === cat;
+              const catEmoji: Record<string, string> = {
+                All: "✦", Fridge: "🧊", Freezer: "❄️", Pantry: "🥫", Spices: "🌶️", Sauces: "🫙", Produce: "🥦",
+              };
               return (
                 <TouchableOpacity
                   key={cat}
                   style={[
                     styles.categoryTab,
                     isActive
-                      ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                      ? {
+                          backgroundColor: colors.primary,
+                          borderColor: colors.primary,
+                          shadowColor: colors.primary,
+                          shadowOffset: { width: 0, height: 0 },
+                          shadowOpacity: 0.45,
+                          shadowRadius: 8,
+                          elevation: 4,
+                        }
                       : { backgroundColor: colors.card, borderColor: colors.border },
                   ]}
                   onPress={() => setActiveCategory(cat)}
@@ -556,7 +578,7 @@ export default function PantryScreen() {
                       },
                     ]}
                   >
-                    {cat}
+                    {catEmoji[cat]} {cat}
                   </Text>
                 </TouchableOpacity>
               );
@@ -587,26 +609,30 @@ export default function PantryScreen() {
               const txt = STATUS_TEXT[item.status] ?? "#6B7280";
               const dot = STATUS_DOT[item.status] ?? "#9CA3AF";
               return (
-                <View key={item.id} style={[styles.pantryItem, { backgroundColor: itemCardBg, borderColor: itemCardBorder }]}>
-                  <View style={[styles.itemIconBox, { backgroundColor: iconBoxBg }]}>
-                    <Text style={styles.itemEmoji}>{item.emoji}</Text>
-                  </View>
-                  <View style={styles.itemInfo}>
-                    <Text style={[styles.itemName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <Text style={[styles.itemDetail, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-                      {item.quantity} {item.unit} · {item.category}
-                    </Text>
-                  </View>
-                  <View style={styles.itemRight}>
-                    <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
-                      <View style={[styles.statusDot, { backgroundColor: dot }]} />
-                      <Text style={[styles.statusText, { color: txt, fontFamily: "Inter_500Medium" }]}>{item.status}</Text>
+                <View key={item.id} style={[styles.pantryItemWrap, { shadowColor: "#000" }]}>
+                  {/* Status-color left accent bar — the signature element */}
+                  <View style={[styles.pantryItemAccent, { backgroundColor: dot }]} />
+                  <View style={[styles.pantryItem, { backgroundColor: itemCardBg, borderColor: itemCardBorder }]}>
+                    <View style={[styles.itemIconBox, { backgroundColor: iconBoxBg }]}>
+                      <Text style={styles.itemEmoji}>{item.emoji}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); removeFromPantry(item.id); }}>
-                      <Feather name="trash-2" size={15} color={colors.textMuted} />
-                    </TouchableOpacity>
+                    <View style={styles.itemInfo}>
+                      <Text style={[styles.itemName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={[styles.itemDetail, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                        {item.quantity} {item.unit} · {item.category}
+                      </Text>
+                    </View>
+                    <View style={styles.itemRight}>
+                      <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
+                        <View style={[styles.statusDot, { backgroundColor: dot }]} />
+                        <Text style={[styles.statusText, { color: txt, fontFamily: "Inter_500Medium" }]}>{item.status}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); removeFromPantry(item.id); }}>
+                        <Feather name="trash-2" size={15} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               );
@@ -614,37 +640,47 @@ export default function PantryScreen() {
           )}
           {filtered.length > 0 && (
             <View style={[styles.intelligencePanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.intelligenceTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                Pantry Intelligence
-              </Text>
-              <View style={styles.intelligenceRows}>
-                <View style={styles.intelligenceRow}>
-                  <View style={[styles.intelligenceIcon, { backgroundColor: colors.primary + "22" }]}>
-                    <Feather name="check-circle" size={14} color={colors.primary} />
-                  </View>
-                  <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                    <Text style={{ fontFamily: "Inter_700Bold", color: colors.primary }}>{completeRecipes} complete recipes</Text>{" "}you can cook right now
+              {/* Top saffron accent bar */}
+              <View style={[styles.intelligenceAccentBar, { backgroundColor: colors.primary }]} />
+              <View style={styles.intelligencePanelInner}>
+                {/* Eyebrow + title */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                  <View style={[styles.intelligenceEyebrowDot, { backgroundColor: colors.primary }]} />
+                  <Text style={[styles.intelligenceEyebrow, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                    PANTRY AI
                   </Text>
                 </View>
-                <View style={styles.intelligenceRow}>
-                  <View style={[styles.intelligenceIcon, { backgroundColor: "#F59E0B22" }]}>
-                    <Feather name="plus-circle" size={14} color="#F59E0B" />
+                <View style={styles.intelligenceRows}>
+                  <View style={styles.intelligenceRow}>
+                    <View style={[styles.intelligenceIcon, { backgroundColor: colors.primary + "22" }]}>
+                      <Feather name="check-circle" size={15} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                      <Text style={{ fontFamily: "Inter_700Bold", color: colors.primary }}>{completeRecipes} complete recipes</Text>{" "}you can cook right now
+                    </Text>
                   </View>
-                  <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                    <Text style={{ fontFamily: "Inter_700Bold", color: "#F59E0B" }}>1 ingredient away</Text>{" "}from {oneIngredientAway} more
-                  </Text>
-                </View>
-                <View style={styles.intelligenceRow}>
-                  <View style={[styles.intelligenceIcon, { backgroundColor: expiringWithin3 > 0 ? "#EF444422" : "#10B98122" }]}>
-                    <Feather name="clock" size={14} color={expiringWithin3 > 0 ? "#EF4444" : "#10B981"} />
+                  <View style={[styles.intelligenceDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.intelligenceRow}>
+                    <View style={[styles.intelligenceIcon, { backgroundColor: "#F59E0B22" }]}>
+                      <Feather name="plus-circle" size={15} color="#F59E0B" />
+                    </View>
+                    <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                      <Text style={{ fontFamily: "Inter_700Bold", color: "#F59E0B" }}>1 ingredient away</Text>{" "}from {oneIngredientAway} more
+                    </Text>
                   </View>
-                  <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                    {expiringWithin3 > 0 ? (
-                      <><Text style={{ fontFamily: "Inter_700Bold", color: "#EF4444" }}>{expiringWithin3} item{expiringWithin3 !== 1 ? "s" : ""} expiring</Text>{" "}in the next 3 days — use first</>
-                    ) : (
-                      <>Pantry freshness:{" "}<Text style={{ fontFamily: "Inter_600SemiBold", color: "#10B981" }}>{freshPct}% Fresh</Text></>
-                    )}
-                  </Text>
+                  <View style={[styles.intelligenceDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.intelligenceRow}>
+                    <View style={[styles.intelligenceIcon, { backgroundColor: expiringWithin3 > 0 ? "#EF444422" : "#10B98122" }]}>
+                      <Feather name="clock" size={15} color={expiringWithin3 > 0 ? "#EF4444" : "#10B981"} />
+                    </View>
+                    <Text style={[styles.intelligenceText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                      {expiringWithin3 > 0 ? (
+                        <><Text style={{ fontFamily: "Inter_700Bold", color: "#EF4444" }}>{expiringWithin3} item{expiringWithin3 !== 1 ? "s" : ""} expiring</Text>{" "}in the next 3 days — use first</>
+                      ) : (
+                        <>Pantry freshness:{" "}<Text style={{ fontFamily: "Inter_600SemiBold", color: "#10B981" }}>{freshPct}% Fresh</Text></>
+                      )}
+                    </Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -1385,8 +1421,8 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     flexDirection: "row", alignItems: "center", gap: 10,
-    marginHorizontal: 16, paddingHorizontal: 14, height: 46,
-    borderRadius: 14, borderWidth: 1, marginBottom: 10,
+    marginHorizontal: 16, paddingHorizontal: 14, height: 48,
+    borderRadius: 100, borderWidth: 1, marginBottom: 10,
   },
   searchInput: { flex: 1, fontSize: 14 },
   expiryAlertWrap: {
@@ -1417,6 +1453,22 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", marginHorizontal: 16,
     marginBottom: 10, borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 11,
   },
+  whatCanIMakeCard: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    marginHorizontal: 16, marginBottom: 10,
+    borderRadius: 18, borderWidth: 1.5,
+    paddingHorizontal: 16, paddingVertical: 14,
+  },
+  whatCanIMakeIcon: {
+    width: 52, height: 52, borderRadius: 14,
+    alignItems: "center", justifyContent: "center",
+  },
+  whatCanIMakeEyebrow: {
+    fontSize: 10, letterSpacing: 1, marginBottom: 2,
+  },
+  whatCanIMakeTitle: { fontSize: 16 },
+  whatCanIMakeCount: { fontSize: 24 },
+  whatCanIMakeSub: { fontSize: 12 },
   shoppingRow: {
     flexDirection: "row", alignItems: "center", gap: 12,
     padding: 14, borderRadius: 16, borderWidth: 1,
@@ -1429,10 +1481,16 @@ const styles = StyleSheet.create({
   categoryTab: { height: 34, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   categoryTabText: { fontSize: 13 },
   listContent: { paddingHorizontal: 16, gap: 10, paddingBottom: 16 },
+  pantryItemWrap: {
+    borderRadius: 16, overflow: "hidden",
+    shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+    flexDirection: "row",
+  },
+  pantryItemAccent: { width: 4 },
   pantryItem: {
-    flexDirection: "row", alignItems: "center", padding: 12, paddingRight: 14,
-    borderRadius: 16, borderWidth: 1, gap: 12, minHeight: 70,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+    flex: 1, flexDirection: "row", alignItems: "center", padding: 12, paddingRight: 14,
+    borderTopRightRadius: 16, borderBottomRightRadius: 16, borderWidth: 1, borderLeftWidth: 0,
+    gap: 12, minHeight: 70,
   },
   itemIconBox: { width: 48, height: 48, minWidth: 48, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   itemEmoji: { fontSize: 24 },
@@ -1447,12 +1505,17 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 15 },
   emptyBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 100, marginTop: 4 },
   emptyBtnText: { color: "#fff", fontSize: 15 },
-  intelligencePanel: { marginTop: 4, padding: 16, borderRadius: 16, borderWidth: 1, gap: 12, marginBottom: 8 },
+  intelligencePanel: { marginTop: 4, borderRadius: 16, borderWidth: 1, overflow: "hidden", marginBottom: 8 },
+  intelligenceAccentBar: { height: 3, width: "100%" },
+  intelligencePanelInner: { padding: 16 },
+  intelligenceEyebrowDot: { width: 5, height: 5, borderRadius: 3 },
+  intelligenceEyebrow: { fontSize: 10, letterSpacing: 1 },
   intelligenceTitle: { fontSize: 15, marginBottom: 4 },
-  intelligenceRows: { gap: 12 },
+  intelligenceRows: { gap: 0 },
+  intelligenceDivider: { height: 1, marginVertical: 12 },
   intelligenceRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  intelligenceIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  intelligenceText: { flex: 1, fontSize: 13, lineHeight: 19 },
+  intelligenceIcon: { width: 32, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  intelligenceText: { flex: 1, fontSize: 13, lineHeight: 19, paddingTop: 7 },
   stickyPanel: { height: 80, borderTopWidth: 1, paddingHorizontal: 16, justifyContent: "center" },
   stickyPanelBtn: { flexDirection: "row", alignItems: "center", borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 10 },
   stickyPanelTitle: { fontSize: 15 },
