@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Modal,
   Platform,
@@ -59,7 +59,7 @@ export default function PlannerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { cookedRecipes, cookingHistory, liveRecipes, userProfile } = useApp();
+  const { cookingHistory, liveRecipes } = useApp();
 
   const [view, setView] = useState<ViewType>("Week");
   const [mealPlan, setMealPlan] = useState<MealPlan>(EMPTY_PLAN);
@@ -75,18 +75,62 @@ export default function PlannerScreen() {
   const allRecipes = useMemo(() => [...MOCK_RECIPES, ...liveRecipes], [liveRecipes]);
   const findRecipe = (id: string | null) => id ? allRecipes.find(r => r.id === id) ?? null : null;
 
-  const { cookedKcalPerDay, totalCookedMeals } = useMemo(() => {
-    let cals = 0;
-    cookedRecipes.forEach((id) => {
-      const r = findRecipe(id);
-      if (r) cals += r.calories;
+  /** Auto-populate mealPlan from cookingHistory whenever history changes or week changes. */
+  useEffect(() => {
+    if (cookingHistory.length === 0) return;
+    const weekDateStrings = weekDates.map((d) => d.toISOString().split("T")[0]);
+    setMealPlan((prev) => {
+      const next: MealPlan = JSON.parse(JSON.stringify(prev));
+      cookingHistory.forEach((entry) => {
+        const weekIdx = weekDateStrings.indexOf(entry.date);
+        if (weekIdx === -1) return;
+        const dayKey = DAYS_SHORT[weekIdx];
+        if (!dayKey) return;
+        if (!next[dayKey][entry.mealType]) {
+          const exists = allRecipes.find((r) => r.id === entry.recipeId);
+          if (exists) next[dayKey][entry.mealType] = entry.recipeId;
+        }
+      });
+      return next;
     });
-    return {
-      cookedKcalPerDay: cookedRecipes.length > 0 ? Math.round(cals / 7) : 0,
-      totalCookedMeals: cookedRecipes.length,
-    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cookedRecipes, liveRecipes]);
+  }, [cookingHistory, weekDates]);
+
+  /** Calories and meal counts for the selected view period. */
+  const { periodKcal, periodMeals, totalCookedMeals } = useMemo(() => {
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+    const weekDateStrings = weekDates.map((d) => d.toISOString().split("T")[0]);
+
+    let kcal = 0;
+    let meals = 0;
+
+    cookingHistory.forEach((entry) => {
+      const recipe = allRecipes.find((r) => r.id === entry.recipeId);
+      if (!recipe) return;
+
+      let include = false;
+      if (view === "Day") {
+        include = entry.date === todayStr;
+      } else if (view === "Week") {
+        include = weekDateStrings.includes(entry.date);
+      } else {
+        const d = new Date(entry.date + "T00:00:00");
+        include = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
+      }
+
+      if (include) {
+        kcal += recipe.calories;
+        meals++;
+      }
+    });
+
+    return { periodKcal: kcal, periodMeals: meals, totalCookedMeals: cookingHistory.length };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cookingHistory, view, weekDates, liveRecipes]);
+
+  const kcalLabel = view === "Day" ? "kcal today" : view === "Week" ? "kcal this week" : "kcal this month";
+  const mealsLabel = view === "Day" ? "cooked today" : view === "Week" ? "cooked this week" : "cooked this month";
 
   const plannedCount = useMemo(() => {
     let count = 0;
@@ -231,50 +275,25 @@ export default function PlannerScreen() {
               <Feather name="zap" size={15} color={colors.primary} />
             </View>
             <Text style={[styles.summaryValue, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]}>
-              {cookedKcalPerDay > 0 ? cookedKcalPerDay : "—"}
+              {periodKcal > 0 ? periodKcal.toLocaleString() : "—"}
             </Text>
-            <Text style={[styles.summaryLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>kcal/day</Text>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{kcalLabel}</Text>
           </View>
           <View style={[styles.summaryCard, { backgroundColor: colors.saveBlue + "0C", borderColor: colors.saveBlue + "28" }]}>
             <View style={[styles.summaryIconBox, { backgroundColor: colors.saveBlue + "20" }]}>
               <Feather name="check-circle" size={15} color={colors.saveBlue} />
             </View>
             <Text style={[styles.summaryValue, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]}>{totalCookedMeals}</Text>
-            <Text style={[styles.summaryLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>meals cooked</Text>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>meals total</Text>
           </View>
           <View style={[styles.summaryCard, { backgroundColor: "#4CAF7610", borderColor: "#4CAF7630" }]}>
             <View style={[styles.summaryIconBox, { backgroundColor: "#4CAF7622" }]}>
               <Feather name="calendar" size={15} color="#4CAF76" />
             </View>
-            <Text style={[styles.summaryValue, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]}>{plannedCount}</Text>
-            <Text style={[styles.summaryLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>this week</Text>
+            <Text style={[styles.summaryValue, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]}>{periodMeals}</Text>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{mealsLabel}</Text>
           </View>
         </View>
-
-        {/* Budget awareness banner */}
-        {userProfile.weeklyBudget > 0 && (
-          <View style={[styles.budgetBanner, { backgroundColor: colors.card, borderColor: colors.border, overflow: "hidden" }]}>
-            <View style={[styles.budgetAccent, { backgroundColor: colors.primary }]} />
-            <View style={styles.budgetBody}>
-              <View style={[styles.budgetIconBox, { backgroundColor: colors.primary + "18" }]}>
-                <Feather name="dollar-sign" size={14} color={colors.primary} />
-              </View>
-              <Text style={[styles.budgetBannerText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-                Weekly budget:{" "}
-                <Text style={{ color: colors.primary, fontFamily: "Inter_700Bold" }}>
-                  ${userProfile.weeklyBudget}
-                </Text>
-              </Text>
-              {userProfile.goal ? (
-                <View style={[styles.budgetGoalPill, { backgroundColor: colors.primary + "20" }]}>
-                  <Text style={[{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 11 }]}>
-                    {userProfile.goal}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          </View>
-        )}
 
         {/* Meal type filter pills */}
         <View style={styles.mealTypeRow}>

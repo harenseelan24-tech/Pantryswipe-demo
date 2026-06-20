@@ -235,6 +235,13 @@ const VARIATION_MACRO_ADJUST: Record<string, { protein: number; carbs: number; f
 
 type MealType = "Breakfast" | "Lunch" | "Dinner";
 
+function getMealTypeFromTime(): MealType {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) return "Breakfast";
+  if (hour >= 11 && hour < 16) return "Lunch";
+  return "Dinner";
+}
+
 export default function RecipeDetailScreen() {
   const { id, servings: servingsParam, mealType: mealTypeParam } =
     useLocalSearchParams<{ id: string; servings?: string; mealType?: string }>();
@@ -255,7 +262,7 @@ export default function RecipeDetailScreen() {
 
   // ── Servings & meal type ─────────────────────────────────────────────────────
   const [selectedServings, setSelectedServings] = useState(recipe?.servings ?? 2);
-  const [selectedMealType, setSelectedMealType] = useState<MealType>("Dinner");
+  const [selectedMealType, setSelectedMealType] = useState<MealType>(getMealTypeFromTime);
   const [customServingsMode, setCustomServingsMode] = useState(false);
   const [customServingsInput, setCustomServingsInput] = useState("");
   const [showServingsModal, setShowServingsModal] = useState(false);
