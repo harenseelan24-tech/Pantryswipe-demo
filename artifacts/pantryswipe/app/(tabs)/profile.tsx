@@ -32,6 +32,8 @@ const CUISINE_EMOJIS: Record<string, string> = {
   French: "🥐", Mediterranean: "🫒", Vietnamese: "🍜", International: "🍽",
 };
 
+const BIO_LIMIT = 80;
+
 const PROFILE_TABS = ["Recipes", "Saved", "Stats", "Badges"] as const;
 const RECIPE_SUBTABS = ["Saved Later", "Made", "To Cook"] as const;
 
@@ -158,13 +160,12 @@ export default function ProfileScreen() {
   };
 
   // ── Save edit profile ─────────────────────────────────────────────────────
+  const bioOverLimit = editBio.length > BIO_LIMIT;
+  const canSaveProfile = editName.trim().length > 0 && !bioOverLimit;
+
   const handleSaveProfile = () => {
-    const trimmedName = editName.trim();
-    if (!trimmedName) {
-      Alert.alert("Name required", "Please enter your name.");
-      return;
-    }
-    updateProfile({ name: trimmedName, bio: editBio.trim() });
+    if (!canSaveProfile) return;
+    updateProfile({ name: editName.trim(), bio: editBio.trim() });
     setShowEditModal(false);
   };
 
@@ -273,8 +274,9 @@ export default function ProfileScreen() {
                 </View>
               )}
             </View>
-            <Text style={[styles.handle, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+            <Text style={[styles.handle, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={1} ellipsizeMode="tail">
               @{userProfile.name.toLowerCase().replace(/\s/g, "_")}
+              {userProfile.bio ? ` | ${userProfile.bio}` : ""}
             </Text>
 
             {/* Diet tags */}
@@ -735,8 +737,8 @@ export default function ProfileScreen() {
               <Text style={[styles.editModalCancel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Cancel</Text>
             </TouchableOpacity>
             <Text style={[styles.editModalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Edit Profile</Text>
-            <TouchableOpacity onPress={handleSaveProfile} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={[styles.editModalSave, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>Save</Text>
+            <TouchableOpacity onPress={handleSaveProfile} disabled={!canSaveProfile} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={[styles.editModalSave, { color: canSaveProfile ? colors.primary : colors.textMuted, fontFamily: "Inter_700Bold" }]}>Save</Text>
             </TouchableOpacity>
           </View>
 
@@ -782,12 +784,13 @@ export default function ProfileScreen() {
                 onChangeText={setEditBio}
                 placeholder="Tell people about your cooking style…"
                 placeholderTextColor={colors.textMuted}
-                style={[styles.editFieldInput, styles.editFieldTextArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" }]}
-                maxLength={150}
+                style={[styles.editFieldInput, styles.editFieldTextArea, { backgroundColor: colors.card, borderColor: bioOverLimit ? "#E84040" : colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" }]}
                 multiline
                 numberOfLines={3}
               />
-              <Text style={[styles.editFieldCounter, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>{editBio.length}/150</Text>
+              <Text style={[styles.editFieldCounter, { color: bioOverLimit ? "#E84040" : editBio.length > BIO_LIMIT * 0.85 ? "#F5A623" : colors.textMuted, fontFamily: "Inter_500Medium" }]}>
+                {editBio.length}/{BIO_LIMIT}
+              </Text>
             </View>
 
             {/* Read-only info */}
