@@ -223,6 +223,21 @@ export default function RecipeDetailScreen() {
 
   // ── Shopping list ────────────────────────────────────────────────────────────
   const [showShoppingList, setShowShoppingList] = useState(false);
+  const [checkedShoppingItems, setCheckedShoppingItems] = useState<Set<string>>(new Set());
+
+  const toggleShoppingItem = (name: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCheckedShoppingItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  // ── Pantry match expand/collapse ──────────────────────────────────────────────
+  const [pantryExpanded, setPantryExpanded] = useState(false);
+  const PANTRY_PREVIEW_COUNT = 3;
 
   // ── AI Variations state ──────────────────────────────────────────────────────
   const [variationLoading, setVariationLoading] = useState<string | null>(null);
@@ -232,6 +247,8 @@ export default function RecipeDetailScreen() {
   const [varNotes, setVarNotes] = useState<string | null>(null);
   const [varAdditions, setVarAdditions] = useState<Array<{ name: string; amount: string; inPantry: boolean }>>([]);
   const [selectedAdditions, setSelectedAdditions] = useState<Set<string>>(new Set());
+  // committed = user pressed "Apply" — the You Have/You Need columns switch to varIngredients
+  const [varCommitted, setVarCommitted] = useState(false);
 
   // ── Timer state ──────────────────────────────────────────────────────────────
   const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
@@ -305,6 +322,7 @@ export default function RecipeDetailScreen() {
     setVarNotes(null);
     setVarAdditions([]);
     setSelectedAdditions(new Set());
+    setVarCommitted(false);
   };
 
   // ── Toggle an addition in/out of selected set ────────────────────────────────
@@ -396,13 +414,22 @@ export default function RecipeDetailScreen() {
   const displaySteps = varSteps ?? recipe.steps;
 
   // ── Pantry match with active additions ───────────────────────────────────────
+  // When user has committed a variation (pressed Apply), use varIngredients directly
+  // (which already has inPantry=false for substituted items, true for unchanged pantry items).
+  // Otherwise fall back to original pantry/missing lists + any additions.
   const activeAdditions = varAdditions.filter((a) => selectedAdditions.has(a.name));
-  const displayPantryIngredients = appliedVariation
-    ? [...pantryIngredients, ...activeAdditions.filter((a) => a.inPantry)]
-    : pantryIngredients;
-  const displayMissingIngredients = appliedVariation
-    ? [...missingIngredients, ...activeAdditions.filter((a) => !a.inPantry)]
-    : missingIngredients;
+  const displayPantryIngredients: Array<{ name: string; amount: string; inPantry: boolean }> =
+    varCommitted && varIngredients
+      ? varIngredients.filter((i) => i.inPantry)
+      : appliedVariation
+        ? [...pantryIngredients, ...activeAdditions.filter((a) => a.inPantry)]
+        : pantryIngredients;
+  const displayMissingIngredients: Array<{ name: string; amount: string; inPantry: boolean }> =
+    varCommitted && varIngredients
+      ? varIngredients.filter((i) => !i.inPantry)
+      : appliedVariation
+        ? [...missingIngredients, ...activeAdditions.filter((a) => !a.inPantry)]
+        : missingIngredients;
   const totalDisplayIngredients = displayPantryIngredients.length + displayMissingIngredients.length;
   const displayMatchScore = totalDisplayIngredients > 0
     ? Math.round((displayPantryIngredients.length / totalDisplayIngredients) * 100)
@@ -680,13 +707,14 @@ export default function RecipeDetailScreen() {
                 <Text style={styles.matchScoreText}>{displayMatchScore}% match</Text>
               </View>
             </View>
+            {/* Collapsible ingredient columns */}
             <View style={styles.matchColumns}>
               {displayPantryIngredients.length > 0 && (
                 <View style={styles.matchColumn}>
                   <Text style={[styles.matchColumnHeader, { color: colors.secondary }]}>
                     You Have ({displayPantryIngredients.length})
                   </Text>
-                  {displayPantryIngredients.map((ing) => (
+                  {(pantryExpanded ? displayPantryIngredients : displayPantryIngredients.slice(0, PANTRY_PREVIEW_COUNT)).map((ing) => (
                     <View key={ing.name} style={styles.ingredientRow}>
                       <Feather name="check" size={14} color={colors.secondary} />
                       <Text style={[styles.ingredientText, { color: colors.foreground }]}>
@@ -694,6 +722,11 @@ export default function RecipeDetailScreen() {
                       </Text>
                     </View>
                   ))}
+                  {!pantryExpanded && displayPantryIngredients.length > PANTRY_PREVIEW_COUNT && (
+                    <Text style={[styles.ingredientText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }]}>
+                      +{displayPantryIngredients.length - PANTRY_PREVIEW_COUNT} more…
+                    </Text>
+                  )}
                 </View>
               )}
               {displayMissingIngredients.length > 0 && (
@@ -701,7 +734,7 @@ export default function RecipeDetailScreen() {
                   <Text style={[styles.matchColumnHeader, { color: colors.saffron }]}>
                     You Need ({displayMissingIngredients.length})
                   </Text>
-                  {displayMissingIngredients.map((ing) => (
+                  {(pantryExpanded ? displayMissingIngredients : displayMissingIngredients.slice(0, PANTRY_PREVIEW_COUNT)).map((ing) => (
                     <View key={ing.name} style={styles.ingredientRow}>
                       <Feather name="shopping-cart" size={14} color={colors.saffron} />
                       <Text style={[styles.ingredientText, { color: colors.foreground }]}>
@@ -709,9 +742,15 @@ export default function RecipeDetailScreen() {
                       </Text>
                     </View>
                   ))}
+                  {!pantryExpanded && displayMissingIngredients.length > PANTRY_PREVIEW_COUNT && (
+                    <Text style={[styles.ingredientText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }]}>
+                      +{displayMissingIngredients.length - PANTRY_PREVIEW_COUNT} more…
+                    </Text>
+                  )}
                 </View>
               )}
             </View>
+
             {/* Shopping list button */}
             <TouchableOpacity
               style={[styles.shoppingListBtn, { backgroundColor: displayMissingIngredients.length === 0 ? colors.secondary : colors.saffron }]}
@@ -724,6 +763,20 @@ export default function RecipeDetailScreen() {
                   : `Shopping List · ${displayMissingIngredients.length} item${displayMissingIngredients.length !== 1 ? "s" : ""}`}
               </Text>
             </TouchableOpacity>
+
+            {/* Expand / collapse arrow */}
+            {(displayPantryIngredients.length > PANTRY_PREVIEW_COUNT || displayMissingIngredients.length > PANTRY_PREVIEW_COUNT) && (
+              <TouchableOpacity
+                style={styles.pantryExpandBtn}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setPantryExpanded((e) => !e); }}
+                activeOpacity={0.7}
+              >
+                <Feather name={pantryExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
+                <Text style={[styles.pantryExpandText, { color: colors.mutedForeground }]}>
+                  {pantryExpanded ? "Show less" : `Show all ${totalDisplayIngredients} ingredients`}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* ── Make It Your Way ─────────────────────────────────────────────── */}
@@ -872,6 +925,33 @@ export default function RecipeDetailScreen() {
                     </View>
                   );
                 })()}
+
+                {/* Apply / Applied button */}
+                {varIngredients && (
+                  varCommitted ? (
+                    <View style={[styles.varApplyBtn, { backgroundColor: colors.secondary + "18", borderColor: colors.secondary + "40" }]}>
+                      <Feather name="check-circle" size={15} color={colors.secondary} />
+                      <Text style={[styles.varApplyBtnText, { color: colors.secondary, fontFamily: "Inter_600SemiBold" }]}>
+                        Applied — You Have / You Need updated
+                      </Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.varApplyBtn, { backgroundColor: colors.saffron, borderColor: colors.saffron }]}
+                      onPress={() => {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        setVarCommitted(true);
+                        setPantryExpanded(false);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name="check" size={15} color="#fff" />
+                      <Text style={[styles.varApplyBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                        Apply Changes to Recipe
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                )}
               </View>
             )}
           </View>
@@ -1106,24 +1186,39 @@ export default function RecipeDetailScreen() {
                   <Text style={[styles.sheetSectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
                     TO BUY · {displayMissingIngredients.length} {displayMissingIngredients.length === 1 ? "item" : "items"}
                   </Text>
-                  {displayMissingIngredients.map((ing, idx) => (
-                    <View
-                      key={`${ing.name}-${idx}`}
-                      style={[styles.sheetIngRow, { backgroundColor: colors.card, borderColor: colors.border }]}
-                    >
-                      <View style={[styles.sheetIngIcon, { backgroundColor: colors.saffron + "18" }]}>
-                        <Feather name="shopping-cart" size={14} color={colors.saffron} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.sheetIngName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                          {ing.name}
-                        </Text>
-                        <Text style={[styles.sheetIngAmount, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                          {scaleAmount(ing.amount, servingRatio)}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
+                  {displayMissingIngredients.map((ing, idx) => {
+                    const isChecked = checkedShoppingItems.has(ing.name);
+                    return (
+                      <TouchableOpacity
+                        key={`${ing.name}-${idx}`}
+                        style={[
+                          styles.sheetIngRow,
+                          {
+                            backgroundColor: isChecked ? colors.muted : colors.card,
+                            borderColor: isChecked ? colors.border : colors.border,
+                            opacity: isChecked ? 0.65 : 1,
+                          },
+                        ]}
+                        onPress={() => toggleShoppingItem(ing.name)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[styles.sheetIngIcon, { backgroundColor: isChecked ? "#4CAF7618" : colors.saffron + "18" }]}>
+                          <Feather name={isChecked ? "check" : "shopping-cart"} size={14} color={isChecked ? "#4CAF76" : colors.saffron} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.sheetIngName, { color: colors.foreground, fontFamily: "Inter_600SemiBold", textDecorationLine: isChecked ? "line-through" : "none" }]}>
+                            {ing.name}
+                          </Text>
+                          <Text style={[styles.sheetIngAmount, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", textDecorationLine: isChecked ? "line-through" : "none" }]}>
+                            {scaleAmount(ing.amount, servingRatio)}
+                          </Text>
+                        </View>
+                        {isChecked && (
+                          <Text style={{ fontSize: 11, color: "#4CAF76", fontFamily: "Inter_500Medium" }}>Got it</Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               )}
 
@@ -1418,6 +1513,14 @@ const styles = StyleSheet.create({
   celebrationBtn: { flex: 1, paddingVertical: 16, borderRadius: 14, alignItems: "center" },
   celebIngBlock: { borderRadius: 12, borderWidth: 1, padding: 12, width: "100%" },
   celebrationBtnText: { fontSize: 15 },
+
+  // ── Pantry expand/collapse ─────────────────────────────────────────────────
+  pantryExpandBtn: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6, paddingVertical: 10, marginTop: 4 },
+  pantryExpandText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+
+  // ── Variation apply button ─────────────────────────────────────────────────
+  varApplyBtn: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8, paddingVertical: 13, borderRadius: 12, borderWidth: 1, marginTop: 4 },
+  varApplyBtnText: { fontSize: 14 },
 
   // ── Shopping list sheet ────────────────────────────────────────────────────
   sheetOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" },
