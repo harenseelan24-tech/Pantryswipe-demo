@@ -1,9 +1,11 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
+  Alert,
   FlatList,
   Image,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -78,6 +80,34 @@ function PostCard({ post, index, accent, colors, onRecipePress, isLast }: PostCa
   const avatarColors = [accent, "#F5A623", "#4CAF76", "#5B8EF5", "#C2185B"];
   const avatarBg = avatarColors[index % avatarColors.length];
 
+  const [liked, setLiked] = useState(post.liked);
+  const [saved, setSaved] = useState(post.saved);
+  const [followed, setFollowed] = useState(false);
+  const [likeCount, setLikeCount] = useState(post.likes);
+
+  const handleLike = () => {
+    const next = !liked;
+    setLiked(next);
+    setLikeCount((c) => c + (next ? 1 : -1));
+  };
+
+  const handleSave = () => setSaved((s) => !s);
+
+  const handleFollow = () => setFollowed((f) => !f);
+
+  const handleComment = () =>
+    Alert.alert("Comments", `${post.comments} comment${post.comments !== 1 ? "s" : ""} on this post.`);
+
+  const handleShare = () =>
+    Share.share({
+      message: `Check out this post by @${post.username} on PantrySwipe!\n\n"${post.caption}"`,
+      title: `@${post.username} on PantrySwipe`,
+    }).catch(() => null);
+
+  const handleRecipe = () => {
+    if (post.recipeId != null) onRecipePress(post.recipeId);
+  };
+
   return (
     <View style={[styles.postItem, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
       {/* Header row */}
@@ -94,11 +124,19 @@ function PostCard({ post, index, accent, colors, onRecipePress, isLast }: PostCa
           <Text style={[styles.postTime, { color: colors.textMuted }]}>{post.timeAgo}</Text>
         </View>
         <TouchableOpacity
-          style={[styles.followBtn, { borderColor: accent + "55" }]}
+          style={[
+            styles.followBtn,
+            followed
+              ? { backgroundColor: accent, borderColor: accent }
+              : { borderColor: accent + "70" },
+          ]}
+          onPress={handleFollow}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           activeOpacity={0.7}
         >
-          <Text style={[styles.followBtnText, { color: accent }]}>Follow</Text>
+          <Text style={[styles.followBtnText, { color: followed ? "#fff" : accent }]}>
+            {followed ? "Following" : "Follow"}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -116,7 +154,7 @@ function PostCard({ post, index, accent, colors, onRecipePress, isLast }: PostCa
       {post.recipeName != null && (
         <TouchableOpacity
           style={[styles.recipeChip, { backgroundColor: accent + "14", borderColor: accent + "35" }]}
-          onPress={() => post.recipeId != null && onRecipePress(post.recipeId)}
+          onPress={handleRecipe}
           activeOpacity={0.75}
         >
           <Feather name="book-open" size={11} color={accent} />
@@ -129,24 +167,24 @@ function PostCard({ post, index, accent, colors, onRecipePress, isLast }: PostCa
 
       {/* Actions */}
       <View style={styles.postActions}>
-        <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
-          <Feather name="heart" size={18} color={post.liked ? "#E84040" : colors.textMuted} />
-          <Text style={[styles.actionCount, { color: colors.textMuted }]}>
-            {formatCount(post.likes)}
+        <TouchableOpacity style={styles.actionBtn} onPress={handleLike} activeOpacity={0.7}>
+          <Feather name="heart" size={18} color={liked ? "#E84040" : colors.textMuted} />
+          <Text style={[styles.actionCount, { color: liked ? "#E84040" : colors.textMuted }]}>
+            {formatCount(likeCount)}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleComment} activeOpacity={0.7}>
           <Feather name="message-circle" size={18} color={colors.textMuted} />
           <Text style={[styles.actionCount, { color: colors.textMuted }]}>
             {String(post.comments)}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleShare} activeOpacity={0.7}>
           <Feather name="share-2" size={18} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
-        <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
-          <Feather name="bookmark" size={18} color={post.saved ? accent : colors.textMuted} />
+        <TouchableOpacity style={styles.actionBtn} onPress={handleSave} activeOpacity={0.7}>
+          <Feather name="bookmark" size={18} color={saved ? accent : colors.textMuted} />
         </TouchableOpacity>
       </View>
     </View>
