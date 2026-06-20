@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState, memo } from "react";
 import {
   Animated,
   Dimensions,
@@ -55,7 +55,7 @@ interface SwipeCardProps {
   programmaticSwipe?: "left" | "right" | "up" | null;
 }
 
-export default function SwipeCard({
+function SwipeCard({
   recipe,
   pantryMatchScore,
   onSwipeLeft,
@@ -149,6 +149,8 @@ export default function SwipeCard({
   const stackWidthReduction = index === 0 ? 0   : index === 1 ? 20   : 36;
   const cardWidth = CARD_BASE_WIDTH - stackWidthReduction;
 
+  const [imageError, setImageError] = useState(false);
+
   const { getIngredientMatches } = useApp();
   const enrichedIngredients = getIngredientMatches(recipe);
   const matchedCount = enrichedIngredients.filter((i) => i.inPantry).length;
@@ -192,8 +194,13 @@ export default function SwipeCard({
     >
       {/* ── IMAGE SECTION (top 62%) ── */}
       <View style={{ height: imageSectionH, width: "100%", overflow: "hidden", backgroundColor: C.darkWarm }}>
-        {imageSource ? (
-          <Image source={imageSource} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+        {imageSource && !imageError ? (
+          <Image
+            source={imageSource}
+            style={{ width: "100%", height: "100%" }}
+            resizeMode="cover"
+            onError={() => setImageError(true)}
+          />
         ) : (
           <View style={[styles.emojiPlaceholder, { backgroundColor: C.darkWarm }]}>
             <Text style={styles.placeholderEmoji}>{cuisineEmoji}</Text>
@@ -434,3 +441,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 });
+
+// Wrap with React.memo so unchanged card props don't trigger re-renders
+// when the parent swipe deck updates (e.g. matchCount changes on another card).
+export default memo(SwipeCard);

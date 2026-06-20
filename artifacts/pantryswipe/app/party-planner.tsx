@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,7 @@ import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
+import { generatePartyMenu, PartyMenuResult } from "@/services/aiChef";
 
 const EVENT_TYPES = [
   { label: "Birthday", icon: "gift" as const },
@@ -44,17 +46,23 @@ export default function PartyPlannerScreen() {
   const [servingStyle, setServingStyle] = useState("Buffet");
   const [budget, setBudget] = useState(200);
   const [generated, setGenerating] = useState(false);
+  const [aiMenu, setAiMenu] = useState<PartyMenuResult | null>(null);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setGenerating(true);
-    setTimeout(() => {
-      setStep(2);
-      setGenerating(false);
-    }, 1500);
+    // Try real AI generation via inference.sh; fall back to SAMPLE_MENU on failure
+    try {
+      const result = await generatePartyMenu({ eventType, guestCount, servingStyle, budget });
+      setAiMenu(result);
+    } catch {
+      setAiMenu(null);
+    }
+    setStep(2);
+    setGenerating(false);
   };
 
   return (
@@ -173,11 +181,15 @@ export default function PartyPlannerScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.nextBtn, { backgroundColor: colors.saffron }]}
+              style={[styles.nextBtn, { backgroundColor: colors.saffron, opacity: generated ? 0.7 : 1 }]}
               onPress={handleGenerate}
               disabled={generated}
             >
-              <Feather name="zap" size={20} color="#fff" />
+              {generated ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Feather name="zap" size={20} color="#fff" />
+              )}
               <Text style={styles.nextBtnText}>
                 {generated ? "Generating..." : "Generate Party Plan"}
               </Text>
@@ -199,8 +211,15 @@ export default function PartyPlannerScreen() {
               </View>
             </View>
 
+            {aiMenu && (
+              <View style={[styles.aiBadge, { backgroundColor: colors.saffron + "18", borderColor: colors.saffron + "40" }]}>
+                <Feather name="zap" size={12} color={colors.saffron} />
+                <Text style={[styles.aiBadgeText, { color: colors.saffron }]}>AI-generated menu</Text>
+              </View>
+            )}
+
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Menu</Text>
-            {SAMPLE_MENU.map((item) => (
+            {(aiMenu?.menu ?? SAMPLE_MENU).map((item) => (
               <View key={item.course} style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={[styles.courseBadge, { backgroundColor: colors.muted }]}>
                   <Text style={[styles.courseLabel, { color: colors.mutedForeground }]}>{item.course}</Text>
@@ -215,12 +234,12 @@ export default function PartyPlannerScreen() {
 
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Timeline</Text>
             <View style={[styles.timeline, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {[
+              {(aiMenu?.timeline ?? [
                 { time: "Day before", task: "Marinate proteins · Make desserts" },
                 { time: "3h before", task: "Prep vegetables · Set up buffet station" },
                 { time: "1h before", task: "Start mains · Arrange appetizers" },
                 { time: "30m before", task: "Final seasoning · Plate garnishes" },
-              ].map((t, i) => (
+              ]).map((t, i) => (
                 <View key={i} style={styles.timelineItem}>
                   <View style={[styles.timelineDot, { backgroundColor: colors.saffron }]} />
                   <View style={{ flex: 1 }}>
@@ -337,4 +356,15 @@ const styles = StyleSheet.create({
     borderRadius: 100,
   },
   actionBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  aiBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignSelf: "flex-start",
+  },
+  aiBadgeText: { fontSize: 12, fontWeight: "600" },
 });

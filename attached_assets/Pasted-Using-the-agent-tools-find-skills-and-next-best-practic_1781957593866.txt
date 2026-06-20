@@ -1,0 +1,184 @@
+Using the agent-tools, find-skills, and next-best-practices agents, I need you to deeply integrate all three skill systems into my PantrySwipe app in the most impactful, natural locations. Do not break anything. Run every test and typecheck after all changes. Do not stop until everything passes at 100%.
+
+=== ABOUT THIS APP ===
+
+PantrySwipe is a Tinder-style AI cooking ecosystem built as an Expo mobile app. Here is the full structure:
+
+WORKSPACE ROOT:
+- pnpm workspaces (pnpm-workspace.yaml)
+- Node.js 24, TypeScript 5.9
+- Root scripts: `pnpm run typecheck` (runs typecheck:libs then all artifact typechecks)
+
+MOBILE APP: artifacts/pantryswipe/
+- Expo SDK 54, expo-router v6 (file-based routing), React Native 0.81
+- State: React Context + AsyncStorage via artifacts/pantryswipe/context/AppContext.tsx
+- Gestures: PanResponder (NOT gesture-handler) — do not change this
+- UI: @expo/vector-icons (Feather), react-native-reanimated, expo-haptics
+- NO backend DB required — all state lives in AsyncStorage
+
+SCREENS (artifacts/pantryswipe/app/):
+- app/index.tsx — root guard: checks AsyncStorage, routes to /welcome or /(tabs)
+- app/welcome.tsx — first launch welcome screen
+- app/onboarding.tsx — onboarding flow
+- app/(tabs)/ — 5-tab navigation: index (Discover/Home), pantry, planner, social, profile
+- app/recipe/[id].tsx — single recipe detail screen
+- app/ai-chef.tsx — AI Chat interface with pantry-aware mock responses + quick prompt chips
+- app/party-planner.tsx — multi-step wizard: event type, guest count, serving style, budget → menu + timeline
+- app/notifications.tsx — notifications screen
+- Stack screens for recipe/[id], ai-chef, party-planner, notifications
+
+KEY COMPONENTS:
+- artifacts/pantryswipe/components/SwipeCard.tsx — Tinder-style swipe card using PanResponder
+- artifacts/pantryswipe/context/AppContext.tsx — global state: pantry items, recipes, profile, stats, cooking streak, XP/levels
+- artifacts/pantryswipe/data/mockData.ts — all recipe, pantry, social mock data
+- artifacts/pantryswipe/constants/colors.ts — brand palette (light + dark)
+
+BRAND COLORS:
+- Saffron primary: #F5A623
+- Herb Green secondary: #4CAF76
+- Skip Red: #E84040
+- Save Blue: #5B8EF5
+- Light BG: #FAFAF8
+- Dark BG: #141210
+
+API SERVER (artifacts/api-server/):
+- Express 5 + Drizzle ORM — currently unused for core app features
+- Can be wired up for AI calls
+
+NAVIGATION FLOW:
+- First launch: / → /welcome → /onboarding → /(tabs)
+- Return user: / → /(tabs) directly
+- Navigation uses expo-router file-based routing
+
+GOTCHAS:
+- All image assets used via require() MUST exist on disk before Metro bundles — create placeholder files if needed
+- Do NOT switch from PanResponder to gesture-handler
+- useNativeDriver warnings on web are expected (ignore)
+- shadow* style deprecation warnings on web are expected (ignore)
+
+=== TASK 1: agent-tools (inference.sh belt CLI) ===
+
+Step 1 — Install the belt CLI:
+Run: curl -fsSL https://cli.inference.sh | sh
+Then run: belt login (if already authenticated, skip)
+
+Step 2 — Wire up the AI Chef screen (artifacts/pantryswipe/app/ai-chef.tsx):
+The AI Chef currently uses pattern-matched mock responses. Replace this with REAL LLM calls using the inference.sh belt CLI.
+- Create a helper at artifacts/pantryswipe/services/aiChef.ts
+- Use: belt app run openrouter/claude-sonnet-45 --input '{"prompt": "<user message>"}' via child_process exec OR via the inference.sh REST API (https://api.inference.sh/v1/...)
+- The AI Chef should be pantry-aware: pass the current pantry items from AppContext into the prompt so Claude can give personalised advice
+- If belt is not authenticated or the call fails, fall back gracefully to the existing mock responses so the app never crashes
+- Show a loading indicator while waiting for the real AI response
+- Quick prompt chips should still work and pass their text as the user message
+
+Step 3 — Wire up AI image generation on the Discover screen (artifacts/pantryswipe/app/(tabs)/index.tsx) and SwipeCard (artifacts/pantryswipe/components/SwipeCard.tsx):
+- Add a "Generate Image" button or auto-trigger on each recipe card that calls: belt app run falai/flux-dev-lora --input '{"prompt": "professional food photography of <recipe name>, <cuisine>, overhead shot"}'
+- Display the returned image URL in the SwipeCard component
+- Cache generated images in AsyncStorage keyed by recipe ID so you don't regenerate on every render
+- If generation fails or belt is not available, show the existing mock image (require() placeholder) — never break the swipe flow
+
+Step 4 — Add Party Planner AI generation (artifacts/pantryswipe/app/party-planner.tsx):
+- After the user completes the multi-step wizard (event type, guest count, serving style, budget), call belt app run openrouter/claude-sonnet-45 to generate a REAL full menu + timeline instead of the current static mock output
+- Pass all wizard inputs as a structured prompt
+- Show a loading state during generation
+- Fall back to mock menu if the call fails
+
+Step 5 — Add two shell script helpers at the root level:
+- scripts/ai-chef-test.sh — demo CLI call: belt app run openrouter/claude-sonnet-45 --input '{"prompt": "What can I cook with chicken, rice, and garlic?"}'
+- scripts/generate-recipe-image.sh — demo CLI call: belt app run falai/flux-dev-lora --input '{"prompt": "professional food photography of spaghetti carbonara"}'
+Make both executable (chmod +x).
+
+=== TASK 2: find-skills ===
+
+Step 1 — Search for relevant skills:
+Run all of these commands and capture output:
+- npx skills find expo best practices
+- npx skills find react native food app
+- npx skills find expo router navigation
+- npx skills find pantry recipe ai mobile
+
+Step 2 — Evaluate results:
+Only install skills that have 1000+ installs AND come from a reputable source (e.g. vercel-labs, anthropics, expo, microsoft, ComposioHQ). Do not install anything from unknown authors with under 100 installs.
+
+Step 3 — Apply the skills:
+For each skill you install, apply its guidance concretely to AT LEAST 2 of these components:
+- SwipeCard.tsx — gesture handling, performance
+- AppContext.tsx — state management patterns
+- ai-chef.tsx — async data fetching patterns
+- Any tab screen in (tabs)/ — navigation, layout
+
+Show in code comments exactly what guidance you followed and from which skill.
+
+Step 4 — Create a skills audit file at .agents/skills-audit.md:
+Document:
+- What you searched for
+- What results came back
+- What you installed (with install counts and source)
+- What you skipped and why
+- Exactly which files were changed and what was applied from each skill
+
+=== TASK 3: next-best-practices (Expo/React Native + TypeScript best practices) ===
+
+Note: PantrySwipe is an Expo/React Native app, NOT a Next.js web app. Apply the next-best-practices agent's patterns that translate to React Native/Expo:
+
+1. ASYNC PARAMS — In app/recipe/[id].tsx, ensure route params are accessed correctly using expo-router's useLocalSearchParams() hook. Do not access params synchronously in ways that could cause issues. Verify the pattern is correct for expo-router v6.
+
+2. ERROR BOUNDARIES — Add proper error boundaries:
+   - Create artifacts/pantryswipe/components/ErrorBoundary.tsx as a class component ErrorBoundary with fallback UI using PantrySwipe brand colors
+   - Wrap the SwipeCard deck in Discover tab with this ErrorBoundary
+   - Wrap the AI Chef chat in ErrorBoundary
+   - Wrap the Party Planner wizard in ErrorBoundary
+
+3. LOADING/SUSPENSE PATTERNS — For any screen that fetches async data (ai-chef, party-planner after AI integration from Task 1), add proper loading states with ActivityIndicator in PantrySwipe brand colors (Saffron #F5A623). Do not leave screens that wait on promises without a loading UI.
+
+4. IMAGE HANDLING — Audit all Image components in SwipeCard.tsx and any (tabs) screens:
+   - Ensure every Image has a defined width and height (no implicit sizing)
+   - Every remote/dynamic image URL must have a fallback onError handler that shows the placeholder require() image
+   - Add resizeMode="cover" consistently
+
+5. TYPESCRIPT STRICTNESS — Fix any implicit `any` types. Ensure all props have proper TypeScript interfaces. Ensure AppContext types are fully typed with no `any` escapes. Run typecheck and fix every error.
+
+6. PERFORMANCE — Apply these optimisations:
+   - Wrap expensive calculations in AppContext with useMemo (e.g. pantry match % per recipe)
+   - Wrap callback functions passed to SwipeCard with useCallback
+   - Add React.memo() to SwipeCard component if it is not already memoised
+
+7. NAVIGATION SAFETY — Ensure all navigation calls (router.push, router.replace, router.back) have proper null checks and are wrapped in try/catch where appropriate.
+
+8. CONSTANTS — Move any hardcoded magic numbers (animation durations, swipe thresholds, card dimensions) into a constants file at artifacts/pantryswipe/constants/layout.ts
+
+=== TESTING AND VERIFICATION ===
+
+After ALL changes from Tasks 1, 2, and 3 are complete:
+
+Step 1 — TypeScript:
+Run: pnpm run typecheck
+Fix every single error until this exits with 0 errors.
+
+Step 2 — Tests:
+Check if any test suite exists (jest, vitest, etc). If it exists, run it.
+If NO test suite exists, create one:
+- Install jest and @testing-library/react-native as devDependencies in artifacts/pantryswipe/
+- Create artifacts/pantryswipe/__tests__/AppContext.test.tsx — test that the context initialises with correct default state, that addPantryItem works, that recipes load from mockData
+- Create artifacts/pantryswipe/__tests__/SwipeCard.test.tsx — test that SwipeCard renders without crashing given a mock recipe prop
+- Add a "test" script to artifacts/pantryswipe/package.json: "jest --passWithNoTests"
+- Run the tests. Fix any failures.
+
+Step 3 — Verify the app still runs:
+Run: pnpm --filter @workspace/pantryswipe run dev
+Confirm it starts without errors (Metro bundler starts, no import errors, no missing file errors).
+
+=== DO NOT STOP UNTIL ===
+- pnpm run typecheck exits clean (0 errors)
+- All tests pass
+- Metro bundler starts without errors
+- .agents/skills-audit.md is written
+- scripts/ai-chef-test.sh and scripts/generate-recipe-image.sh exist and are executable
+
+=== FINAL SUMMARY ===
+After everything passes, output a summary covering:
+1. Which inference.sh apps were wired up and in which files
+2. Which skills were installed from find-skills and what changed
+3. Which next-best-practices patterns were applied and where
+4. Final typecheck result (number of errors fixed)
+5. Final test result (tests passed/total)

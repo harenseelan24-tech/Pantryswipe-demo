@@ -20,6 +20,7 @@ import { PremiumBottomSheet } from "@/components/PremiumBottomSheet";
 import { useAIChefUsage, FREE_DAILY_LIMIT } from "@/hooks/useAIChefUsage";
 import { useSubscription } from "@/lib/revenuecat";
 import { PantryItem } from "@/data/mockData";
+import { callAIChef } from "@/services/aiChef";
 
 interface Message {
   id: string;
@@ -308,34 +309,56 @@ export default function AIChefScreen() {
     const history = conversationRef.current.slice(-10);
 
     try {
-      let aiText: string;
+      let aiText = "";
 
-      if (isSubscribed) {
-        // Premium: generate rich pantry-aware response
-        await new Promise((r) => setTimeout(r, 900 + Math.random() * 600));
-        aiText = buildPremiumResponse(text, pantryItems, userProfile as UserProfileShape);
-      } else {
-        // Free: use the backend API
-        const res = await fetch(`${API_BASE}/recipes/ai-chef`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: text,
-            conversation_history: history,
-            pantry_items: pantryItems.map((i) => i.name),
-            user_profile: {
-              dietType: userProfile.dietType,
-              allergies: userProfile.allergies,
-              skillLevel: userProfile.skillLevel,
-              cuisinePreferences: userProfile.cuisinePreferences,
-              goal: userProfile.goal,
-              name: userProfile.name,
-            },
-          }),
+      // ── Try real AI via inference.sh (callAIChef) first ──────────────────
+      // Falls back to existing premium/free mock if EXPO_PUBLIC_INFSH_API_KEY
+      // is not set or the request fails — the app never crashes.
+      let realAiSucceeded = false;
+      try {
+        aiText = await callAIChef({
+          prompt: text,
+          pantryItems: pantryItems.map((i) => i.name),
+          dietType: userProfile.dietType,
+          allergies: userProfile.allergies,
+          skillLevel: userProfile.skillLevel,
+          cuisinePreferences: userProfile.cuisinePreferences,
+          goal: userProfile.goal,
         });
-        const data = await res.json().catch(() => ({ response: null }));
-        aiText = (data.response as string | null) ?? "I'm having a moment — please try again!";
-        await increment();
+        realAiSucceeded = true;
+        if (!isSubscribed) await increment();
+      } catch {
+        // API key not configured or network error — fall through to mock
+      }
+
+      if (!realAiSucceeded) {
+        if (isSubscribed) {
+          // Premium: generate rich pantry-aware response
+          await new Promise((r) => setTimeout(r, 900 + Math.random() * 600));
+          aiText = buildPremiumResponse(text, pantryItems, userProfile as UserProfileShape);
+        } else {
+          // Free: use the backend API
+          const res = await fetch(`${API_BASE}/recipes/ai-chef`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: text,
+              conversation_history: history,
+              pantry_items: pantryItems.map((i) => i.name),
+              user_profile: {
+                dietType: userProfile.dietType,
+                allergies: userProfile.allergies,
+                skillLevel: userProfile.skillLevel,
+                cuisinePreferences: userProfile.cuisinePreferences,
+                goal: userProfile.goal,
+                name: userProfile.name,
+              },
+            }),
+          });
+          const data = await res.json().catch(() => ({ response: null }));
+          aiText = (data.response as string | null) ?? "I'm having a moment — please try again!";
+          await increment();
+        }
       }
 
       const aiMsg: Message = {
