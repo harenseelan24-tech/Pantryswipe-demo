@@ -98,8 +98,6 @@ function SwipeCard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [programmaticSwipe]);
 
-  const imageSectionH = cardHeight * 0.62;
-
   const rotate = pan.x.interpolate({
     inputRange: [-SCREEN_WIDTH * 0.5, 0, SCREEN_WIDTH * 0.5],
     outputRange: [`-${MAX_ROTATION}deg`, "0deg", `${MAX_ROTATION}deg`],
@@ -192,61 +190,61 @@ function SwipeCard({
       ]}
       {...(isTop ? panResponder.panHandlers : {})}
     >
-      {/* ── IMAGE SECTION (top 62%) ── */}
-      <View style={{ height: imageSectionH, width: "100%", overflow: "hidden", backgroundColor: C.darkWarm }}>
-        {imageSource && !imageError ? (
-          <Image
-            source={imageSource}
-            style={{ width: "100%", height: "100%" }}
-            resizeMode="cover"
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <View style={[styles.emojiPlaceholder, { backgroundColor: C.darkWarm }]}>
-            <Text style={styles.placeholderEmoji}>{cuisineEmoji}</Text>
-          </View>
-        )}
-
-        {/* Top badges row */}
-        <View style={styles.topRow}>
-          <View style={styles.cuisineBadge}>
-            <Text style={styles.cuisineBadgeText}>{cuisineFlag} {recipe.cuisine}</Text>
-          </View>
-          <View style={[styles.diffBadge, { backgroundColor: difficultyColor }]}>
-            <Text style={styles.diffBadgeText}>{recipe.difficulty}</Text>
-          </View>
+      {/* ── FULL-CARD IMAGE ── */}
+      {imageSource && !imageError ? (
+        <Image
+          source={imageSource}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          onError={() => setImageError(true)}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.emojiPlaceholder, { backgroundColor: C.darkWarm }]}>
+          <Text style={styles.placeholderEmoji}>{cuisineEmoji}</Text>
         </View>
+      )}
 
-        {/* Gradient fade from photo into dark info section */}
-        <View style={styles.imageFade} />
+      {/* ── TOP BADGES ── */}
+      <View style={styles.topRow}>
+        <View style={styles.cuisineBadge}>
+          <Text style={styles.cuisineBadgeText}>{cuisineFlag} {recipe.cuisine}</Text>
+        </View>
+        <View style={[styles.diffBadge, { backgroundColor: difficultyColor }]}>
+          <Text style={styles.diffBadgeText}>{recipe.difficulty}</Text>
+        </View>
       </View>
 
-      {/* ── INFO SECTION (bottom 38%) ── */}
-      <View style={[styles.infoSection, { backgroundColor: C.darkWarm }]}>
-        {/* Pantry match pill */}
-        <View style={[styles.matchPill, { backgroundColor: matchBgRgba, borderColor: matchColor + "55" }]}>
-          <View style={[styles.matchDot, { backgroundColor: matchColor }]} />
-          <Text style={styles.matchPillText}>{pantryMatchScore}% pantry match</Text>
-        </View>
+      {/* ── BOTTOM INFO OVERLAY ── */}
+      <View style={styles.infoOverlay}>
+        {/* Dark scrim behind text */}
+        <View style={styles.infoScrim} />
 
-        {/* Recipe title */}
-        <Text style={styles.recipeTitle} numberOfLines={2}>{recipe.title}</Text>
-
-        {/* Meta row */}
-        <Text style={styles.metaRow} numberOfLines={1}>
-          {recipe.cuisine} · ⏱ {recipe.prepTime + recipe.cookTime}m · 🔥 {recipe.calories} kcal · ⭐ {recipe.rating}
-        </Text>
-
-        {/* Pantry / shopping tags */}
-        <View style={styles.tagsRow}>
-          <View style={styles.tagPill}>
-            <Text style={styles.tagText}>✓ {matchedCount}/{recipe.ingredients.length} in pantry</Text>
+        <View style={styles.infoContent}>
+          {/* Pantry match pill */}
+          <View style={[styles.matchPill, { backgroundColor: matchBgRgba, borderColor: matchColor + "55" }]}>
+            <View style={[styles.matchDot, { backgroundColor: matchColor }]} />
+            <Text style={styles.matchPillText}>{pantryMatchScore}% pantry match</Text>
           </View>
-          {missingCount > 0 && (
-            <View style={[styles.tagPillAmber, { backgroundColor: "rgba(245,166,35,0.18)", borderColor: "rgba(245,166,35,0.40)" }]}>
-              <Text style={styles.tagText}>+{missingCount} to buy</Text>
+
+          {/* Recipe title */}
+          <Text style={styles.recipeTitle} numberOfLines={2}>{recipe.title}</Text>
+
+          {/* Meta row */}
+          <Text style={styles.metaRow} numberOfLines={1}>
+            {recipe.cuisine} · ⏱ {recipe.prepTime + recipe.cookTime}m · 🔥 {recipe.calories} kcal · ⭐ {recipe.rating}
+          </Text>
+
+          {/* Pantry / shopping tags */}
+          <View style={styles.tagsRow}>
+            <View style={styles.tagPill}>
+              <Text style={styles.tagText}>✓ {matchedCount}/{recipe.ingredients.length} in pantry</Text>
             </View>
-          )}
+            {missingCount > 0 && (
+              <View style={[styles.tagPillAmber, { backgroundColor: "rgba(245,166,35,0.18)", borderColor: "rgba(245,166,35,0.40)" }]}>
+                <Text style={styles.tagText}>+{missingCount} to buy</Text>
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
@@ -337,19 +335,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
   },
-  imageFade: {
+  infoOverlay: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    height: 72,
-    backgroundColor: "rgba(28,20,16,0.72)",
   },
-  infoSection: {
-    flex: 1,
+  infoScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(10,6,4,0.62)",
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  infoContent: {
     paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 16,
+    paddingTop: 28,
+    paddingBottom: 18,
     gap: 7,
   },
   matchPill: {
