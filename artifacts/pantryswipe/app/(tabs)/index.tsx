@@ -104,7 +104,7 @@ type Particle = { id: string; emoji: string; anim: Animated.ValueXY; opacity: An
 const HEADER_CONTENT_H = 58;
 const SEARCH_H = 54;
 const MOOD_H = 48;
-const BANNER_H = 50;
+
 const TAB_BAR_H = Platform.OS === "web" ? 68 : 60;
 
 export default function HomeScreen() {
@@ -115,7 +115,6 @@ export default function HomeScreen() {
   const { userProfile, getPantryMatchScore, saveRecipe, pantryItems, liveRecipes, getPersonalizedRecipes, trackSwipe } = useApp();
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
-  const hasBanner = pantryItems.length > 0;
 
   const HEADER_TOTAL = topPadding + 14 + HEADER_CONTENT_H;
   const deckHeight = Math.max(
@@ -154,8 +153,6 @@ export default function HomeScreen() {
   const [customServingInput, setCustomServingInput] = useState("");
   const [programmaticSwipe, setProgrammaticSwipe] = useState<"left" | "right" | "up" | null>(null);
   const [focusKey, setFocusKey] = useState(0);
-  const [expiryDismissed, setExpiryDismissed] = useState(false);
-  const [showExpiryRecipes, setShowExpiryRecipes] = useState(false);
 
   // ── Tutorial state ──
   const [showTutorial, setShowTutorial] = useState(false);
@@ -174,8 +171,6 @@ export default function HomeScreen() {
   const tutRunning = useRef(false);
 
   const saveToastAnim = useRef(new Animated.Value(0)).current;
-  const matchCountAnim = useRef(new Animated.Value(0)).current;
-  const [displayMatchCount, setDisplayMatchCount] = useState(0);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening";
@@ -183,12 +178,6 @@ export default function HomeScreen() {
   const visibleRecipes = filteredRecipes.slice(currentIndex, currentIndex + 3);
   const matchCount = filteredRecipes.filter((r) => getPantryMatchScore(r) >= 60).length;
   const expiringItems = pantryItems.filter((i) => i.status === "Expiring" || i.status === "Expired");
-  const expiryIngredient = expiringItems[0]?.name ?? "";
-  const expiryRecipes = expiryIngredient
-    ? liveRecipes
-        .filter((r) => r.ingredients.some((ing) => ing.name.toLowerCase().includes(expiryIngredient.toLowerCase())))
-        .slice(0, 8)
-    : [];
   const noMoreCards = currentIndex >= filteredRecipes.length;
 
   // ── Check if tutorial has been seen ──
@@ -251,13 +240,6 @@ export default function HomeScreen() {
     });
   };
 
-  useEffect(() => {
-    if (matchCount === 0) return;
-    matchCountAnim.setValue(0);
-    const listener = matchCountAnim.addListener(({ value }) => setDisplayMatchCount(Math.round(value)));
-    Animated.timing(matchCountAnim, { toValue: matchCount, duration: 900, useNativeDriver: false }).start();
-    return () => matchCountAnim.removeListener(listener);
-  }, [matchCount]);
 
   const applyMood = useCallback((mood: string) => {
     const moodObj = MOODS.find((m) => m.label === mood);
@@ -426,9 +408,11 @@ export default function HomeScreen() {
             onPress={() => router.push("/notifications")}
           >
             <Feather name="bell" size={18} color={colors.primary} />
-            {unreadCount > 0 && (
+            {(unreadCount + expiringItems.length) > 0 && (
               <View style={[styles.notifBadge, { backgroundColor: colors.danger }]}>
-                <Text style={styles.notifBadgeText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+                <Text style={styles.notifBadgeText}>
+                  {(unreadCount + expiringItems.length) > 9 ? "9+" : unreadCount + expiringItems.length}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
@@ -535,49 +519,6 @@ export default function HomeScreen() {
 
       {/* ── SWIPE DECK ── */}
       <View style={styles.deckWrapper}>
-
-        {/* ── Floating banners — absolutely overlaid on top of deck, no layout shift ── */}
-        <View style={styles.bannerFloat} pointerEvents="box-none">
-          {activeIngredient ? (
-            <TouchableOpacity
-              style={[styles.bannerPill, { backgroundColor: colors.herbGreen + "F2", borderColor: colors.herbGreen }]}
-              onPress={resetCards}
-              activeOpacity={0.8}
-            >
-              <Text style={{ fontSize: 13 }}>🌿</Text>
-              <Text style={[styles.bannerPillText, { color: "#fff", fontFamily: "Inter_500Medium" }]} numberOfLines={1}>
-                Filtering by <Text style={{ fontFamily: "Inter_700Bold" }}>{activeIngredient}</Text>
-              </Text>
-              <Feather name="x" size={13} color="#fff" />
-            </TouchableOpacity>
-          ) : expiringItems.length > 0 && !expiryDismissed ? (
-            <TouchableOpacity
-              style={[styles.bannerPill, { backgroundColor: "#FFF8EBF5", borderColor: "#F59E0B" }]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowExpiryRecipes(true); }}
-              activeOpacity={0.85}
-            >
-              <Text style={{ fontSize: 13 }}>⚠️</Text>
-              <Text style={[styles.bannerPillText, { color: "#78480C", fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
-                <Text style={{ fontFamily: "Inter_600SemiBold" }}>{expiringItems[0].name}</Text>
-                {expiringItems.length > 1 ? ` +${expiringItems.length - 1} more` : ""}{" "}expiring — see recipes!
-              </Text>
-              <TouchableOpacity
-                onPress={(e) => { e.stopPropagation(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setExpiryDismissed(true); }}
-                hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-              >
-                <Feather name="x" size={14} color="#92400E" />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ) : hasBanner ? (
-            <View style={[styles.bannerPill, { backgroundColor: colors.card + "F5", borderColor: colors.border }]}>
-              <Text style={{ fontSize: 13 }}>🥘</Text>
-              <Text style={[styles.bannerPillText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                <Text style={[{ color: colors.primary, fontFamily: "SpaceGrotesk_700Bold" }]}>{displayMatchCount} </Text>
-                <Text style={{ fontFamily: "Inter_500Medium" }}>recipes you can cook now</Text>
-              </Text>
-            </View>
-          ) : null}
-        </View>
 
         {noMoreCards ? (
           <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -716,75 +657,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Animated.View>
       )}
-
-      {/* ── EXPIRY RECIPES MODAL ── */}
-      <Modal visible={showExpiryRecipes} transparent animationType="slide" onRequestClose={() => setShowExpiryRecipes(false)}>
-        <TouchableOpacity style={styles.expiryModalOverlay} activeOpacity={1} onPress={() => setShowExpiryRecipes(false)} />
-        <View style={[styles.expiryModalSheet, { backgroundColor: colors.card }]}>
-          <View style={[styles.expiryModalHandle, { backgroundColor: colors.border }]} />
-          {/* Header */}
-          <View style={styles.expiryModalHeader}>
-            <View>
-              <Text style={[styles.expiryModalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                Use up your {expiryIngredient}
-              </Text>
-              <Text style={[styles.expiryModalSub, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
-                {expiryRecipes.length > 0 ? `${expiryRecipes.length} recipes found` : "No matching recipes yet"}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.expiryModalCloseBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
-              onPress={() => setShowExpiryRecipes(false)}
-            >
-              <Feather name="x" size={18} color={colors.foreground} />
-            </TouchableOpacity>
-          </View>
-
-          {expiryRecipes.length === 0 ? (
-            <View style={styles.expiryModalEmpty}>
-              <Text style={{ fontSize: 40 }}>🤷</Text>
-              <Text style={[styles.expiryModalEmptyText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-                No recipes found for {expiryIngredient}.{"\n"}Try adding more pantry items!
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={expiryRecipes}
-              keyExtractor={(r) => r.id}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.expiryModalList}
-              renderItem={({ item }) => {
-                const match = getPantryMatchScore(item);
-                return (
-                  <TouchableOpacity
-                    style={[styles.expiryRecipeRow, { backgroundColor: colors.background, borderColor: colors.border }]}
-                    onPress={() => { setShowExpiryRecipes(false); router.push(`/recipe/${item.id}`); }}
-                    activeOpacity={0.75}
-                  >
-                    <View style={styles.expiryRecipeEmoji}>
-                      <Text style={{ fontSize: 28 }}>🍽️</Text>
-                    </View>
-                    <View style={{ flex: 1, gap: 3 }}>
-                      <Text style={[styles.expiryRecipeName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={[styles.expiryRecipeMeta, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
-                        {item.cuisine} · {item.prepTime + item.cookTime}m · {item.calories} kcal
-                      </Text>
-                    </View>
-                    <View style={[styles.expiryMatchPill, { backgroundColor: match >= 60 ? "#4CAF7620" : colors.border }]}>
-                      <Text style={[styles.expiryMatchText, { color: match >= 60 ? "#4CAF76" : colors.textMuted, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
-                        {match}%
-                      </Text>
-                    </View>
-                    <Feather name="chevron-right" size={16} color={colors.textMuted} />
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          )}
-        </View>
-      </Modal>
 
       {/* ── SEARCH MODAL ── */}
       <Modal
@@ -1046,54 +918,6 @@ const styles = StyleSheet.create({
     height: 50, borderRadius: 14, borderWidth: 1.5,
     paddingHorizontal: 16, fontSize: 17, fontFamily: "Inter_500Medium", marginBottom: 12,
   },
-
-  // ── Floating banner overlay — sits above swipe deck, no layout shift ──
-  bannerFloat: {
-    position: "absolute", top: 10, left: 16, right: 16, zIndex: 20,
-    pointerEvents: "box-none" as any,
-  },
-  bannerPill: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 20, borderWidth: 1,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4,
-  },
-  bannerPillText: { flex: 1, fontSize: 13 },
-
-  // ── Expiry recipes modal ──
-  expiryModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
-  expiryModalSheet: {
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingTop: 12, paddingHorizontal: 16, maxHeight: "72%",
-  },
-  expiryModalHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 16 },
-  expiryModalHeader: {
-    flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16,
-  },
-  expiryModalTitle: { fontSize: 20, letterSpacing: -0.3 },
-  expiryModalSub: { fontSize: 13, marginTop: 3 },
-  expiryModalCloseBtn: {
-    width: 36, height: 36, borderRadius: 18, borderWidth: 1,
-    alignItems: "center", justifyContent: "center",
-  },
-  expiryModalEmpty: { alignItems: "center", paddingVertical: 40, gap: 12 },
-  expiryModalEmptyText: { fontSize: 14, textAlign: "center", lineHeight: 22 },
-  expiryModalList: { gap: 10, paddingBottom: 40 },
-  expiryRecipeRow: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    borderRadius: 14, borderWidth: 1, padding: 12,
-  },
-  expiryRecipeEmoji: {
-    width: 52, height: 52, borderRadius: 12,
-    backgroundColor: "#F5A62315", alignItems: "center", justifyContent: "center",
-  },
-  expiryRecipeName: { fontSize: 15 },
-  expiryRecipeMeta: { fontSize: 12 },
-  expiryMatchPill: {
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
-  },
-  expiryMatchText: { fontSize: 12 },
-
 
   // ── Deck ──
   deckWrapper: { alignItems: "center", position: "relative", flex: 1 },

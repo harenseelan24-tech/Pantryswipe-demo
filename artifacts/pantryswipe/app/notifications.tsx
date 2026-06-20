@@ -6,6 +6,7 @@ import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useApp } from "@/context/AppContext";
 import { STORAGE_KEYS } from "@/constants/storageKeys";
 
 // ── Intent key shared with index.tsx ─────────────────────────────────────────
@@ -42,7 +43,7 @@ function timeAgo(hoursBack: number): string {
 }
 
 // ── Build notification list ───────────────────────────────────────────────────
-function buildNotifications(): AppNotif[] {
+function buildNotifications(expiringItems: Array<{ name: string; status: string }>): AppNotif[] {
   const h = new Date().getHours();
   const notifs: AppNotif[] = [];
 
@@ -83,14 +84,27 @@ function buildNotifications(): AppNotif[] {
   // Reverse meal notifs so most recent is first
   notifs.reverse();
 
-  // Activity notifications
+  // ── Expiry alerts from real pantry data (most urgent first) ──
+  expiringItems.forEach((item, idx) => {
+    const isExpired = item.status === "Expired";
+    notifs.push({
+      id: `a_expiry_${item.name.toLowerCase().replace(/\s+/g, "_")}`,
+      featherIcon: "alert-triangle",
+      color: isExpired ? "#E84040" : "#F59E0B",
+      title: isExpired
+        ? `${item.name} has expired ⚠️`
+        : `${item.name} expires soon ⏰`,
+      body: isExpired
+        ? `${item.name} is past its date. Use it up now or it'll go to waste — tap to find recipes.`
+        : `${item.name} is expiring soon. Tap to see what you can cook with it before it's too late.`,
+      hoursBack: isExpired ? idx * 2 : idx * 3 + 1,
+      section: "activity",
+      action: { kind: "intent", type: "ingredient", value: item.name },
+    });
+  });
+
+  // ── Static activity notifications ──
   notifs.push(
-    {
-      id: "a_spinach", featherIcon: "alert-triangle", color: "#E84040",
-      title: "Spinach expires tomorrow", body: "Use it up! Tap to see recipes you can cook with spinach right now.",
-      hoursBack: 1.5, section: "activity",
-      action: { kind: "intent", type: "ingredient", value: "Spinach" },
-    },
     {
       id: "a_carbonara", featherIcon: "check-circle", color: "#4CAF76",
       title: "Carbonara is ready to cook! 🍝", body: "You now have all the ingredients. Ready to start cooking?",
@@ -121,12 +135,6 @@ function buildNotifications(): AppNotif[] {
       hoursBack: 26, section: "activity",
       action: { kind: "tab", path: "/(tabs)/social" },
     },
-    {
-      id: "a_chicken", featherIcon: "alert-triangle", color: "#E84040",
-      title: "Chicken expires in 2 days", body: "Cook it tonight! Tap to see what you can make with chicken.",
-      hoursBack: 48, section: "activity",
-      action: { kind: "intent", type: "ingredient", value: "Chicken" },
-    },
   );
 
   return notifs;
@@ -139,6 +147,11 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const { markAllRead, clearAll, cleared } = useNotifications();
+  const { pantryItems } = useApp();
+
+  const expiringItems = pantryItems.filter(
+    (i) => i.status === "Expiring" || i.status === "Expired"
+  );
 
   // Mark all read as soon as screen opens
   useEffect(() => { markAllRead(); }, []);
@@ -158,7 +171,7 @@ export default function NotificationsScreen() {
     await clearAll();
   };
 
-  const notifs = buildNotifications();
+  const notifs = buildNotifications(expiringItems);
   const mealNotifs = notifs.filter((n) => n.section === "meal");
   const activityNotifs = notifs.filter((n) => n.section === "activity");
 
