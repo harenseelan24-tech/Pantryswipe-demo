@@ -194,7 +194,7 @@ export default function CuisineDetailScreen() {
       {/* ── Hero gradient ── */}
       <LinearGradient
         colors={[accent, accent + "88", colors.background] as readonly [string, string, string]}
-        style={[styles.hero, { paddingTop: topPadding + 16 }]}
+        style={[styles.hero, { paddingTop: topPadding + 8 }]}
       >
         {/* Glow ring behind emoji */}
         <View style={[styles.emojiGlow, { backgroundColor: accent + "33" }]}>
@@ -366,11 +366,13 @@ export default function CuisineDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  // Floating back button
+  // Floating back button — explicit 38×38 so it can't intercept touches elsewhere
   floatingBackWrap: {
     position: "absolute",
     left: 16,
     zIndex: 10,
+    width: 38,
+    height: 38,
   },
   floatingBack: {
     width: 38,
@@ -380,44 +382,44 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // Hero
+  // Hero — compact
   hero: {
     alignItems: "center",
-    paddingBottom: 36,
+    paddingBottom: 20,
     paddingHorizontal: 24,
   },
   emojiGlow: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
-    marginTop: 8,
+    marginBottom: 12,
+    marginTop: 4,
   },
   emojiGlowInner: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: "center",
     justifyContent: "center",
   },
-  heroEmoji: { fontSize: 52 },
+  heroEmoji: { fontSize: 34 },
   heroName: {
-    fontSize: 30,
+    fontSize: 26,
     fontFamily: "Inter_700Bold",
     color: "#FFFFFF",
-    letterSpacing: -0.8,
+    letterSpacing: -0.6,
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   heroDesc: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: "rgba(255,255,255,0.72)",
     textAlign: "center",
-    lineHeight: 20,
-    maxWidth: 300,
+    lineHeight: 18,
+    maxWidth: 290,
   },
 
   // Stats
