@@ -825,10 +825,30 @@ export default function PantryScreen() {
       <Modal visible={showExpiryModal} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowExpiryModal(false)}>
         <View style={[styles.modal, { backgroundColor: colors.background }]}>
           <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-          <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Expiring Soon 🕐</Text>
+
+          {/* ── Header ── */}
+          <View style={[styles.expiryModalAccentBar, { backgroundColor: "#EF4444" }]} />
+          <View style={styles.expiryModalHeader}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                <View style={[styles.intelligenceEyebrowDot, { backgroundColor: "#EF4444" }]} />
+                <Text style={{ fontSize: 10, letterSpacing: 1, fontFamily: "Inter_600SemiBold", color: "#EF4444" }}>USE THESE FIRST</Text>
+              </View>
+              <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 0 }]}>
+                Expiring Soon
+              </Text>
+            </View>
+            <View style={[styles.expiryCountPill, { backgroundColor: "#FEF2F2", borderColor: "#FECACA" }]}>
+              <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: "#DC2626" }}>{expiringItems.length}</Text>
+              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: "#EF4444" }}> item{expiringItems.length !== 1 ? "s" : ""}</Text>
+            </View>
+          </View>
+
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 24 }}>
             {expiringItems.map((item) => {
               const daysLeft = item.expiryDate ? getDaysUntilExpiry(item.expiryDate) : null;
+              const isExpired = daysLeft !== null && daysLeft < 0;
+              const accentColor = isExpired ? "#9CA3AF" : daysLeft !== null && daysLeft <= 1 ? "#DC2626" : "#EF4444";
               return (
                 <SwipeableRow
                   key={item.id}
@@ -838,42 +858,76 @@ export default function PantryScreen() {
                     removeFromPantry(item.id);
                   }}
                 >
-                  <View style={[styles.expiryItem, { backgroundColor: colors.card, borderColor: "#EF444430" }]}>
-                    <Text style={{ fontSize: 28 }}>{item.emoji}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.itemName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{item.name}</Text>
-                      <Text style={[styles.itemDetail, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>{item.quantity} {item.unit} · {item.category}</Text>
-                      {daysLeft !== null && (
-                        <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", marginTop: 3, color: daysLeft < 0 ? "#9CA3AF" : daysLeft <= 1 ? "#DC2626" : "#EF4444" }}>
-                          {formatCountdown(daysLeft)}
+                  {/* Left accent bar + card (same pattern as pantry item list) */}
+                  <View style={{ flexDirection: "row", borderRadius: 16, overflow: "hidden" }}>
+                    <View style={{ width: 4, backgroundColor: accentColor }} />
+                    <View style={[styles.expiryItemInner, { backgroundColor: colors.card, borderColor: isExpired ? colors.border : "#EF444430" }]}>
+                      <View style={[styles.expiryEmojiBox, { backgroundColor: isExpired ? colors.muted : "#FEF2F2" }]}>
+                        <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.itemName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{item.name}</Text>
+                        <Text style={[styles.itemDetail, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+                          {item.quantity} {item.unit} · {item.category}
                         </Text>
-                      )}
-                    </View>
-                    <View style={[styles.statusBadge, { backgroundColor: daysLeft !== null && daysLeft < 0 ? "#F9FAFB" : "#FEF2F2" }]}>
-                      <View style={[styles.statusDot, { backgroundColor: daysLeft !== null && daysLeft < 0 ? "#9CA3AF" : "#EF4444" }]} />
-                      <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", color: daysLeft !== null && daysLeft < 0 ? "#6B7280" : "#DC2626" }}>
-                        {daysLeft !== null && daysLeft < 0 ? "Expired" : "Expiring"}
-                      </Text>
+                        {daysLeft !== null && (
+                          <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", marginTop: 3, color: accentColor }}>
+                            {formatCountdown(daysLeft)}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: isExpired ? colors.muted : "#FEF2F2" }]}>
+                        <View style={[styles.statusDot, { backgroundColor: accentColor }]} />
+                        <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: isExpired ? colors.textMuted : "#DC2626" }}>
+                          {isExpired ? "Expired" : "Expiring"}
+                        </Text>
+                      </View>
                     </View>
                   </View>
                 </SwipeableRow>
               );
             })}
-            <Text style={[styles.expiryHint, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Recipes that use these ingredients:</Text>
+
+            {/* Suggested recipes section */}
             {liveRecipes.filter((r: import("@/data/mockData").Recipe) =>
               r.ingredients.some((ing: { name: string }) => expiringItems.some((e) => e.name.toLowerCase().includes(ing.name.toLowerCase().split(" ")[0])))
-            ).slice(0, 3).map((r: import("@/data/mockData").Recipe) => (
-              <View key={r.id} style={[styles.expiryRecipe, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Feather name="book-open" size={16} color={colors.primary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.itemName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{r.title}</Text>
-                  <Text style={[styles.itemDetail, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{r.prepTime + r.cookTime} min · {r.calories} kcal</Text>
+            ).slice(0, 3).length > 0 && (
+              <View style={[styles.expiryRecipeSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <View style={[styles.intelligenceIcon, { backgroundColor: colors.primary + "18" }]}>
+                    <Feather name="book-open" size={14} color={colors.primary} />
+                  </View>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.primary, letterSpacing: 0.5 }}>
+                    RECIPES THAT USE THESE
+                  </Text>
                 </View>
+                {liveRecipes.filter((r: import("@/data/mockData").Recipe) =>
+                  r.ingredients.some((ing: { name: string }) => expiringItems.some((e) => e.name.toLowerCase().includes(ing.name.toLowerCase().split(" ")[0])))
+                ).slice(0, 3).map((r: import("@/data/mockData").Recipe) => (
+                  <TouchableOpacity
+                    key={r.id}
+                    style={[styles.expiryRecipeRow, { borderColor: colors.border }]}
+                    onPress={() => { setShowExpiryModal(false); router.push(`/recipe/${r.id}`); }}
+                    activeOpacity={0.75}
+                  >
+                    <View style={[styles.expiryRecipeIcon, { backgroundColor: colors.primary + "14" }]}>
+                      <Text style={{ fontSize: 18 }}>{CUISINE_EMOJIS[r.cuisine] ?? "🍽"}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.itemName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>{r.title}</Text>
+                      <Text style={[styles.itemDetail, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                        {r.prepTime + r.cookTime} min · {r.calories} kcal
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={15} color={colors.textMuted} />
+                  </TouchableOpacity>
+                ))}
               </View>
-            ))}
+            )}
           </ScrollView>
-          <TouchableOpacity style={[styles.modalBtnFull, { backgroundColor: colors.primary }]} onPress={() => setShowExpiryModal(false)}>
-            <Text style={[styles.modalBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>Got it</Text>
+
+          <TouchableOpacity style={[styles.modalBtnFull, { backgroundColor: "#EF4444" }]} onPress={() => setShowExpiryModal(false)}>
+            <Text style={[styles.modalBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>Got it, I'll use these first ✓</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -1291,7 +1345,23 @@ export default function PantryScreen() {
               )}
             </View>
 
-            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 14 }} />
+            {/* Status summary pills */}
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
+              {activeRanOut.length > 0 && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FECACA" }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#DC2626" }} />
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#DC2626" }}>{activeRanOut.length} ran out</Text>
+                </View>
+              )}
+              {needRestockItems.filter(i => i.quantity > 0).length > 0 && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: "#FFFBEB", borderWidth: 1, borderColor: "#FDE68A" }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#D97706" }} />
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#B45309" }}>{needRestockItems.filter(i => i.quantity > 0).length} running low</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 14 }} />
 
             {/* Unchecked warning */}
             {showUncheckedWarning && (
@@ -1323,6 +1393,7 @@ export default function PantryScreen() {
               {needRestockItems.map((item) => {
                 const isChecked = checkedItems.has(item.id);
                 const isRanOut = item.quantity === 0;
+                const accentColor = isRanOut ? "#DC2626" : "#F59E0B";
                 return (
                   <SwipeableRow
                     key={item.id}
@@ -1333,31 +1404,33 @@ export default function PantryScreen() {
                       setCheckedItems((prev) => { const n = new Set(prev); n.delete(item.id); return n; });
                     }}
                   >
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setCheckedItems((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(item.id)) next.delete(item.id);
-                          else next.add(item.id);
-                          return next;
-                        });
-                        setShowUncheckedWarning(false);
-                      }}
-                      style={[
-                        styles.shoppingRow,
-                        {
-                          backgroundColor: isChecked ? colors.muted : colors.card,
-                          borderColor: colors.border,
-                          opacity: isChecked ? 0.6 : 1,
-                        },
-                      ]}
-                    >
+                    {/* Left accent bar + row (same pattern as pantry item list) */}
+                    <View style={{ flexDirection: "row", borderRadius: 16, overflow: "hidden", opacity: isChecked ? 0.55 : 1 }}>
+                      <View style={{ width: 4, backgroundColor: isChecked ? colors.border : accentColor }} />
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setCheckedItems((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(item.id)) next.delete(item.id);
+                            else next.add(item.id);
+                            return next;
+                          });
+                          setShowUncheckedWarning(false);
+                        }}
+                        style={[
+                          styles.shoppingRowInner,
+                          {
+                            backgroundColor: isChecked ? colors.muted : colors.card,
+                            borderColor: colors.border,
+                          },
+                        ]}
+                      >
                       <View style={[styles.shoppingCheckbox, { backgroundColor: isChecked ? colors.secondary : "transparent", borderColor: isChecked ? colors.secondary : colors.border }]}>
                         {isChecked && <Feather name="check" size={12} color="#fff" />}
                       </View>
-                      <Text style={{ fontSize: 24, marginRight: 4 }}>{item.emoji}</Text>
+                      <Text style={{ fontSize: 22, marginRight: 4 }}>{item.emoji}</Text>
                       <View style={{ flex: 1 }}>
                         <Text style={[{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.foreground }, isChecked && { textDecorationLine: "line-through", color: colors.textMuted }]}>
                           {item.name}
@@ -1367,13 +1440,14 @@ export default function PantryScreen() {
                         </Text>
                       </View>
                       {!isChecked && (
-                        <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: isRanOut ? "#EF444415" : "#E8402215" }}>
-                          <Text style={{ fontSize: 11, color: isRanOut ? "#DC2626" : "#E84040", fontFamily: "Inter_600SemiBold" }}>
+                        <View style={{ paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, backgroundColor: isRanOut ? "#FEF2F2" : "#FFFBEB", borderWidth: 1, borderColor: isRanOut ? "#FECACA" : "#FDE68A" }}>
+                          <Text style={{ fontSize: 11, color: isRanOut ? "#DC2626" : "#B45309", fontFamily: "Inter_700Bold" }}>
                             {isRanOut ? "Out" : "Low"}
                           </Text>
                         </View>
                       )}
-                    </TouchableOpacity>
+                      </TouchableOpacity>
+                    </View>
                   </SwipeableRow>
                 );
               })}
@@ -1554,8 +1628,44 @@ const styles = StyleSheet.create({
   modalBtn: { flex: 1, height: 52, borderRadius: 100, alignItems: "center", justifyContent: "center" },
   modalBtnText: { fontSize: 15 },
   expiryItem: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
+  expiryItemInner: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 12, paddingRight: 14,
+    borderTopRightRadius: 16, borderBottomRightRadius: 16,
+    borderWidth: 1, borderLeftWidth: 0, minHeight: 70,
+  },
+  expiryEmojiBox: {
+    width: 46, height: 46, borderRadius: 12,
+    alignItems: "center", justifyContent: "center",
+  },
+  expiryModalAccentBar: { height: 3, marginBottom: 16 },
+  expiryModalHeader: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between", marginBottom: 18,
+  },
+  expiryCountPill: {
+    flexDirection: "row", alignItems: "baseline",
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 12, borderWidth: 1,
+  },
+  expiryRecipeSection: {
+    borderRadius: 16, borderWidth: 1, padding: 14, marginTop: 4,
+  },
+  expiryRecipeRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingVertical: 10, borderBottomWidth: 1,
+  },
+  expiryRecipeIcon: {
+    width: 38, height: 38, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+  },
   expiryHint: { fontSize: 13, marginTop: 8 },
   expiryRecipe: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
+  shoppingRowInner: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 14, borderTopRightRadius: 16, borderBottomRightRadius: 16,
+    borderWidth: 1, borderLeftWidth: 0,
+  },
 
   // ── Barcode modal ──
   barcodeHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
