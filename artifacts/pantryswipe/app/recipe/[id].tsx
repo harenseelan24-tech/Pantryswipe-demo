@@ -67,21 +67,46 @@ function detectMeat(name: string): string | null {
   return null;
 }
 
+// Replace ingredient terms inside step instruction text (case-insensitive, word-boundary aware)
+function substituteInSteps(
+  steps: Array<{ step: number; instruction: string; timerMinutes?: number }>,
+  subsMap: Record<string, string>
+): Array<{ step: number; instruction: string; timerMinutes?: number }> {
+  return steps.map((step) => {
+    let instruction = step.instruction;
+    for (const [original, replacement] of Object.entries(subsMap)) {
+      const escaped = original.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`\\b${escaped}(?:s|es|ed|ing)?\\b`, "gi");
+      instruction = instruction.replace(regex, (match) => {
+        const core = replacement;
+        if (match[0] === match[0].toUpperCase() && match[0] !== match[0].toLowerCase()) {
+          return core.charAt(0).toUpperCase() + core.slice(1);
+        }
+        return core.toLowerCase();
+      });
+    }
+    return { ...step, instruction };
+  });
+}
+
 function applyLocalVariation(
   recipe: { title: string; ingredients: Array<{ name: string; amount: string; inPantry: boolean }>; steps: Array<{ step: number; instruction: string; timerMinutes?: number }> },
   variation: string
 ): { notes: string; ingredients: Array<{ name: string; amount: string; inPantry: boolean }>; steps: typeof recipe.steps } {
   let ingredients = [...recipe.ingredients.map((i) => ({ ...i }))];
   let notes = "";
-  const steps = recipe.steps;
+  let steps = [...recipe.steps.map((s) => ({ ...s }))];
   const changed: string[] = [];
 
   if (variation === "Make Vegetarian") {
+    // Build substitution map for steps
+    const stepSubsMap: Record<string, string> = {};
     ingredients = ingredients.map((ing) => {
       const meatKey = detectMeat(ing.name);
       if (meatKey) {
         const sub = VEGETARIAN_SUBS[meatKey] ?? `Plant-based ${ing.name}`;
         changed.push(`${ing.name} → ${sub}`);
+        stepSubsMap[meatKey] = sub.toLowerCase();
         return { name: sub, amount: ing.amount, inPantry: false };
       }
       return ing;
@@ -92,12 +117,25 @@ function applyLocalVariation(
     if (changed.length === 0) {
       ingredients = [...ingredients, { name: "Roasted cherry tomatoes", amount: "100g", inPantry: false }, { name: "Baby spinach", amount: "40g", inPantry: false }];
     }
+    // Apply substitution names into step text
+    steps = substituteInSteps(steps, stepSubsMap);
+    // Append a plant-based cooking tip to the final step
+    if (steps.length > 0) {
+      const last = steps[steps.length - 1];
+      steps[steps.length - 1] = {
+        ...last,
+        instruction: last.instruction + "\n💡 Plant-based tip: cook firm tofu or tempeh on high heat without moving it for 2–3 min per side to develop colour and texture similar to the original protein.",
+      };
+    }
+
   } else if (variation === "Make Halal") {
+    const stepSubsMap: Record<string, string> = {};
     ingredients = ingredients.map((ing) => {
       const n = ing.name.toLowerCase();
       for (const [key, sub] of Object.entries(HALAL_SUBS)) {
         if (n.includes(key)) {
           changed.push(`${ing.name} → ${sub}`);
+          stepSubsMap[key] = sub.toLowerCase();
           return { name: sub, amount: ing.amount, inPantry: false };
         }
       }
@@ -106,6 +144,8 @@ function applyLocalVariation(
     notes = changed.length > 0
       ? `Halal swaps: ${changed.join("; ")}. All substitutes are widely available at halal butchers or supermarkets.`
       : "This recipe is already halal-compatible — no pork or alcohol-based ingredients detected.";
+    steps = substituteInSteps(steps, stepSubsMap);
+
   } else if (variation === "High Protein") {
     const additions = [
       { name: "Extra egg whites", amount: "2", inPantry: false },
@@ -113,6 +153,17 @@ function applyLocalVariation(
     ];
     ingredients = [...ingredients, ...additions];
     notes = "Added egg whites and Greek yogurt to boost protein by ~65%. Stir yogurt in off-heat at the very end for creaminess without curdling.";
+    // Append a new final step for the protein additions
+    const newStepNum = steps.length + 1;
+    steps = [
+      ...steps,
+      {
+        step: newStepNum,
+        instruction: "Remove the pan from heat. Quickly whisk 2 egg whites until frothy and fold them through the mixture. Stir in 80 g Greek yogurt for extra creaminess. Do not return to heat — the residual warmth is enough to cook the egg whites through.",
+        timerMinutes: undefined,
+      },
+    ];
+
   } else if (variation === "Spicier") {
     const spiceAdd = [
       { name: "Red chilli flakes", amount: "1 tsp", inPantry: false },
@@ -120,12 +171,22 @@ function applyLocalVariation(
     ];
     ingredients = [...ingredients, ...spiceAdd];
     notes = "Added chilli flakes and fresh chilli. For maximum heat, add the sliced chilli when you first heat the oil. For medium heat, add with the other aromatics.";
+    // Inject heat instruction into the first step
+    if (steps.length > 0) {
+      steps[0] = {
+        ...steps[0],
+        instruction: "Add 1 tsp red chilli flakes and 1 sliced fresh red chilli to the oil before anything else. Cook 30 seconds until fragrant — this blooms the heat into the fat and infuses the whole dish.\n" + steps[0].instruction,
+      };
+    }
+
   } else if (variation === "Budget Version") {
+    const stepSubsMap: Record<string, string> = {};
     ingredients = ingredients.map((ing) => {
       const n = ing.name.toLowerCase();
       for (const [key, sub] of Object.entries(BUDGET_SUBS)) {
         if (n.includes(key)) {
           changed.push(`${ing.name} → ${sub}`);
+          stepSubsMap[key] = sub.toLowerCase();
           return { name: sub, amount: ing.amount, inPantry: true };
         }
       }
@@ -134,6 +195,8 @@ function applyLocalVariation(
     notes = changed.length > 0
       ? `Budget swaps: ${changed.join("; ")}. Saves ~40% on ingredient cost with minimal flavour difference.`
       : "This recipe is already budget-friendly. Tip: buy ingredients in bulk and freeze portions.";
+    steps = substituteInSteps(steps, stepSubsMap);
+
   } else if (variation === "Faster Version") {
     const fastIngredients = ingredients.map((ing) => {
       if (ing.name.toLowerCase().includes("dried") || ing.name.toLowerCase().includes("from scratch")) {
@@ -143,6 +206,17 @@ function applyLocalVariation(
     });
     ingredients = fastIngredients;
     notes = "Speed tips applied: use pre-minced garlic, canned pulses, and a hotter pan. Total time cut by ~35%. Skip resting times and use the microwave where noted.";
+    // Shorten timing references and add speed tips to steps
+    steps = steps.map((step) => {
+      let instruction = step.instruction
+        .replace(/\b(\d+)\s*-\s*(\d+)\s*minutes?\b/gi, (_, a, b) => `${Math.round(parseInt(a) * 0.65)}–${Math.round(parseInt(b) * 0.65)} minutes`)
+        .replace(/\b(\d+)\s*minutes?\b/gi, (_, n) => parseInt(n) > 5 ? `${Math.round(parseInt(n) * 0.65)} minutes` : `${n} minutes`)
+        .replace(/\b1\s*hour\b/gi, "35 minutes")
+        .replace(/\bovernight\b/gi, "30 minutes (or skip)")
+        .replace(/\bgarlic cloves?,\s*minced\b/gi, "pre-minced garlic (from jar)")
+        .replace(/\bdried\b/gi, "canned");
+      return { ...step, instruction, timerMinutes: step.timerMinutes ? Math.round(step.timerMinutes * 0.65) : undefined };
+    });
   }
 
   return { notes, ingredients, steps };
@@ -962,42 +1036,67 @@ export default function RecipeDetailScreen() {
 
           {/* Cooking Instructions */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Cooking Instructions</Text>
+            {/* Section header with eyebrow + optional "Adapted" badge */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={[styles.sectionEyebrow, { color: colors.mutedForeground }]}>STEP BY STEP</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 0 }]}>Cooking Instructions</Text>
+                {varCommitted && appliedVariation && (() => {
+                  const chipColor = AI_VARIATIONS.find((v) => v.label === appliedVariation)?.color ?? colors.saffron;
+                  return (
+                    <View style={[styles.adaptedBadge, { backgroundColor: chipColor + "18", borderColor: chipColor + "45" }]}>
+                      <View style={[styles.adaptedDot, { backgroundColor: chipColor }]} />
+                      <Text style={[styles.adaptedBadgeText, { color: chipColor }]}>Adapted</Text>
+                    </View>
+                  );
+                })()}
+              </View>
+            </View>
+
             {displaySteps.map((step) => {
               const done = completedSteps.includes(step.step);
-              const lines = step.instruction.split("\n").map((l) => l.trim()).filter(Boolean);
+              const chipColor = varCommitted && appliedVariation
+                ? (AI_VARIATIONS.find((v) => v.label === appliedVariation)?.color ?? colors.saffron)
+                : null;
               return (
                 <TouchableOpacity
                   key={step.step}
                   style={[
                     styles.stepCard,
-                    { backgroundColor: done ? colors.secondary + "10" : colors.card, borderColor: done ? colors.secondary + "30" : colors.border },
+                    {
+                      backgroundColor: done ? colors.secondary + "10" : colors.card,
+                      borderColor: done ? colors.secondary + "30" : colors.border,
+                    },
                   ]}
                   onPress={() => toggleStep(step.step)}
                 >
-                  <View style={[styles.stepNum, { backgroundColor: done ? colors.secondary : colors.muted }]}>
+                  {/* Thin left accent when variation is committed */}
+                  {chipColor && !done && (
+                    <View style={[styles.stepAccentBar, { backgroundColor: chipColor }]} />
+                  )}
+                  <View style={[styles.stepNum, { backgroundColor: done ? colors.secondary : chipColor ? chipColor + "22" : colors.muted }]}>
                     {done ? (
                       <Feather name="check" size={14} color="#fff" />
                     ) : (
-                      <Text style={[styles.stepNumText, { color: colors.foreground }]}>{step.step}</Text>
+                      <Text style={[styles.stepNumText, { color: chipColor ?? colors.foreground }]}>{step.step}</Text>
                     )}
                   </View>
                   <View style={{ flex: 1, gap: 5 }}>
                     {splitToPoints(step.instruction).map((line, idx) => (
                       <View key={idx} style={{ flexDirection: "row", gap: 7, alignItems: "flex-start" }}>
-                        <Text style={[styles.stepInstruction, { color: done ? colors.mutedForeground : colors.saffron, textDecorationLine: "none", marginTop: 1 }]}>•</Text>
-                        <Text style={[styles.stepInstruction, { flex: 1, color: done ? colors.mutedForeground : colors.foreground, textDecorationLine: done ? "line-through" : "none" }]}>
+                        <Text style={[styles.stepInstruction, { color: done ? colors.mutedForeground : (chipColor ?? colors.saffron), textDecorationLine: "none", marginTop: 1 }]}>•</Text>
+                        <Text style={[styles.stepInstruction, { flex: 1, fontSize: 14, lineHeight: 21, color: done ? colors.mutedForeground : colors.foreground, textDecorationLine: done ? "line-through" : "none" }]}>
                           {line.startsWith("•") ? line.slice(1).trim() : line}
                         </Text>
                       </View>
                     ))}
                     {step.timerMinutes && !done && (
                       <TouchableOpacity
-                        style={[styles.timerBtn, { backgroundColor: colors.saffron + "15" }]}
+                        style={[styles.timerBtn, { backgroundColor: (chipColor ?? colors.saffron) + "15" }]}
                         onPress={() => startTimer(step.timerMinutes!, `Step ${step.step}`)}
                       >
-                        <Feather name="clock" size={12} color={colors.saffron} />
-                        <Text style={[styles.timerBtnText, { color: colors.saffron }]}>▶ {step.timerMinutes} min timer</Text>
+                        <Feather name="clock" size={12} color={chipColor ?? colors.saffron} />
+                        <Text style={[styles.timerBtnText, { color: chipColor ?? colors.saffron }]}>▶ {step.timerMinutes} min timer</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1517,6 +1616,13 @@ const styles = StyleSheet.create({
   celebrationBtn: { flex: 1, paddingVertical: 16, borderRadius: 14, alignItems: "center" },
   celebIngBlock: { borderRadius: 12, borderWidth: 1, padding: 12, width: "100%" },
   celebrationBtnText: { fontSize: 15 },
+
+  // ── Cooking Instructions polish ────────────────────────────────────────────
+  sectionEyebrow: { fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2, textTransform: "uppercase" as const, marginBottom: 4 },
+  adaptedBadge: { flexDirection: "row" as const, alignItems: "center" as const, gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 100, borderWidth: 1 },
+  adaptedDot: { width: 6, height: 6, borderRadius: 3 },
+  adaptedBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  stepAccentBar: { position: "absolute" as const, left: 0, top: 0, bottom: 0, width: 3, borderRadius: 2 },
 
   // ── Pantry expand/collapse ─────────────────────────────────────────────────
   pantryExpandBtn: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6, paddingVertical: 10, marginTop: 4 },
