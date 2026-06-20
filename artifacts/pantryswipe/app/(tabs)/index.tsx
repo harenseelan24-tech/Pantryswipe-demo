@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   Animated,
   Dimensions,
@@ -380,10 +380,23 @@ export default function HomeScreen() {
     setActiveIngredient(null);
   }, [liveRecipes, getPersonalizedRecipes]);
 
-  const searchResults = SEARCH_VARIANTS.filter((v) =>
-    v.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    v.subtitle.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const searchResults = useMemo(() => {
+    if (!searchQuery) return [];
+    const q = searchQuery.toLowerCase();
+    return liveRecipes
+      .filter((r) =>
+        r.title.toLowerCase().includes(q) ||
+        r.cuisine.toLowerCase().includes(q) ||
+        r.tags.some((t) => t.toLowerCase().includes(q)) ||
+        r.ingredients.some((i) => i.name.toLowerCase().includes(q))
+      )
+      .slice(0, 20)
+      .map((r) => ({
+        label: r.title,
+        subtitle: `${r.cuisine} · ${r.calories} kcal`,
+        recipeId: r.id,
+      }));
+  }, [searchQuery, liveRecipes]);
 
   const currentTutStep = TUTORIAL_STEPS[Math.min(tutStep, TUTORIAL_STEPS.length - 1)];
 
@@ -828,7 +841,7 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       key={tag}
                       style={[styles.searchTag, { backgroundColor: colors.card, borderColor: colors.border }]}
-                      onPress={() => setSearchQuery(tag.split(" ")[1])}
+                      onPress={() => setSearchQuery(tag.replace(/^\S+\s/, ""))}
                     >
                       <Text style={[styles.searchTagText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
                         {tag}
