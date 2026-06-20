@@ -9,7 +9,8 @@ const config = getDefaultConfig(projectRoot);
 // Allow Metro to watch the monorepo root (where pnpm stores packages)
 config.watchFolders = [workspaceRoot];
 
-// Resolve modules from both the artifact's own node_modules and the workspace root
+// Resolve modules from both the artifact's own node_modules and the workspace root.
+// projectRoot/node_modules is listed FIRST so the pantryswipe-local symlinks win.
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(workspaceRoot, "node_modules"),
@@ -17,5 +18,14 @@ config.resolver.nodeModulesPaths = [
 
 // Enable symlink resolution so pnpm's linked packages are found
 config.resolver.unstable_enableSymlinks = true;
+
+// Pin expo-router to the single instance that artifacts/pantryswipe depends on.
+// Without this, pnpm can create multiple expo-router instances (differing by peer-dep
+// hash) and @expo/cli may load a different one than the app code resolves, causing
+// separate React context trees and a "useLinkPreviewContext" runtime crash.
+const expoRouterPath = path.resolve(projectRoot, "node_modules", "expo-router");
+config.resolver.extraNodeModules = {
+  "expo-router": expoRouterPath,
+};
 
 module.exports = config;
