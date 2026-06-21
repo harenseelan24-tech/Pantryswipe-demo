@@ -1,0 +1,812 @@
+# PantrySwipe — Replit AI Agent Prompt (v3 — Senior Reviewed)
+> Paste this entire prompt into Replit AI Agent. It is self-contained and covers every area of the app.
+
+---
+
+## ⚠️ RISK REGISTER — READ BEFORE STARTING
+
+| Rank | Area | Risk |
+|------|------|------|
+| 1 | AI Chef (Section 5) | API key exposure, model ID, CORS, localhost won't work in Replit preview |
+| 2 | SwipeCard PanResponder (Section 4) | useNativeDriver conflicts, gesture interception, silent animation failures |
+| 3 | Onboarding routing guard (Section 10) | Broken AsyncStorage flag locks users out or always re-onboards them |
+| 4 | Replit concurrent run config (Section 12.7) | `&` is unreliable in Nix — use concurrently with --kill-others-on-fail |
+| 5 | Cook Mode new file (Section 8) | Net-new screen, timer fires after step change, wrong import path |
+| 6 | Streak date logic (Section 11) | Timezone bugs, streak value never persisted to AsyncStorage |
+
+---
+
+## ROLE & GOAL
+
+You are a senior React Native / Expo engineer. Your job is to audit, debug, and improve **PantrySwipe** — an Expo SDK 54 / expo-router v6 mobile app living at `artifacts/pantryswipe/`. The app already runs, but several features are incomplete, broken, or only mocked. Go through every section below in order. Do NOT skip any section. After every fix, confirm what was changed and why.
+
+---
+
+## SECTION 1 — PROJECT ORIENTATION (read first, don't touch yet)
+
+- Monorepo managed with **pnpm workspaces**. The app is at `artifacts/pantryswipe/`, the Express API server is at `artifacts/api-server/`.
+- State lives in `artifacts/pantryswipe/context/AppContext.tsx` via React Context + AsyncStorage. There is NO database required for the mobile app itself.
+- Routing: Expo Router file-based. Entry point `app/index.tsx` → checks AsyncStorage → `/welcome` (first time) or `/(tabs)` (returning user). `/welcome` is a splash/landing page with a "Get Started" button that navigates to `/onboarding`. `/onboarding` is the multi-step setup flow.
+- Tabs: Home (Discover/Swipe), Pantry, Planner, Social, Profile.
+- Stack screens: `ai-chef`, `party-planner`, `notifications`, `recipe/[id]`, `welcome`, `onboarding`, `cook-mode`.
+- Swipe cards use **PanResponder only** (NOT gesture-handler). Do not refactor to gesture-handler.
+- Images use static `require()` — all assets must physically exist in `artifacts/pantryswipe/assets/` before Metro runs.
+- Brand colors: Saffron `#F5A623` (primary), Herb Green `#4CAF76`, Skip Red `#E84040`, Save Blue `#5B8EF5`.
+- **Do NOT modify `app/(tabs)/_layout.tsx`** unless explicitly instructed — it contains platform-specific NativeTabs logic for iOS 26+ (liquid glass) that must be preserved.
+
+---
+
+## SECTION 2 — ENVIRONMENT & STARTUP CHECK
+
+1. Run `pnpm install` from the repo root if `node_modules` is missing or stale.
+2. Run `pnpm run typecheck` and list every TypeScript error. Fix ALL errors before moving on. Do not proceed to later sections if typecheck fails — a clean type baseline is essential so new changes don't hide pre-existing errors.
+3. Confirm `artifacts/pantryswipe/app/index.tsx` correctly reads AsyncStorage and routes to `/welcome` or `/(tabs)`. If the logic is missing or broken, repair it per Section 10.1.
+4. Check that all image assets referenced anywhere via `require()` actually exist on disk. For any missing asset, create a valid placeholder PNG (a 400×300 solid-color image is fine) so Metro does not crash. Log every placeholder you create.
+
+---
+
+## SECTION 3 — TAB NAVIGATION AUDIT
+
+Check every file in `artifacts/pantryswipe/app/(tabs)/`:
+
+- **`index.tsx` (Home/Discover):** Must render the swipe card deck. Confirm `<SwipeCard>` is imported and rendered. Confirm action buttons (❌ Skip, ❤️ Cook, ⭐ Save) below the deck call the correct context functions.
+- **`pantry.tsx`:** Must list pantry items from context. "Add Ingredient" button must open an input flow (modal or inline). Category filters must actually filter the displayed list. Delete/remove buttons must call context to update state. Expiry badges must show for items with an `expiresAt` field.
+- **`planner.tsx`:** Weekly 7-day grid must render. "Auto-Generate Plan" button must populate the grid with recipes from context. "Shopping List" CTA must navigate somewhere (even a modal) — it must NOT be a dead button. Nutrition summary section must display even if numbers are approximate.
+- **`social.tsx`:** Feed must render posts from `mockData`. Like button must toggle state (liked ↔ unliked) with a visual change. Save button must add to saved recipes in context. Recipe link on a post must navigate to `recipe/[id]`.
+- **`profile.tsx`:** Must display username, XP bar, level, cooking streak, and achievement badges from context. "Saved Recipes" and "Cooked Recipes" grids must render. If empty, show an empty state message, not a blank screen.
+
+For every tab: if the screen is an empty shell or throws an error, scaffold the missing JSX and wire it to the existing context/mockData.
+
+---
+
+## SECTION 4 — SWIPE CARD (CRITICAL) ⚠️ HIGH RISK
+
+File: `artifacts/pantryswipe/components/SwipeCard.tsx`
+
+**Risk:** PanResponder + Animated has many silent failure modes — wrong `useNativeDriver` usage crashes at runtime, gesture interception breaks child button taps, and animation conflicts between translate and opacity are common. Follow each sub-section exactly.
+
+### 4.0 — Pre-edit safety check (do this FIRST)
+Read the entire existing `SwipeCard.tsx` and document what it currently does. Identify which of the items below are already correctly implemented vs. missing/broken. Only change what is broken — do not rewrite working code.
+
+### 4.1 — PanResponder setup
+- `onStartShouldSetPanResponder` must return `false` — do not intercept taps, only drags.
+- `onMoveShouldSetPanResponder` must return `true` ONLY when horizontal movement exceeds vertical movement:
+  ```typescript
+  onMoveShouldSetPanResponder: (_, gestureState) =>
+    Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 5,
+  ```
+  This prevents the swipe card from blocking vertical scrolls in parent ScrollViews and allows buttons inside the card to receive taps.
+- `onPanResponderMove` must use `Animated.event`:
+  ```typescript
+  onPanResponderMove: Animated.event(
+    [null, { dx: pan.x, dy: pan.y }],
+    { useNativeDriver: false }  // REQUIRED — Animated.event does not support native driver
+  ),
+  ```
+- `onPanResponderRelease` must evaluate thresholds and call the correct callback:
+  ```typescript
+  onPanResponderRelease: (_, gestureState) => {
+    const { dx, dy } = gestureState;
+    if (dx > 100) {
+      dismissCard('cook');
+    } else if (dx < -100) {
+      dismissCard('skip');
+    } else if (dy < -100) {
+      dismissCard('save');
+    } else {
+      // Below threshold — snap back to centre
+      Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
+    }
+  },
+  ```
+- **Mitigation:** Add a temporary `console.log('[SwipeCard] released dx:', gestureState.dx, 'dy:', gestureState.dy)` inside `onPanResponderRelease` to verify thresholds during testing. Remove after confirming.
+
+### 4.2 — Card rotation and transform
+- Interpolate `pan.x` to rotation:
+  ```typescript
+  const rotation = pan.x.interpolate({
+    inputRange: [-200, 0, 200],
+    outputRange: ['-15deg', '0deg', '15deg'],
+    extrapolate: 'clamp',
+  });
+  ```
+- Apply ALL transforms in a single transform array — never split translate and rotate across separate style props:
+  ```typescript
+  style={[styles.card, {
+    transform: [
+      { translateX: pan.x },
+      { translateY: pan.y },
+      { rotate: rotation },
+    ]
+  }]}
+  ```
+- Use `useNativeDriver: false` on this Animated.View — translation and rotation together cannot use the native driver when the Animated.Value is also used with `Animated.event`.
+
+### 4.3 — Overlay labels
+Overlay badges must fade in as the user drags, well before the threshold is reached so they know what action they're triggering:
+
+- COOK badge (green, drag right):
+  ```typescript
+  opacity: pan.x.interpolate({ inputRange: [20, 100], outputRange: [0, 1], extrapolate: 'clamp' })
+  ```
+- SKIP badge (red, drag left):
+  ```typescript
+  opacity: pan.x.interpolate({ inputRange: [-100, -20], outputRange: [1, 0], extrapolate: 'clamp' })
+  ```
+- SAVE badge (blue, drag up):
+  ```typescript
+  opacity: pan.y.interpolate({ inputRange: [-100, -20], outputRange: [1, 0], extrapolate: 'clamp' })
+  ```
+- All badge Animated.Views must use `useNativeDriver: false` — they are driven by the same `pan` value that uses `useNativeDriver: false`.
+
+**Note on SKIP and SAVE ranges:** The outputRange `[1, 0]` with ascending inputRange means: at the far-left/far-up value the badge is fully opaque, and as the drag returns toward 0 it fades out. This is correct — the badge is visible when dragging in the right direction and fades as the card returns to centre.
+
+### 4.4 — Card dismissal animation (`dismissCard` helper)
+Define a `dismissCard` function that fires off the card before calling the parent callback:
+```typescript
+const dismissCard = (action: 'cook' | 'skip' | 'save') => {
+  const toValue = action === 'skip'
+    ? { x: -500, y: 0 }
+    : action === 'cook'
+    ? { x: 500, y: 0 }
+    : { x: 0, y: -800 };
+
+  // Haptics — wrap in try/catch because haptics throw on web/simulator
+  (async () => {
+    try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch (_) {}
+  })();
+
+  Animated.timing(pan, {
+    toValue,
+    duration: 250,
+    useNativeDriver: false,
+  }).start(() => {
+    pan.setValue({ x: 0, y: 0 }); // reset for next card
+    onDismiss(action);             // notify parent to advance the deck
+  });
+};
+```
+
+### 4.5 — Deck cycling (managed in the PARENT, not in SwipeCard)
+In `app/(tabs)/index.tsx`:
+- Maintain a `deck` state: `const [deck, setDeck] = useState(recipes)`.
+- Pass `onDismiss={(action) => setDeck(prev => prev.slice(1))}` to the top card.
+- When `deck.length === 0`, render: `<View><Text>You've seen everything! 🔄</Text><Button onPress={() => setDeck(recipes)} title="Start Over" /></View>`.
+- Reinitialise `deck` when `recipes` changes (useEffect).
+- **Each SwipeCard instance is stateless** — it only handles its own gesture and animation, then calls `onDismiss`.
+
+### 4.6 — Pantry match % (calculated in parent, passed as prop)
+Calculate before rendering — do not calculate inside `SwipeCard.tsx`:
+```typescript
+const getPantryMatch = (recipe: Recipe): number => {
+  if (!recipe.ingredients || recipe.ingredients.length === 0) return 0;
+  // recipe.ingredients must be an array of bare ingredient name strings (e.g. "chicken", "garlic")
+  // If your data stores "2 cups chicken breast", extract the noun before passing or normalise here
+  const matches = recipe.ingredients.filter(ingredient =>
+    pantryItems.some(item => item.name.toLowerCase().includes(ingredient.toLowerCase()))
+  ).length;
+  return Math.round((matches / recipe.ingredients.length) * 100);
+};
+```
+Pass as `pantryMatch={getPantryMatch(recipe)}` prop. The card only renders it.
+
+**Important:** Verify what shape `recipe.ingredients` is in `mockData.ts` before writing this logic. If ingredients are stored as full strings like `"2 cups diced chicken"`, use `.includes()` matching (as above). If they're objects with a `name` field, adjust accordingly.
+
+### 4.7 — Haptic feedback
+Already included inside `dismissCard` in Section 4.4. Do not add it a second time in `onPanResponderRelease`.
+
+---
+
+## SECTION 5 — AI CHEF (CRITICAL) ⚠️ HIGHEST RISK
+
+File: `artifacts/pantryswipe/app/ai-chef.tsx` + `artifacts/api-server/src/`
+
+**Risk:** Four distinct failure points: (a) wrong Anthropic model ID, (b) `localhost:8080` does not resolve in Replit preview or on a physical device, (c) `cors` package may not be installed, (d) API key missing causes confusing crash. All four are addressed below.
+
+### 5a — API Server endpoint
+
+In `artifacts/api-server/src/index.ts` (or wherever the Express routes live):
+
+**Step 1 — Verify cors is installed:**
+Check `artifacts/api-server/package.json`. If `cors` is not listed in dependencies, run:
+```
+pnpm add cors @types/cors --filter @workspace/api-server
+```
+Then add at the top of the server, before any routes:
+```typescript
+import cors from 'cors';
+app.use(cors()); // Must be before routes or fetch from Expo will be silently blocked
+```
+
+**Step 2 — Add startup warning for missing API key (outside route handler):**
+```typescript
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.warn('⚠️  ANTHROPIC_API_KEY is not set. AI Chef will return errors. Add it in Replit Secrets and restart.');
+}
+```
+
+**Step 3 — Add the route:**
+```typescript
+app.post('/api/ai-chef', async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(503).json({ error: 'AI Chef is not configured. Please add ANTHROPIC_API_KEY in Replit Secrets.' });
+  }
+
+  const { message, pantryItems, conversationHistory } = req.body as {
+    message: string;
+    pantryItems: string[];
+    conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
+  };
+
+  const systemPrompt = `You are Sous, an expert AI chef assistant inside the PantrySwipe cooking app.
+The user's current pantry contains: ${pantryItems.join(', ') || 'nothing yet'}.
+Give concise, practical cooking advice, recipe suggestions, and ingredient substitutions.
+Keep replies under 150 words. Be warm, encouraging, and use cooking emojis sparingly.`;
+
+  // Cap conversation history to last 10 turns to avoid exceeding context limits
+  const recentHistory = conversationHistory.slice(-10);
+  const messages = [...recentHistory, { role: 'user' as const, content: message }];
+
+  // 15-second timeout
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',  // Exact model ID — do not change
+        max_tokens: 512,
+        system: systemPrompt,
+        messages,
+      }),
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error('Anthropic API error:', response.status, errBody);
+      return res.status(502).json({ error: 'AI service returned an error. Please try again.' });
+    }
+
+    const data = await response.json() as { content: Array<{ type: string; text: string }> };
+    const reply = data.content.find(b => b.type === 'text')?.text ?? 'Sorry, I could not generate a response.';
+    return res.json({ reply });
+
+  } catch (err: unknown) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === 'AbortError') {
+      return res.status(504).json({ error: 'Request timed out. Please try again.' });
+    }
+    console.error('AI Chef route error:', err);
+    return res.status(500).json({ error: 'An unexpected error occurred.' });
+  }
+});
+```
+
+### 5b — Mobile AI Chef screen
+
+**⚠️ RISK MITIGATION — URL strategy:**
+`localhost:8080` will NOT resolve in Replit's web preview or on a physical device. Handle this:
+
+1. Create `artifacts/pantryswipe/.env.example`:
+   ```
+   EXPO_PUBLIC_API_URL=https://YOUR-REPLIT-SLUG.replit.dev
+   ```
+2. Create `artifacts/pantryswipe/.env` with the same content (the user fills in their actual URL).
+3. Verify `artifacts/pantryswipe/.env` is listed in `.gitignore`. If not, add it.
+4. Add a comment at the top of `ai-chef.tsx`:
+   ```typescript
+   // ⚠️ Set EXPO_PUBLIC_API_URL in artifacts/pantryswipe/.env to your Replit preview URL.
+   // Find it: in Replit, open the Webview tab → copy the base URL (no path).
+   // Example: https://pantryswipe.yourusername.repl.co
+   // After changing .env, you MUST restart Metro (stop and re-run the app) for the change to take effect.
+   // EXPO_PUBLIC_ vars are baked in at bundle time, not read at runtime.
+   ```
+5. Resolve the URL:
+   ```typescript
+   const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+   ```
+
+**Implement the screen:**
+1. Replace mock responses with a `fetch` to `${API_BASE}/api/ai-chef`.
+2. Maintain `conversationHistory` in state. Cap it at 10 turns before sending (same cap as server):
+   ```typescript
+   const [conversationHistory, setConversationHistory] = useState<Array<{role: 'user'|'assistant', content: string}>>([]);
+   ```
+3. Show a typing indicator (three animated dots) while `isLoading` is true.
+4. On any error (network, 503, 504, 502), show an inline error bubble in the chat: "Sous is taking a break 🍳 Try again in a moment." Do NOT crash the screen.
+5. Quick prompt chips ("What can I make tonight?", "Suggest a 15-min meal", "What's expiring soon?") must set the text input value AND immediately send, without requiring the user to tap Send separately.
+6. The send button must be `disabled={isLoading}` to prevent double-sends.
+7. The chat FlatList must call `flatListRef.current?.scrollToEnd({ animated: true })` after each new message is appended.
+8. After a successful reply, append both the user message and assistant reply to `conversationHistory`:
+   ```typescript
+   setConversationHistory(prev => [
+     ...prev,
+     { role: 'user', content: message },
+     { role: 'assistant', content: reply },
+   ]);
+   ```
+
+### 5c — Replit Secrets setup comment
+
+At the very top of the API server route file, add:
+```typescript
+/*
+ * SETUP REQUIRED — AI Chef will not work without this:
+ * 1. In Replit, click the lock icon ("Secrets") in the left sidebar.
+ * 2. Add a new secret:  Key: ANTHROPIC_API_KEY  |  Value: your key from https://console.anthropic.com
+ * 3. Do NOT put the key in .env or any committed file — Secrets keep it out of git.
+ * 4. Click "Restart" to reload the server after adding the secret.
+ */
+```
+
+---
+
+## SECTION 6 — PARTY PLANNER
+
+File: `artifacts/pantryswipe/app/party-planner.tsx`
+
+1. Multi-step wizard with 4 steps: Event Type → Guest Count → Serving Style → Budget.
+2. Each "Next" button is `disabled` until the user has made a selection for that step.
+3. "Back" button appears from step 2 onward.
+4. On the final step, "Generate Menu" produces a rule-based structured output: starter, mains (scaled to guest count), dessert, drinks, prep timeline. It must render on screen — not just log to console.
+5. "Start Over" button on the results screen resets all wizard state to step 1.
+
+---
+
+## SECTION 7 — RECIPE DETAIL SCREEN
+
+File: `artifacts/pantryswipe/app/recipe/[id].tsx`
+
+1. Read recipe `id` from `useLocalSearchParams()` and look it up in context/mockData.
+2. Display: title, image, pantry match %, ingredients list (✅ for items already in pantry), steps, and cook time.
+3. "Start Cooking" button navigates to `cook-mode` screen, passing `recipeId` as a param.
+4. "Save Recipe" button adds to saved list in context and toggles visually if already saved.
+5. If recipe ID is not found, show a "Recipe not found" error screen with a back button — never access properties of `undefined`.
+
+---
+
+## SECTION 8 — COOK MODE ⚠️ MEDIUM RISK (new file)
+
+File: `artifacts/pantryswipe/app/cook-mode.tsx`
+
+**Risk:** Net-new file with a wrong import path or missing export crashes the navigator. Timer state must reset on step change or it updates stale UI.
+
+### Step 1 — Create minimal scaffold first and confirm it renders before adding logic:
+```typescript
+import { View, Text, StyleSheet } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
+import { useAppContext } from '../context/AppContext';  // one level up from app/
+
+export default function CookMode() {
+  const { recipeId } = useLocalSearchParams<{ recipeId: string }>();
+  const { recipes } = useAppContext();
+  const recipe = recipes.find(r => r.id === recipeId);
+
+  if (!recipe) {
+    return (
+      <View style={styles.center}>
+        <Text>Recipe not found.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.center}>
+      <Text>{recipe.title}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+});
+```
+Confirm this renders without crashing before proceeding.
+
+### Step 2 — Verify `markRecipeCooked` exists in AppContext:
+Open `context/AppContext.tsx`. If `markRecipeCooked` does not exist, add it:
+```typescript
+const markRecipeCooked = async (recipeId: string) => {
+  // Mark the recipe as cooked and increment XP
+  const updatedRecipes = recipes.map(r =>
+    r.id === recipeId ? { ...r, cookedCount: (r.cookedCount ?? 0) + 1 } : r
+  );
+  setRecipes(updatedRecipes);
+
+  const updatedProfile = {
+    ...profile,
+    xp: (profile.xp ?? 0) + 50,
+    cookedRecipeIds: [...(profile.cookedRecipeIds ?? []), recipeId],
+  };
+  setProfile(updatedProfile);
+  await AsyncStorage.setItem('pantryswipe_profile', JSON.stringify(updatedProfile));
+};
+```
+Expose it in the context value object.
+
+### Step 3 — Implement step-by-step UI:
+```typescript
+const [currentStep, setCurrentStep] = useState(0);
+const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
+const [timerActive, setTimerActive] = useState(false);
+const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+// Reset timer whenever the step changes
+useEffect(() => {
+  if (intervalRef.current) clearInterval(intervalRef.current);
+  setTimerActive(false);
+  // Detect time mention in current step text
+  const match = recipe.steps[currentStep]?.match(/(\d+)\s*(hour|minute|min|second)/i);
+  if (match) {
+    const value = parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+    const seconds = unit.startsWith('hour') ? value * 3600
+      : unit.startsWith('min') ? value * 60
+      : value;
+    setTimerSeconds(seconds);
+  } else {
+    setTimerSeconds(null);
+  }
+  return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+}, [currentStep]);
+
+// Countdown tick
+useEffect(() => {
+  if (timerActive && timerSeconds !== null && timerSeconds > 0) {
+    intervalRef.current = setInterval(() => {
+      setTimerSeconds(prev => {
+        if (prev === null || prev <= 1) {
+          clearInterval(intervalRef.current!);
+          setTimerActive(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+  return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+}, [timerActive]);
+```
+
+On "Finish": call `markRecipeCooked(recipe.id)` then `router.back()`.
+
+---
+
+## SECTION 9 — NOTIFICATIONS SCREEN
+
+File: `artifacts/pantryswipe/app/notifications.tsx`
+
+1. Render a list of notifications from context or mockData.
+2. Types: expiry warning (ingredient expiring ≤3 days), recipe match (pantry ≥80%), streak reminder.
+3. Each notification must have a timestamp and a type-matched icon.
+4. Tapping expiry → navigate to Pantry tab (`router.push('/(tabs)/pantry')`). Tapping recipe match → navigate to `recipe/[id]`.
+5. Empty state: "You're all caught up! 🎉".
+
+---
+
+## SECTION 10 — ONBOARDING FLOW ⚠️ HIGH RISK
+
+File: `artifacts/pantryswipe/app/onboarding.tsx` + `app/index.tsx` + `app/welcome.tsx`
+
+**Risk:** The AsyncStorage routing guard is the first thing that runs. A mistyped key, inverted condition, or race condition before the navigator mounts can lock users out or always re-onboard them.
+
+### 10.0 — Read index.tsx FIRST
+Read the ENTIRE current `app/index.tsx` before touching it. Document exactly what it does. Only change what is broken.
+
+### 10.1 — AsyncStorage flag contract
+Use this EXACT key and value everywhere — do not vary spelling:
+- Key: `'pantryswipe_onboarding_complete'`
+- Value: `'true'` (string — AsyncStorage does not store booleans)
+
+In `index.tsx`, use the `useRootNavigationState` hook to avoid the race condition where `router` is called before the navigator is mounted:
+
+```typescript
+import { useEffect, useState } from 'react';
+import { View, ActivityIndicator } from 'react-native';
+import { router, useRootNavigationState } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export default function Index() {
+  const navState = useRootNavigationState();
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    // Don't navigate until the navigator is ready
+    if (!navState?.key) return;
+
+    const checkOnboarding = async () => {
+      try {
+        const value = await AsyncStorage.getItem('pantryswipe_onboarding_complete');
+        if (value === 'true') {
+          router.replace('/(tabs)');
+        } else {
+          router.replace('/welcome');
+        }
+      } catch (_) {
+        // AsyncStorage failure: default to onboarding (safer than crashing)
+        router.replace('/welcome');
+      } finally {
+        setChecked(true);
+      }
+    };
+
+    checkOnboarding();
+  }, [navState?.key]);
+
+  // Show spinner while checking — never render null
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" color="#F5A623" />
+    </View>
+  );
+}
+```
+
+### 10.2 — welcome.tsx
+`app/welcome.tsx` is the splash/landing screen. It must have a "Get Started" button that navigates to `/onboarding`. It must NOT write the AsyncStorage flag — that only happens after onboarding completes or is skipped.
+
+### 10.3 — Onboarding completion
+At the END of the onboarding flow, write the flag BEFORE navigating:
+```typescript
+// Write flag first, then navigate — if reversed, a navigation error leaves the flag unwritten
+await AsyncStorage.setItem('pantryswipe_onboarding_complete', 'true');
+router.replace('/(tabs)');
+```
+This same sequence MUST be used for the "Skip" path too — skipping onboarding must still write the flag.
+
+### 10.4 — Onboarding screens
+Multi-step flow (3 steps as a step index, not separate routes) inside `onboarding.tsx`:
+1. Welcome splash with logo and tagline.
+2. Dietary preferences (Vegetarian, Vegan, Gluten-Free, Halal, No restrictions). "No restrictions" must deselect all other options when tapped.
+3. Add first pantry items: text input + "Add" button, running list below. "Skip" is allowed.
+
+Each screen must have a progress indicator (dots or bar). "Skip" on any screen must still write the flag and navigate to `/(tabs)` following the pattern in 10.3.
+
+---
+
+## SECTION 11 — PROFILE & GAMIFICATION ⚠️ MEDIUM RISK
+
+File: `artifacts/pantryswipe/app/(tabs)/profile.tsx`
+
+**Risk:** Streak value is never persisted, so it resets to 0 on every app restart. Date math must use UTC to avoid timezone edge cases.
+
+### 11.1 — XP bar
+Fill width: `(currentXP / xpToNextLevel) * 100%`. Animate with `Animated.timing` using `useNativeDriver: false` (width percentage is a layout property, not a transform — native driver does not support it).
+
+### 11.2 — Cooking streak (use this exact logic)
+The streak VALUE and the last-cooked DATE are two separate things and must both be persisted.
+
+AsyncStorage keys to use consistently:
+- `'pantryswipe_last_cooked_date'` — ISO date string `"YYYY-MM-DD"`
+- `'pantryswipe_streak'` — integer stored as a string, e.g. `"7"`
+
+Call this function inside `markRecipeCooked` in AppContext (after marking the recipe cooked):
+```typescript
+const updateStreak = async () => {
+  const todayUTC = new Date().toISOString().split('T')[0]; // e.g. "2026-06-21"
+  const lastCookedDate = await AsyncStorage.getItem('pantryswipe_last_cooked_date');
+  const storedStreak = await AsyncStorage.getItem('pantryswipe_streak');
+  const currentStreak = storedStreak ? parseInt(storedStreak, 10) : 0;
+
+  let newStreak: number;
+
+  if (!lastCookedDate) {
+    newStreak = 1; // First cook ever
+  } else {
+    const diffMs = new Date(todayUTC).getTime() - new Date(lastCookedDate).getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      newStreak = currentStreak; // Already cooked today — no change
+    } else if (diffDays === 1) {
+      newStreak = currentStreak + 1; // Consecutive day
+    } else {
+      newStreak = 1; // Streak broken — restart from 1
+    }
+  }
+
+  // Only write date if this is a new day's cook
+  if (lastCookedDate !== todayUTC) {
+    await AsyncStorage.setItem('pantryswipe_last_cooked_date', todayUTC);
+  }
+  await AsyncStorage.setItem('pantryswipe_streak', String(newStreak));
+
+  // Update context so UI reflects immediately
+  setProfile(prev => ({ ...prev, streak: newStreak }));
+};
+```
+
+### 11.3 — Achievement badges
+Create `artifacts/pantryswipe/data/achievements.ts` (shared single source of truth — do NOT duplicate this in multiple files):
+
+```typescript
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  isUnlocked: (stats: UserStats) => boolean;
+}
+
+export interface UserStats {
+  cookedCount: number;
+  streak: number;
+  pantryItemCount: number;
+  totalLikes: number;
+  partyPlansCreated: number;
+  recipesSwipedCount: number;
+}
+
+export const ACHIEVEMENTS: Achievement[] = [
+  { id: 'first_cook', title: 'First Cook', description: 'Cook your first recipe', icon: '🍳', isUnlocked: s => s.cookedCount >= 1 },
+  { id: 'streak_5', title: '5-Day Streak', description: 'Cook 5 days in a row', icon: '🔥', isUnlocked: s => s.streak >= 5 },
+  { id: 'pantry_master', title: 'Pantry Master', description: 'Add 20 ingredients', icon: '🥘', isUnlocked: s => s.pantryItemCount >= 20 },
+  { id: 'social_butterfly', title: 'Social Butterfly', description: 'Give 10 likes', icon: '❤️', isUnlocked: s => s.totalLikes >= 10 },
+  { id: 'party_planner', title: 'Party Planner', description: 'Plan your first party', icon: '🎉', isUnlocked: s => s.partyPlansCreated >= 1 },
+  { id: 'explorer', title: 'Explorer', description: 'Swipe through 50 recipes', icon: '🗺️', isUnlocked: s => s.recipesSwipedCount >= 50 },
+];
+```
+
+In `profile.tsx`, import `ACHIEVEMENTS` and `UserStats`, build a `userStats` object from context, then render each badge:
+```typescript
+{ACHIEVEMENTS.map(achievement => {
+  const unlocked = achievement.isUnlocked(userStats);
+  return (
+    <View key={achievement.id} style={[styles.badge, unlocked ? styles.badgeUnlocked : styles.badgeLocked]}>
+      <Text style={{ fontSize: 24, opacity: unlocked ? 1 : 0.4 }}>{achievement.icon}</Text>
+      <Text style={{ opacity: unlocked ? 1 : 0.4 }}>{achievement.title}</Text>
+    </View>
+  );
+})}
+```
+
+### 11.4 — Edit Profile modal
+"Edit Profile" opens a `<Modal>`. User changes display name. On save: update context + `AsyncStorage.setItem('pantryswipe_display_name', newName)`. On cancel: close without saving.
+
+---
+
+## SECTION 12 — GLOBAL POLISH & REPLIT-SPECIFIC IMPROVEMENTS
+
+### 12.1 — Loading states
+Any screen that reads from AsyncStorage on mount must show `<ActivityIndicator size="large" color="#F5A623" />` centered while loading. Never show a blank or flash of wrong content.
+
+### 12.2 — Error boundaries
+Create ONE shared error boundary component at `artifacts/pantryswipe/components/TabErrorBoundary.tsx`:
+```typescript
+import React from 'react';
+import { View, Text } from 'react-native';
+
+interface State { hasError: boolean; }
+
+export class TabErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  State
+> {
+  state: State = { hasError: false };
+
+  static getDerivedStateFromError(_: Error): State {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text>Something went wrong on this tab.</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+```
+Import and wrap the root view in each of the 5 tab files. Do NOT copy-paste the class definition into each file — import the single shared version.
+
+### 12.3 — useNativeDriver rules
+- `Animated.event` with PanResponder: **always `useNativeDriver: false`** — no exceptions.
+- `Animated.timing` / `Animated.spring` on transform or opacity: `useNativeDriver: true` — BUT only if the Animated.Value is not also used in `Animated.event` or on a layout prop. If shared with PanResponder, it must remain `false`.
+- `Animated.timing` on width, height, backgroundColor, or any layout prop: **always `useNativeDriver: false`**.
+- **Never mix** `useNativeDriver: true` and `false` on the same `Animated.Value` — pick one and use it everywhere for that value.
+
+### 12.4 — Shadow deprecation
+```typescript
+import { Platform } from 'react-native';
+
+const cardShadow = Platform.OS === 'web'
+  ? { boxShadow: '0px 4px 12px rgba(0,0,0,0.15)' }
+  : { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 };
+```
+
+### 12.5 — Missing placeholder images
+Scan all `require('../assets/...')` calls. For any file that doesn't exist, create a placeholder. Log every file created.
+
+### 12.6 — Environment variables
+- Create `artifacts/pantryswipe/.env.example` with `EXPO_PUBLIC_API_URL=https://YOUR-REPLIT-SLUG.replit.dev`.
+- Confirm `artifacts/pantryswipe/.env` is in `.gitignore`. Add it if not.
+
+### 12.7 — Replit concurrent run config ⚠️ MEDIUM RISK
+
+**Risk:** `&` in `.replit` is unreliable in the Nix shell — processes may not start, and crashes go unnoticed.
+
+**Fix:**
+1. `pnpm add -D concurrently -w` (adds to workspace root).
+2. In root `package.json` scripts:
+   ```json
+   "dev": "concurrently --kill-others-on-fail \"pnpm --filter @workspace/api-server run dev\" \"pnpm --filter @workspace/pantryswipe run dev\""
+   ```
+   The `--kill-others-on-fail` flag means if either process crashes, both stop — preventing silent half-starts.
+3. Update `.replit` run command to: `pnpm run dev`.
+4. Confirm both processes appear in Replit's console after clicking Run.
+
+### 12.8 — Console error cleanup
+Every `FlatList` renderItem and `.map()` must pass a unique `key`. Use the item's `id` field where available. Never use array index as key for lists that can reorder.
+
+### 12.9 — TypeScript strict
+All new code must have explicit types. No `any` unless unavoidable — mark those `// TODO: type this`. Run `pnpm run typecheck` after every section and fix errors before moving on.
+
+---
+
+## SECTION 13 — FINAL VERIFICATION CHECKLIST
+
+**Core launch:**
+- [ ] App launches without crash on fresh install (AsyncStorage empty → onboarding).
+- [ ] Loading spinner shows during AsyncStorage check — no blank screen.
+- [ ] `welcome.tsx` has a "Get Started" button that navigates to `/onboarding`.
+- [ ] Onboarding completes (all 3 steps) and routes to `/(tabs)`.
+- [ ] Onboarding skip path (from any step) writes the flag and routes to `/(tabs)`.
+- [ ] Returning user (flag set) goes directly to `/(tabs)` without seeing onboarding.
+
+**Swipe deck:**
+- [ ] Swipe deck loads recipes.
+- [ ] Swiping right triggers COOK overlay + callback. Left triggers SKIP. Up triggers SAVE.
+- [ ] Overlay labels appear smoothly during drag, well before the threshold.
+- [ ] Releasing below threshold snaps card back to centre.
+- [ ] Buttons inside swipe cards are tappable (gesture interception is conditional).
+- [ ] Pantry match % badge is accurate and updates when pantry changes.
+- [ ] After all cards swiped, empty state appears with a reset button.
+- [ ] Haptics fire on card dismissal (test on device or simulator — haptics do not work on web).
+
+**Tabs:**
+- [ ] Pantry tab: add, view, and delete ingredients.
+- [ ] Planner tab: auto-generate a meal plan. Shopping List button navigates.
+- [ ] Social tab: like and save posts toggle correctly with visual feedback.
+- [ ] Profile: XP bar, streak, and badges all display correctly.
+
+**Screens:**
+- [ ] Recipe detail loads from swipe deck, social feed, and direct URL.
+- [ ] Cook Mode steps through a recipe. Timer appears on timed steps. Finish marks recipe cooked.
+- [ ] Streak increments after Finish in Cook Mode. Streak persists after app restart.
+- [ ] AI Chef sends a message and receives a real Claude reply (not mock).
+- [ ] AI Chef works in Replit's preview URL (not just localhost).
+- [ ] AI Chef shows inline error bubble on network failure — does not crash.
+- [ ] Party Planner completes 4 steps and renders a menu on screen.
+- [ ] Notifications screen renders and navigation links work.
+
+**Technical:**
+- [ ] Both the Expo app and API server start when clicking Run in Replit.
+- [ ] `pnpm run typecheck` passes with 0 errors.
+- [ ] No red errors in Metro/Expo console (web/native driver warnings are acceptable).
+- [ ] `achievements.ts` is the single definition — not duplicated across files.
+
+**Report any item that could NOT be fixed and explain why.**
+
+---
+
+## IMPORTANT CONSTRAINTS
+
+- Do NOT switch from PanResponder to gesture-handler for swipes.
+- Do NOT add a database — all state stays in AsyncStorage via AppContext.
+- Do NOT expose `ANTHROPIC_API_KEY` in the Expo app bundle — it must only live in the API server via Replit Secrets.
+- Do NOT install packages unless explicitly instructed. Permitted new packages: `concurrently` (Section 12.7), `cors` and `@types/cors` if missing from api-server (Section 5a). Any other addition requires a written justification.
+- Preserve existing brand colors (`#F5A623`, `#4CAF76`, `#E84040`, `#5B8EF5`).
+- Preserve existing working code — do not rewrite things that already work.
+- Do NOT modify `app/(tabs)/_layout.tsx` unless explicitly instructed.

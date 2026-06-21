@@ -113,9 +113,12 @@ function SwipeCard({
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => isTopRef.current,
+      // Return false so child press handlers (buttons, links) can fire on tap.
+      // The gesture is still captured by onMoveShouldSetPanResponder once the
+      // user actually starts dragging, preserving full swipe functionality.
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) =>
-        isTopRef.current && (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5),
+        isTopRef.current && (Math.abs(gs.dx) > 8 || gs.dy < -8),
       onPanResponderGrant: () => { pan.extractOffset(); },
       onPanResponderMove: Animated.event(
         [null, { dx: pan.x, dy: pan.y }],
