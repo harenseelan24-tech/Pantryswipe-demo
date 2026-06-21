@@ -51,6 +51,7 @@ REVENUECAT_PROJECT_ID = "proj5d1a3e65"
 REVENUECAT_TEST_STORE_APP_ID = "app99f43b6459"
 REVENUECAT_APPLE_APP_STORE_APP_ID = "appa9b4d3afec"
 REVENUECAT_GOOGLE_PLAY_STORE_APP_ID = "app14176679fb"
+SUPABASE_URL = "https://xswlzcqiszvackrnchny.supabase.co"
 
 [nix]
 channel = "stable-25_05"
