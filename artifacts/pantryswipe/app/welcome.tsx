@@ -13,7 +13,7 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
-import * as AuthSession from "expo-auth-session";
+import * as Linking from "expo-linking";
 import { useColors } from "@/hooks/useColors";
 import { StatusBar } from "expo-status-bar";
 import { TextType } from "@/components/TextType";
@@ -27,10 +27,7 @@ export default function WelcomeScreen() {
   const [screenKey, setScreenKey] = useState(0);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  const redirectTo = AuthSession.makeRedirectUri({
-    scheme: "pantryswipe",
-    path: "auth/callback",
-  });
+  const redirectTo = Linking.createURL("auth/callback");
 
   const handleGoogleSignIn = async () => {
     if (googleLoading) return;
