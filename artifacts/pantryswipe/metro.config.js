@@ -24,8 +24,10 @@ config.resolver.unstable_enableSymlinks = true;
 // hash) and @expo/cli may load a different one than the app code resolves, causing
 // separate React context trees and a "useLinkPreviewContext" runtime crash.
 const expoRouterPath = path.resolve(projectRoot, "node_modules", "expo-router");
+const expoCryptoPath = path.resolve(projectRoot, "node_modules", "expo-crypto");
 config.resolver.extraNodeModules = {
   "expo-router": expoRouterPath,
+  "expo-crypto": expoCryptoPath,
 };
 
 module.exports = config;
