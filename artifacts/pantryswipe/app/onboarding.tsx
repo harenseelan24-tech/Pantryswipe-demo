@@ -273,7 +273,7 @@ export default function OnboardingScreen() {
       id: `m${Date.now()}`,
       emoji: emojis[manualCategory] || "🍽️",
       name: manualName.trim(),
-      quantity: parseFloat(manualQty) || 1,
+      quantity: Number.isNaN(parseFloat(manualQty)) ? 1 : parseFloat(manualQty),
       unit: manualUnit,
       category: manualCategory.toLowerCase(),
       location: "pantry",

@@ -362,21 +362,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
           AsyncStorage.getItem(STORAGE_KEYS.SOCIAL_SAVED_POSTS),
         ]);
 
-      const loadedProfile: UserProfile | undefined = profileData
-        ? (JSON.parse(profileData) as UserProfile) : undefined;
+      const safeParse = <T,>(raw: string | null): T | null => {
+        if (!raw) return null;
+        try { return JSON.parse(raw) as T; } catch { return null; }
+      };
 
+      const loadedProfile = safeParse<UserProfile>(profileData);
       if (loadedProfile) setUserProfile(loadedProfile);
-      if (pantryData) setPantryItems(JSON.parse(pantryData));
-      if (savedData) setSavedRecipes(JSON.parse(savedData));
-      if (cookedData) setCookedRecipes(JSON.parse(cookedData));
-      if (statsData) setStats(JSON.parse(statsData));
-      if (setupData) setIsSetupComplete(JSON.parse(setupData));
-      if (historyData) setCookingHistory(JSON.parse(historyData));
-      if (learningData) setLearningProfile(JSON.parse(learningData));
-      if (followingData) setFollowingList(JSON.parse(followingData));
-      if (savedPostsData) setSavedPostIds(JSON.parse(savedPostsData));
+      const parsedPantry = safeParse<typeof INITIAL_PANTRY>(pantryData);
+      if (parsedPantry) setPantryItems(parsedPantry);
+      const parsedSaved = safeParse<string[]>(savedData);
+      if (parsedSaved) setSavedRecipes(parsedSaved);
+      const parsedCooked = safeParse<string[]>(cookedData);
+      if (parsedCooked) setCookedRecipes(parsedCooked);
+      const parsedStats = safeParse<typeof defaultStats>(statsData);
+      if (parsedStats) setStats(parsedStats);
+      const parsedSetup = safeParse<boolean>(setupData);
+      if (parsedSetup !== null) setIsSetupComplete(parsedSetup);
+      const parsedHistory = safeParse<unknown[]>(historyData);
+      if (parsedHistory) setCookingHistory(parsedHistory as any);
+      const parsedLearning = safeParse<typeof defaultLearning>(learningData);
+      if (parsedLearning) setLearningProfile(parsedLearning);
+      const parsedFollowing = safeParse<string[]>(followingData);
+      if (parsedFollowing) setFollowingList(parsedFollowing);
+      const parsedSavedPosts = safeParse<string[]>(savedPostsData);
+      if (parsedSavedPosts) setSavedPostIds(parsedSavedPosts);
 
-      fetchLiveRecipes(loadedProfile);
+      fetchLiveRecipes(loadedProfile ?? undefined);
     } catch {
       fetchLiveRecipes();
     }

@@ -411,7 +411,7 @@ export default function SocialScreen() {
         <Pressable onPress={() => handleDoubleTap(item.id)}>
           <View style={[styles.postImageContainer, { backgroundColor: colors.muted }]}>
             {imageSource ? (
-              <Image source={imageSource} style={styles.postImage} resizeMode="cover" />
+              <Image source={imageSource} style={styles.postImage} resizeMode="cover" onError={() => {}} />
             ) : (
               <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
                 <Text style={{ fontSize: 52 }}>{CUISINE_EMOJIS[item.cuisine ?? ""] ?? "🍽"}</Text>
