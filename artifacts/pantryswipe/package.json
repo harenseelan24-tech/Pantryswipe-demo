@@ -63,10 +63,12 @@
   "dependencies": {
     "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
+    "@supabase/supabase-js": "^2.108.2",
     "expo-camera": "^17.0.10",
     "expo-image-manipulator": "~14.0.8",
     "expo-notifications": "^0.32.17",
-    "react-native-purchases": "^10.3.0"
+    "react-native-purchases": "^10.3.0",
+    "react-native-url-polyfill": "^3.0.0"
   },
   "jest": {
     "preset": "jest-expo",

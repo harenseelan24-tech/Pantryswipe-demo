@@ -9,11 +9,13 @@ import { SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from "@expo-google-fon
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as Linking from "expo-linking";
 import React, { useEffect } from "react";
 import { Alert } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { supabase } from "@/lib/supabase";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider } from "@/context/AppContext";
@@ -64,6 +66,28 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  // Handle deep link PKCE code exchange (Google OAuth / magic link callbacks)
+  useEffect(() => {
+    const handleUrl = async ({ url }: { url: string }) => {
+      if (!url.includes("auth/callback")) return;
+      try {
+        const parsed = new URL(url);
+        const code = parsed.searchParams.get("code");
+        if (code) {
+          await supabase.auth.exchangeCodeForSession(code);
+        }
+      } catch { /* ignore */ }
+    };
+
+    // Handle URL that opened the app
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl({ url });
+    });
+
+    const sub = Linking.addEventListener("url", handleUrl);
+    return () => sub.remove();
+  }, []);
 
   if (!fontsLoaded && !fontError) return null;
 

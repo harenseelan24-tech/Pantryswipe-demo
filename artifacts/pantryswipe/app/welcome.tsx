@@ -1,5 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import {
+  Alert,
+  ActivityIndicator,
   Animated,
   Image,
   Platform,
@@ -10,16 +12,48 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 import { useColors } from "@/hooks/useColors";
 import { StatusBar } from "expo-status-bar";
 import { TextType } from "@/components/TextType";
 import { DecryptedText } from "@/components/DecryptedText";
+import { supabase } from "@/lib/supabase";
 
 export default function WelcomeScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [screenKey, setScreenKey] = useState(0);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const redirectTo = Linking.createURL("auth/callback");
+
+  const handleGoogleSignIn = async () => {
+    if (googleLoading) return;
+    setGoogleLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo, skipBrowserRedirect: true },
+      });
+      if (error || !data.url) throw error ?? new Error("No OAuth URL returned");
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type === "success") {
+        const urlParams = new URL(result.url);
+        const code = urlParams.searchParams.get("code");
+        if (code) {
+          const { error: exchErr } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchErr) throw exchErr;
+          // onAuthStateChange in AppContext handles routing
+        }
+      }
+    } catch {
+      Alert.alert("Google Sign-In failed", "Please try again or use email instead.");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -110,11 +144,33 @@ export default function WelcomeScreen() {
         {/* CTA buttons */}
         <View style={styles.ctaContainer}>
           <TouchableOpacity
+            style={[styles.googleButton]}
+            onPress={handleGoogleSignIn}
+            activeOpacity={0.88}
+            disabled={googleLoading}
+          >
+            {googleLoading ? (
+              <ActivityIndicator size="small" color="#1a1a1a" />
+            ) : (
+              <>
+                <Text style={styles.googleIcon}>G</Text>
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: colors.saffron }]}
-            onPress={() => router.push("/onboarding")}
+            onPress={() => router.push("/sign-in?mode=signup")}
             activeOpacity={0.88}
           >
-            <Text style={styles.primaryButtonText}>Get Started</Text>
+            <Text style={styles.primaryButtonText}>Create Account</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -203,4 +259,19 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: "#fff", fontSize: 17, fontWeight: "600" },
   legalText: { fontSize: 11, color: "rgba(255,255,255,0.45)", textAlign: "center", lineHeight: 16 },
   legalLink: { color: "rgba(255,255,255,0.75)", fontWeight: "600", textDecorationLine: "underline" },
+
+  googleButton: {
+    height: 56,
+    borderRadius: 100,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+    flexDirection: "row",
+    gap: 10,
+  },
+  googleIcon: { fontSize: 18, fontWeight: "800", color: "#4285F4" },
+  googleButtonText: { color: "#1a1a1a", fontSize: 17, fontWeight: "600" },
+  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 2 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.2)" },
+  dividerText: { color: "rgba(255,255,255,0.5)", fontSize: 13, fontWeight: "500" },
 });

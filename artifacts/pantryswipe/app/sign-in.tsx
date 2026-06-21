@@ -1,33 +1,29 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import { useColors } from "@/hooks/useColors";
-import { STORAGE_KEYS } from "@/constants/storageKeys";
-
-const API_BASE =
-  Platform.OS !== "web"
-    ? `https://${process.env.EXPO_PUBLIC_API_DOMAIN ?? "zip-repl-cactusussy24.replit.app"}/api`
-    : "/api";
+import { supabase } from "@/lib/supabase";
 
 export default function SignInScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
 
+  const [isSignUp, setIsSignUp] = useState(mode === "signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -38,252 +34,202 @@ export default function SignInScreen() {
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom;
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const canSubmit = emailOk && password.length >= 1 && !loading;
+  const canSubmit = emailOk && password.length >= 6 && !loading;
 
-  const handleSignIn = async () => {
+  const handleSubmit = async () => {
     if (!canSubmit) return;
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Sign in failed. Please try again.");
-        setLoading(false);
-        return;
+      if (isSignUp) {
+        const { error: signUpErr } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+        });
+        if (signUpErr) { setError(signUpErr.message); setLoading(false); return; }
+        router.replace("/onboarding");
+      } else {
+        const { data, error: signInErr } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (signInErr) { setError(signInErr.message); setLoading(false); return; }
+        if (data.user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("onboarding_complete")
+            .eq("id", data.user.id)
+            .single() as { data: { onboarding_complete: boolean } | null };
+          if (profile?.onboarding_complete) {
+            router.replace("/(tabs)");
+          } else {
+            router.replace("/onboarding");
+          }
+        }
       }
-      if (data.token) {
-        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, data.token);
-      }
-      // Ensure setup complete is set so root guard routes to tabs
-      await AsyncStorage.setItem(STORAGE_KEYS.SETUP_COMPLETE, "true");
-      // Give Android's SQLite one extra tick to flush before navigating
-      await new Promise<void>((resolve) => setTimeout(resolve, 50));
-      router.replace("/(tabs)");
     } catch {
       setError("Unable to connect. Check your internet connection and try again.");
       setLoading(false);
     }
   };
 
-  const s = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 20,
-      paddingTop: topPadding + 8,
-      paddingBottom: 12,
-      gap: 12,
-    },
-    backBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: colors.card,
-    },
-    headerTitle: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: colors.foreground,
-    },
-    body: {
-      flex: 1,
-      paddingHorizontal: 28,
-      paddingTop: 32,
-    },
-    headline: {
-      fontSize: 32,
-      fontWeight: "800",
-      color: colors.foreground,
-      letterSpacing: -1,
-      marginBottom: 8,
-    },
-    sub: {
-      fontSize: 15,
-      color: colors.textSecondary,
-      lineHeight: 22,
-      marginBottom: 36,
-    },
-    label: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: colors.textSecondary,
-      letterSpacing: 0.3,
-      textTransform: "uppercase",
-      marginBottom: 8,
-      marginTop: 20,
-    },
-    inputRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      borderWidth: 1.5,
-      borderColor: colors.border,
-      borderRadius: 14,
-      paddingHorizontal: 16,
-      height: 52,
-      backgroundColor: colors.card,
-    },
-    inputRowFocused: {
-      borderColor: colors.saffron,
-    },
-    inputRowError: {
-      borderColor: colors.destructive,
-    },
-    input: {
-      flex: 1,
-      fontSize: 16,
-      color: colors.foreground,
-      height: "100%",
-    },
-    errorBox: {
-      backgroundColor: colors.destructive + "18",
-      borderWidth: 1,
-      borderColor: colors.destructive + "40",
-      borderRadius: 12,
-      padding: 14,
-      marginTop: 20,
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: 10,
-    },
-    errorText: {
-      flex: 1,
-      fontSize: 14,
-      color: colors.destructive,
-      lineHeight: 20,
-    },
-    signInBtn: {
-      height: 56,
-      borderRadius: 100,
-      alignItems: "center",
-      justifyContent: "center",
-      marginTop: 32,
-      backgroundColor: colors.saffron,
-    },
-    signInBtnDisabled: {
-      opacity: 0.5,
-    },
-    signInBtnText: {
-      color: "#fff",
-      fontSize: 17,
-      fontWeight: "700",
-      letterSpacing: 0.2,
-    },
-    footerText: {
-      textAlign: "center",
-      fontSize: 13,
-      color: colors.textSecondary,
-      marginTop: 24,
-      lineHeight: 20,
-    },
-    footerLink: {
-      color: colors.saffron,
-      fontWeight: "600",
-    },
-    bottomPad: {
-      height: bottomPadding + 16,
-    },
-  });
-
   return (
-    <View style={s.container}>
+    <View style={[s.container, { backgroundColor: colors.background }]}>
       <StatusBar style="auto" />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {/* Back button */}
-        <View style={s.header}>
-          <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-            <Feather name="arrow-left" size={20} color={colors.foreground} />
-          </TouchableOpacity>
-          <Text style={s.headerTitle}>Sign In</Text>
-        </View>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[s.inner, { paddingTop: topPadding + 8, paddingBottom: bottomPadding + 24 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={s.header}>
+            <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+              <Feather name="arrow-left" size={22} color={colors.text} />
+            </TouchableOpacity>
+          </View>
 
-        <View style={s.body}>
-          <Text style={s.headline}>Welcome back 👋</Text>
-          <Text style={s.sub}>
-            Sign in to your PantrySwipe account to pick up right where you left off.
+          <Text style={[s.title, { color: colors.text }]}>
+            {isSignUp ? "Create your account" : "Welcome back"}
+          </Text>
+          <Text style={[s.sub, { color: colors.textSecondary }]}>
+            {isSignUp
+              ? "Sign up to save your pantry, recipes, and progress."
+              : "Sign in to access your pantry and saved recipes."}
           </Text>
 
-          <Text style={s.label}>Email</Text>
-          <View style={[s.inputRow, error ? s.inputRowError : null]}>
+          {/* Tab toggle */}
+          <View style={[s.tabs, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={[s.tab, !isSignUp && { backgroundColor: colors.saffron }]}
+              onPress={() => { setIsSignUp(false); setError(""); }}
+            >
+              <Text style={[s.tabTxt, { color: !isSignUp ? "#fff" : colors.textSecondary }]}>Sign In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.tab, isSignUp && { backgroundColor: colors.saffron }]}
+              onPress={() => { setIsSignUp(true); setError(""); }}
+            >
+              <Text style={[s.tabTxt, { color: isSignUp ? "#fff" : colors.textSecondary }]}>Sign Up</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Email */}
+          <Text style={[s.label, { color: colors.textSecondary }]}>Email</Text>
+          <View style={[s.inputWrap, { backgroundColor: colors.card, borderColor: error && !emailOk ? "#E84040" : colors.border }]}>
+            <Feather name="mail" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
             <TextInput
-              style={s.input}
+              style={[s.input, { color: colors.text }]}
               placeholder="you@example.com"
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={colors.textMuted}
               value={email}
               onChangeText={(t) => { setEmail(t); setError(""); }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
-              returnKeyType="next"
             />
-            {emailOk && !error && (
-              <Feather name="check-circle" size={18} color={colors.herbGreen} />
-            )}
+            {emailOk && <Feather name="check-circle" size={16} color={colors.herbGreen} />}
           </View>
 
-          <Text style={s.label}>Password</Text>
-          <View style={[s.inputRow, error ? s.inputRowError : null]}>
+          {/* Password */}
+          <Text style={[s.label, { color: colors.textSecondary }]}>Password</Text>
+          <View style={[s.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="lock" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
             <TextInput
-              style={s.input}
-              placeholder="Your password"
-              placeholderTextColor={colors.textSecondary}
+              style={[s.input, { color: colors.text }]}
+              placeholder={isSignUp ? "Create a password (6+ characters)" : "Your password"}
+              placeholderTextColor={colors.textMuted}
               value={password}
               onChangeText={(t) => { setPassword(t); setError(""); }}
               secureTextEntry={!showPw}
-              autoCapitalize="none"
-              returnKeyType="done"
-              onSubmitEditing={handleSignIn}
             />
-            <TouchableOpacity onPress={() => setShowPw((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Feather name={showPw ? "eye-off" : "eye"} size={18} color={colors.textSecondary} />
+            <TouchableOpacity onPress={() => setShowPw(!showPw)}>
+              <Feather name={showPw ? "eye-off" : "eye"} size={18} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
-          {/* Error message */}
-          {error ? (
+          {!!error && (
             <View style={s.errorBox}>
-              <Feather name="alert-circle" size={16} color={colors.destructive} style={{ marginTop: 2 }} />
-              <Text style={s.errorText}>{error}</Text>
+              <Feather name="alert-circle" size={14} color="#E84040" />
+              <Text style={s.errorTxt}>{error}</Text>
             </View>
-          ) : null}
+          )}
 
-          {/* Sign In button */}
+          {/* Submit */}
           <TouchableOpacity
-            style={[s.signInBtn, !canSubmit && s.signInBtnDisabled]}
-            onPress={handleSignIn}
+            style={[s.submitBtn, { backgroundColor: colors.saffron, opacity: canSubmit ? 1 : 0.5 }]}
+            onPress={handleSubmit}
             disabled={!canSubmit}
-            activeOpacity={0.88}
+            activeOpacity={0.85}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={s.signInBtnText}>Sign In</Text>
+              <Text style={s.submitTxt}>{isSignUp ? "Create Account" : "Sign In"}</Text>
             )}
           </TouchableOpacity>
 
-          <Text style={s.footerText}>
-            Don{"'"}t have an account?{" "}
-            <Text
-              style={s.footerLink}
-              onPress={() => router.replace("/onboarding")}
-            >
-              Get Started
-            </Text>
-          </Text>
-        </View>
-
-        <View style={s.bottomPad} />
+          {!isSignUp && (
+            <TouchableOpacity style={{ alignSelf: "center", marginTop: 8 }}>
+              <Text style={[s.forgotTxt, { color: colors.textSecondary }]}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
 }
+
+const s = StyleSheet.create({
+  container: { flex: 1 },
+  inner: { paddingHorizontal: 24, flexGrow: 1 },
+  header: { flexDirection: "row", alignItems: "center", marginBottom: 28 },
+  backBtn: { padding: 4 },
+  title: { fontSize: 28, fontWeight: "800", letterSpacing: -0.8, marginBottom: 8 },
+  sub: { fontSize: 15, lineHeight: 22, marginBottom: 28 },
+  tabs: {
+    flexDirection: "row",
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 4,
+    marginBottom: 28,
+    gap: 4,
+  },
+  tab: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: "center" },
+  tabTxt: { fontSize: 15, fontWeight: "600" },
+  label: { fontSize: 13, fontWeight: "600", marginBottom: 6, marginTop: 4 },
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 52,
+    marginBottom: 16,
+  },
+  input: { flex: 1, fontSize: 16 },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorTxt: { color: "#E84040", fontSize: 13, flex: 1 },
+  submitBtn: {
+    height: 54,
+    borderRadius: 100,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  submitTxt: { color: "#fff", fontSize: 17, fontWeight: "700" },
+  forgotTxt: { fontSize: 14, textDecorationLine: "underline" },
+});
