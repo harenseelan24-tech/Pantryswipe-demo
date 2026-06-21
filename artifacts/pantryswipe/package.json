@@ -66,7 +66,6 @@
     "@supabase/supabase-js": "^2.108.2",
     "expo-auth-session": "^56.0.14",
     "expo-camera": "^17.0.10",
-    "expo-crypto": "^56.0.4",
     "expo-image-manipulator": "~14.0.8",
     "expo-notifications": "^0.32.17",
     "react-native-purchases": "^10.3.0",
