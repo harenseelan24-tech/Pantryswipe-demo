@@ -546,10 +546,28 @@ PantrySwipe is a mobile app that helps you discover recipes based on ingredients
 - Terms of Service: ${baseUrl}/terms-of-service
 `;
 
+  const robotsTxt = `User-agent: *
+Allow: /
+Allow: /privacy-policy
+Allow: /terms-of-service
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: ${baseUrl}/sitemap.xml
+`;
+
   fs.writeFileSync(path.join(staticBuild, "sitemap.xml"), sitemap, "utf-8");
   fs.writeFileSync(path.join(staticBuild, "llms.txt"), llmsTxt, "utf-8");
+  fs.writeFileSync(path.join(staticBuild, "robots.txt"), robotsTxt, "utf-8");
 
-  console.log("Crawler files written: sitemap.xml, llms.txt");
+  console.log("Crawler files written: sitemap.xml, llms.txt, robots.txt");
 }
 
 async function main() {

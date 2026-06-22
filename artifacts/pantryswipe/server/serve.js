@@ -7,6 +7,7 @@
  * - GET /privacy-policy → Privacy Policy HTML
  * - GET /terms-of-service → Terms of Service HTML
  * - GET /sitemap.xml → XML sitemap for crawlers
+ * - GET /robots.txt → crawler governance file (sitemap pointer + bot rules)
  * - GET /llms.txt → AI-crawler discovery file
  * Everything else falls through to static file serving from ./static-build/.
  *
@@ -132,6 +133,30 @@ function serveSitemap(req, res) {
   res.end(xml);
 }
 
+function serveRobotsTxt(req, res) {
+  const baseUrl = getBaseUrl(req);
+
+  const txt = `User-agent: *
+Allow: /
+Allow: /privacy-policy
+Allow: /terms-of-service
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: ${baseUrl}/sitemap.xml
+`;
+
+  res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+  res.end(txt);
+}
+
 function serveLlmsTxt(req, res) {
   const baseUrl = getBaseUrl(req);
 
@@ -207,6 +232,10 @@ const server = http.createServer((req, res) => {
 
   if (pathname === "/sitemap.xml") {
     return serveSitemap(req, res);
+  }
+
+  if (pathname === "/robots.txt") {
+    return serveRobotsTxt(req, res);
   }
 
   if (pathname === "/llms.txt") {
