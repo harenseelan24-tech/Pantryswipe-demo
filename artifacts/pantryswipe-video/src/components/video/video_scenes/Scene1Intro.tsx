@@ -9,54 +9,47 @@ export function Scene1Intro() {
     const timers = [
       setTimeout(() => setPhase(1), 300),
       setTimeout(() => setPhase(2), 1200),
-      setTimeout(() => setPhase(3), 2500),
+      setTimeout(() => setPhase(3), 2000),
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
 
   return (
     <motion.div 
-      className="absolute inset-0 flex items-center justify-center overflow-hidden"
-      {...sceneTransitions.clipCircle}
+      className="absolute inset-0 flex items-center justify-center overflow-hidden bg-[#141210]"
+      {...sceneTransitions.zoomThrough}
     >
       <div className="absolute inset-0 z-0">
-         <img 
-            src={`${import.meta.env.BASE_URL}images/food-bg1.jpg`} 
-            alt="Food bg" 
-            className="w-full h-full object-cover opacity-40"
+         <motion.div 
+           className="absolute w-[100vw] h-[100vw] rounded-full blur-[150px] opacity-30 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+           style={{ background: 'radial-gradient(circle, #F5A623, transparent)' }}
+           animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
+           transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
          />
-         <div className="absolute inset-0 bg-black/50" />
       </div>
 
       <div className="relative z-10 text-center flex flex-col items-center">
         <motion.div 
-          className="w-32 h-32 mb-8 bg-primary rounded-3xl flex items-center justify-center shadow-2xl shadow-primary/50"
-          initial={{ scale: 0, rotate: -45 }}
-          animate={phase >= 1 ? { scale: 1, rotate: 0 } : { scale: 0, rotate: -45 }}
+          className="mb-8"
+          initial={{ scale: 0, opacity: 0, filter: 'blur(20px)' }}
+          animate={phase >= 1 ? { scale: 1, opacity: 1, filter: 'blur(0px)' } : { scale: 0, opacity: 0, filter: 'blur(20px)' }}
           transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         >
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-          </svg>
+          <img 
+            src={`${import.meta.env.BASE_URL}logo.png`} 
+            alt="PantrySwipe Logo" 
+            className="w-[20vw] h-[20vw] max-w-[240px] max-h-[240px] rounded-full shadow-[0_0_80px_rgba(245,166,35,0.4)] object-contain"
+          />
         </motion.div>
 
         <motion.h1 
-          className="text-[8vw] font-black text-white leading-none font-display uppercase tracking-tight"
+          className="text-[7vw] font-black text-white leading-none font-display uppercase tracking-tight"
           initial={{ opacity: 0, y: 50 }}
           animate={phase >= 2 ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30 }}
         >
-          PANTRYSWIPE
+          Cook what you<br/><span className="text-primary">already have</span>
         </motion.h1>
-
-        <motion.p
-          className="text-[2.5vw] text-white/80 mt-4 font-body font-medium"
-          initial={{ opacity: 0, filter: 'blur(10px)' }}
-          animate={phase >= 3 ? { opacity: 1, filter: 'blur(0)' } : { opacity: 0, filter: 'blur(10px)' }}
-          transition={{ duration: 0.8 }}
-        >
-          Stop eating boring food.
-        </motion.p>
       </div>
     </motion.div>
   );
