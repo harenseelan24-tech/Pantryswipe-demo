@@ -12,12 +12,18 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { Alert } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider } from "@/context/AppContext";
 import { initializeRevenueCat, SubscriptionProvider } from "@/lib/revenuecat";
+
+let KeyboardProvider: React.ComponentType<{ children: React.ReactNode }> | null = null;
+try {
+  KeyboardProvider = require("react-native-keyboard-controller").KeyboardProvider;
+} catch {
+  // react-native-keyboard-controller not available in Expo Go
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -74,9 +80,13 @@ export default function RootLayout() {
           <AppProvider>
             <SubscriptionProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
-                <KeyboardProvider>
+                {KeyboardProvider ? (
+                  <KeyboardProvider>
+                    <RootLayoutNav />
+                  </KeyboardProvider>
+                ) : (
                   <RootLayoutNav />
-                </KeyboardProvider>
+                )}
               </GestureHandlerRootView>
             </SubscriptionProvider>
           </AppProvider>

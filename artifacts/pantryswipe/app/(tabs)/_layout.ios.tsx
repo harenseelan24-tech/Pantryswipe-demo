@@ -1,36 +1,56 @@
 import { BlurView } from "expo-blur";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
 import React from "react";
 import { StyleSheet, useColorScheme } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 
+let isLiquidGlassAvailable: (() => boolean) | null = null;
+let NativeTabs: any = null;
+let NativeTabsIcon: any = null;
+let NativeTabsLabel: any = null;
+
+try {
+  const glassEffect = require("expo-glass-effect");
+  isLiquidGlassAvailable = glassEffect.isLiquidGlassAvailable;
+} catch {
+  // expo-glass-effect not available in Expo Go
+}
+
+try {
+  const nativeTabs = require("expo-router/unstable-native-tabs");
+  NativeTabs = nativeTabs.NativeTabs;
+  NativeTabsIcon = nativeTabs.Icon;
+  NativeTabsLabel = nativeTabs.Label;
+} catch {
+  // unstable-native-tabs not available in Expo Go
+}
+
 function NativeTabLayout() {
+  if (!NativeTabs) return null;
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "sparkle", selected: "sparkles" }} />
-        <Label>Discover</Label>
+        <NativeTabsIcon sf={{ default: "sparkle", selected: "sparkles" }} />
+        <NativeTabsLabel>Discover</NativeTabsLabel>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="pantry">
-        <Icon sf={{ default: "bag", selected: "bag.fill" }} />
-        <Label>Pantry</Label>
+        <NativeTabsIcon sf={{ default: "bag", selected: "bag.fill" }} />
+        <NativeTabsLabel>Pantry</NativeTabsLabel>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="planner">
-        <Icon sf={{ default: "fork.knife", selected: "fork.knife" }} />
-        <Label>Planner</Label>
+        <NativeTabsIcon sf={{ default: "fork.knife", selected: "fork.knife" }} />
+        <NativeTabsLabel>Planner</NativeTabsLabel>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="social">
-        <Icon sf={{ default: "heart", selected: "heart.fill" }} />
-        <Label>Social</Label>
+        <NativeTabsIcon sf={{ default: "heart", selected: "heart.fill" }} />
+        <NativeTabsLabel>Social</NativeTabsLabel>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: "person.crop.circle", selected: "person.crop.circle.fill" }} />
-        <Label>Profile</Label>
+        <NativeTabsIcon sf={{ default: "person.crop.circle", selected: "person.crop.circle.fill" }} />
+        <NativeTabsLabel>Profile</NativeTabsLabel>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -117,7 +137,8 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
+  const liquidGlass = isLiquidGlassAvailable && NativeTabs && isLiquidGlassAvailable();
+  if (liquidGlass) {
     return <NativeTabLayout />;
   }
   return <ClassicTabLayout />;

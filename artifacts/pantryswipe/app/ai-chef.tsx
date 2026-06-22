@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import {
   FlatList,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,7 +13,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
