@@ -1,6 +1,5 @@
 import React, { createContext, useContext } from "react";
 import { Platform } from "react-native";
-import Purchases from "react-native-purchases";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
 
@@ -10,13 +9,24 @@ const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_AP
 
 export const REVENUECAT_ENTITLEMENT_IDENTIFIER = "premium";
 
+let Purchases: any = null;
+try {
+  Purchases = require("react-native-purchases").default;
+} catch {
+  // react-native-purchases native module not available (Expo Go or web)
+}
+
+function isAvailable() {
+  return (
+    Purchases !== null &&
+    Platform.OS !== "web" &&
+    Constants.executionEnvironment !== "storeClient"
+  );
+}
+
 function getRevenueCatApiKey() {
   if (!REVENUECAT_TEST_API_KEY || !REVENUECAT_IOS_API_KEY || !REVENUECAT_ANDROID_API_KEY) {
     throw new Error("RevenueCat Public API Keys not found");
-  }
-
-  if (!REVENUECAT_ENTITLEMENT_IDENTIFIER) {
-    throw new Error("RevenueCat Entitlement Identifier not provided");
   }
 
   if (__DEV__ || Platform.OS === "web" || Constants.executionEnvironment === "storeClient") {
@@ -35,6 +45,11 @@ function getRevenueCatApiKey() {
 }
 
 export function initializeRevenueCat() {
+  if (!isAvailable()) {
+    console.log("RevenueCat skipped (Expo Go / web / native module unavailable)");
+    return;
+  }
+
   const apiKey = getRevenueCatApiKey();
   if (!apiKey) throw new Error("RevenueCat Public API Key not found");
 
@@ -48,6 +63,7 @@ function useSubscriptionContext() {
   const customerInfoQuery = useQuery({
     queryKey: ["revenuecat", "customer-info"],
     queryFn: async () => {
+      if (!isAvailable()) return null;
       const info = await Purchases.getCustomerInfo();
       return info;
     },
@@ -57,6 +73,7 @@ function useSubscriptionContext() {
   const offeringsQuery = useQuery({
     queryKey: ["revenuecat", "offerings"],
     queryFn: async () => {
+      if (!isAvailable()) return null;
       const offerings = await Purchases.getOfferings();
       return offerings;
     },
@@ -65,6 +82,7 @@ function useSubscriptionContext() {
 
   const purchaseMutation = useMutation({
     mutationFn: async (packageToPurchase: any) => {
+      if (!isAvailable()) throw new Error("Purchases not available in this environment");
       const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
       return customerInfo;
     },
@@ -73,6 +91,7 @@ function useSubscriptionContext() {
 
   const restoreMutation = useMutation({
     mutationFn: async () => {
+      if (!isAvailable()) throw new Error("Purchases not available in this environment");
       return Purchases.restorePurchases();
     },
     onSuccess: () => customerInfoQuery.refetch(),
