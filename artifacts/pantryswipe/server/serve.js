@@ -22,6 +22,7 @@ const STATIC_ROOT = path.resolve(__dirname, "..", "static-build");
 const TEMPLATE_PATH = path.resolve(__dirname, "templates", "landing-page.html");
 const PRIVACY_POLICY_PATH = path.resolve(__dirname, "templates", "privacy-policy.html");
 const TERMS_PATH = path.resolve(__dirname, "templates", "terms-of-service.html");
+const SOCIAL_CARD_PATH = path.resolve(__dirname, "..", "assets", "images", "social-card.png");
 const basePath = (process.env.BASE_PATH || "/").replace(/\/+$/, "");
 
 const MIME_TYPES = {
@@ -240,6 +241,21 @@ const server = http.createServer((req, res) => {
 
   if (pathname === "/llms.txt") {
     return serveLlmsTxt(req, res);
+  }
+
+  if (pathname === "/social-card.png") {
+    if (fs.existsSync(SOCIAL_CARD_PATH)) {
+      const content = fs.readFileSync(SOCIAL_CARD_PATH);
+      res.writeHead(200, {
+        "content-type": "image/png",
+        "cache-control": "public, max-age=86400",
+      });
+      res.end(content);
+      return;
+    }
+    res.writeHead(404);
+    res.end("Not Found");
+    return;
   }
 
   serveStaticFile(pathname, res);

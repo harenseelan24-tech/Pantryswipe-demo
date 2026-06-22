@@ -505,6 +505,18 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
   console.log("Manifests updated");
 }
 
+function copySocialCard() {
+  const src = path.join(projectRoot, "assets", "images", "social-card.png");
+  const dest = path.join(projectRoot, "static-build", "social-card.png");
+
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, dest);
+    console.log("Copied social-card.png to static-build/");
+  } else {
+    console.warn("WARNING: assets/images/social-card.png not found — og:image will 404");
+  }
+}
+
 function writeCrawlerFiles(baseUrl) {
   console.log("Writing crawler discovery files...");
 
@@ -621,6 +633,7 @@ async function main() {
   console.log("Updating manifests and creating landing page...");
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
 
+  copySocialCard();
   writeCrawlerFiles(baseUrl);
 
   console.log("Build complete! Deploy to:", baseUrl);
