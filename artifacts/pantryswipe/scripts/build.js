@@ -517,6 +517,18 @@ function copySocialCard() {
   }
 }
 
+function copyAppLogo() {
+  const src = path.join(projectRoot, "assets", "images", "app-logo.png");
+  const dest = path.join(projectRoot, "static-build", "app-logo.png");
+
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, dest);
+    console.log("Copied app-logo.png to static-build/");
+  } else {
+    console.warn("WARNING: assets/images/app-logo.png not found — Organization.logo will 404");
+  }
+}
+
 function writeCrawlerFiles(baseUrl) {
   console.log("Writing crawler discovery files...");
 
@@ -634,6 +646,7 @@ async function main() {
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
 
   copySocialCard();
+  copyAppLogo();
   writeCrawlerFiles(baseUrl);
 
   console.log("Build complete! Deploy to:", baseUrl);
