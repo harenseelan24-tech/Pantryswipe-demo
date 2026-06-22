@@ -505,6 +505,53 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
   console.log("Manifests updated");
 }
 
+function writeCrawlerFiles(baseUrl) {
+  console.log("Writing crawler discovery files...");
+
+  const staticBuild = path.join(projectRoot, "static-build");
+  const today = new Date().toISOString().slice(0, 10);
+
+  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${baseUrl}/</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/privacy-policy</loc>
+    <lastmod>2026-06-01</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/terms-of-service</loc>
+    <lastmod>2026-06-01</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+</urlset>`;
+
+  const llmsTxt = `# PantrySwipe
+
+> AI-powered cooking ecosystem — Tinder-style recipe discovery, smart pantry management, meal planning, social feed, and AI chef chat.
+
+PantrySwipe is a mobile app that helps you discover recipes based on ingredients already in your pantry, reduce food waste, and build a smarter cooking routine.
+
+## Pages
+
+- Home: ${baseUrl}/
+- Privacy Policy: ${baseUrl}/privacy-policy
+- Terms of Service: ${baseUrl}/terms-of-service
+`;
+
+  fs.writeFileSync(path.join(staticBuild, "sitemap.xml"), sitemap, "utf-8");
+  fs.writeFileSync(path.join(staticBuild, "llms.txt"), llmsTxt, "utf-8");
+
+  console.log("Crawler files written: sitemap.xml, llms.txt");
+}
+
 async function main() {
   console.log("Building static Expo Go deployment...");
 
@@ -555,6 +602,8 @@ async function main() {
 
   console.log("Updating manifests and creating landing page...");
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
+
+  writeCrawlerFiles(baseUrl);
 
   console.log("Build complete! Deploy to:", baseUrl);
 
