@@ -66,7 +66,8 @@ function buildPremiumResponse(
 
   const expiring = pantryItems.filter((i) => {
     if (!i.expiryDate) return false;
-    return new Date(i.expiryDate) <= twoDays;
+    const expDate = new Date(i.expiryDate);
+    return expDate >= now && expDate <= twoDays;
   });
   const useSoon = pantryItems.filter((i) => {
     if (!i.expiryDate) return false;
@@ -269,6 +270,7 @@ export default function AIChefScreen() {
   const { usageCount, isAtLimit, increment, loaded } = useAIChefUsage();
   const [showGate, setShowGate] = useState(false);
   const conversationRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
+  const isSendingRef = useRef(false);
 
   const API_BASE = Platform.OS !== "web"
     ? `https://${process.env.EXPO_PUBLIC_API_DOMAIN ?? "zip-repl-cactusussy24.replit.app"}/api`
@@ -284,7 +286,7 @@ export default function AIChefScreen() {
   const remaining = Math.max(0, FREE_DAILY_LIMIT - usageCount);
 
   const sendMessage = async (text: string = input.trim()) => {
-    if (!text || isTyping) return;
+    if (!text || isTyping || isSendingRef.current) return;
 
     // Gate check for free users
     if (!isSubscribed && isAtLimit) {
@@ -292,6 +294,8 @@ export default function AIChefScreen() {
       setShowGate(true);
       return;
     }
+
+    isSendingRef.current = true;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -326,7 +330,6 @@ export default function AIChefScreen() {
           goal: userProfile.goal,
         });
         realAiSucceeded = true;
-        if (!isSubscribed) await increment();
       } catch {
         // API key not configured or network error — fall through to mock
       }
@@ -357,7 +360,6 @@ export default function AIChefScreen() {
           });
           const data = await res.json().catch(() => ({ response: null }));
           aiText = (data.response as string | null) ?? "I'm having a moment — please try again!";
-          await increment();
         }
       }
 
@@ -373,7 +375,7 @@ export default function AIChefScreen() {
         ...history,
         { role: "user", content: text },
         { role: "assistant", content: aiMsg.content },
-      ];
+      ].slice(-10);
 
       // Show gate preemptively when 1 remaining (after this one is used)
       if (!isSubscribed && remaining === 1) {
@@ -389,6 +391,8 @@ export default function AIChefScreen() {
       setMessages((prev) => [errMsg, ...prev]);
     } finally {
       setIsTyping(false);
+      if (!isSubscribed) await increment();
+      isSendingRef.current = false;
     }
   };
 

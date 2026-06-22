@@ -278,7 +278,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile>(defaultProfile);
-  const [pantryItems, setPantryItems] = useState<PantryItem[]>(INITIAL_PANTRY);
+  const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
   const [savedRecipes, setSavedRecipes] = useState<string[]>([]);
   const [cookedRecipes, setCookedRecipes] = useState<string[]>([]);
   const [cookingHistory, setCookingHistory] = useState<CookingEntry[]>([]);
@@ -398,7 +398,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
     } catch { /* ignore storage errors */ }
     setUserProfile(defaultProfile);
-    setPantryItems(INITIAL_PANTRY);
+    setPantryItems([]);
     setSavedRecipes([]);
     setCookedRecipes([]);
     setCookingHistory([]);
@@ -471,17 +471,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const updated = [...cookedRecipes, id];
       setCookedRecipes(updated);
       saveData(STORAGE_KEYS.COOKED, updated);
-      const today = new Date().toISOString().split("T")[0];
-      const newStats = {
-        ...stats,
-        mealsCooked: stats.mealsCooked + 1,
-        xp: stats.xp + 50,
-        streak: computeNewStreak(stats.streak, stats.lastCookedDate),
-        lastCookedDate: today,
-        moneySaved: stats.moneySaved + 12,
-      };
-      setStats(newStats);
-      saveData(STORAGE_KEYS.STATS, newStats);
     }
   };
 

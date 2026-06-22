@@ -1384,8 +1384,8 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     timeAgo: "4h ago",
     recipeId: "2",
     recipeName: "Garlic Butter Salmon",
-    liked: true,
-    saved: true,
+    liked: false,
+    saved: false,
     cuisine: "Japanese",
   },
   {
@@ -1414,7 +1414,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     timeAgo: "8h ago",
     recipeId: "4",
     recipeName: "Beef Bibimbap",
-    liked: true,
+    liked: false,
     saved: false,
     cuisine: "Korean",
   },
@@ -1430,7 +1430,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeId: "9",
     recipeName: "Beef Ramen",
     liked: false,
-    saved: true,
+    saved: false,
     cuisine: "Japanese",
   },
   {
@@ -1445,7 +1445,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeId: "11",
     recipeName: "Shakshuka",
     liked: false,
-    saved: true,
+    saved: false,
   },
   {
     id: "s7",
@@ -1458,8 +1458,8 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     timeAgo: "1d ago",
     recipeId: "12",
     recipeName: "Thai Green Curry",
-    liked: true,
-    saved: true,
+    liked: false,
+    saved: false,
     cuisine: "Thai",
   },
   {
@@ -1474,7 +1474,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeId: "26",
     recipeName: "Creamy Tomato Pasta",
     liked: false,
-    saved: true,
+    saved: false,
     cuisine: "Italian",
   },
   {
@@ -1488,7 +1488,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     timeAgo: "2d ago",
     recipeId: "29",
     recipeName: "Chocolate Lava Cake",
-    liked: true,
+    liked: false,
     saved: false,
   },
   {
@@ -1503,7 +1503,7 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     recipeId: "22",
     recipeName: "Teriyaki Chicken Bowl",
     liked: false,
-    saved: true,
+    saved: false,
     cuisine: "Japanese",
   },
   {
@@ -1515,23 +1515,10 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
     likes: 4820,
     comments: 243,
     timeAgo: "3d ago",
+    recipeId: "r103",
     recipeName: "Butter Chicken",
     liked: false,
     saved: false,
-    cuisine: "Indian",
-  },
-  {
-    id: "s12",
-    username: "dal_daily",
-    userAvatar: "D",
-    image: null,
-    caption: "Dal makhani that simmered for 4 hours. The colour says it all. Paired with fresh roti from scratch 🫓",
-    likes: 2930,
-    comments: 118,
-    timeAgo: "4d ago",
-    recipeName: "Dal Makhani",
-    liked: true,
-    saved: true,
     cuisine: "Indian",
   },
   {
@@ -1579,14 +1566,14 @@ export const MOCK_SOCIAL_POSTS: SocialPost[] = [
 ];
 
 export const BADGES = [
-  { id: "b1", name: "First Cook", icon: "zap", earned: true, description: "Cooked your first recipe" },
-  { id: "b2", name: "7-Day Streak", icon: "award", earned: true, description: "Cooked 7 days in a row" },
+  { id: "b1", name: "First Cook", icon: "zap", earned: false, description: "Cooked your first recipe" },
+  { id: "b2", name: "7-Day Streak", icon: "award", earned: false, description: "Cooked 7 days in a row" },
   { id: "b3", name: "World Traveler", icon: "globe", earned: false, description: "Cooked 10 different cuisines" },
   { id: "b4", name: "Waste Warrior", icon: "wind", earned: false, description: "Used 20 expiring ingredients" },
   { id: "b5", name: "Party Pro", icon: "star", earned: false, description: "Used party planner for 5+ guests" },
-  { id: "b6", name: "Budget Chef", icon: "dollar-sign", earned: true, description: "Cooked 10 meals under budget" },
+  { id: "b6", name: "Budget Chef", icon: "dollar-sign", earned: false, description: "Cooked 10 meals under budget" },
   { id: "b7", name: "Food Photographer", icon: "camera", earned: false, description: "Posted 10 food photos" },
-  { id: "b8", name: "Meal Prep Master", icon: "check-circle", earned: true, description: "Completed a full week meal plan" },
+  { id: "b8", name: "Meal Prep Master", icon: "check-circle", earned: false, description: "Completed a full week meal plan" },
 ];
 
 export const CUISINES = [

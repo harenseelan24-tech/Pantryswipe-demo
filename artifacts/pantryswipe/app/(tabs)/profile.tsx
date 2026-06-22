@@ -37,14 +37,12 @@ const BIO_LIMIT = 80;
 const PROFILE_TABS = ["Recipes", "Saved", "Stats", "Badges"] as const;
 const RECIPE_SUBTABS = ["Saved Later", "Made", "To Cook"] as const;
 
-const ALL_CUISINES = [
-  { name: "Italian", flag: "🇮🇹", count: 18 },
-  { name: "Japanese", flag: "🇯🇵", count: 14 },
-  { name: "Korean", flag: "🇰🇷", count: 11 },
-  { name: "American", flag: "🇺🇸", count: 9 },
-  { name: "Indian", flag: "🇮🇳", count: 7 },
-  { name: "Mediterranean", flag: "🌊", count: 5 },
-];
+const CUISINE_FLAGS: Record<string, string> = {
+  Italian: "🇮🇹", Japanese: "🇯🇵", Korean: "🇰🇷", Mexican: "🇲🇽",
+  Indian: "🇮🇳", Chinese: "🇨🇳", Thai: "🇹🇭", American: "🇺🇸",
+  French: "🇫🇷", Mediterranean: "🌊", Vietnamese: "🇻🇳", International: "🍽",
+  "Middle Eastern": "🌙", African: "🌍",
+};
 
 const GOAL_EMOJI: Record<string, string> = {
   "Build Muscle": "💪", "Eat Healthier": "🥗", "Save Money": "💰",
@@ -363,7 +361,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <View style={styles.statItem}>
-                <Text style={[styles.statBig, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]}>48</Text>
+                <Text style={[styles.statBig, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]}>0</Text>
                 <Text style={[styles.statSmall, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Followers</Text>
               </View>
               <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
@@ -628,29 +626,54 @@ export default function ProfileScreen() {
               })()}
 
               {/* Top cuisines */}
-              <View style={[styles.cuisineCard, { backgroundColor: colors.card, borderColor: colors.border, overflow: "hidden" }]}>
-                {/* Saffron top accent bar */}
-                <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, backgroundColor: colors.primary }} />
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, marginBottom: 2 }}>
-                  <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: colors.primary }} />
-                  <Text style={{ fontSize: 10, letterSpacing: 1.5, fontFamily: "Inter_600SemiBold", color: colors.primary, textTransform: "uppercase" }}>
-                    Top Cuisines
-                  </Text>
-                </View>
-                {ALL_CUISINES.map((c, i) => (
-                  <View key={c.name} style={styles.cuisineRow}>
-                    <Text style={[styles.cuisineRank, { color: colors.textMuted, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
-                      {String(i + 1).padStart(2, "0")}
-                    </Text>
-                    <Text style={styles.cuisineFlag}>{c.flag}</Text>
-                    <Text style={[styles.cuisineName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{c.name}</Text>
-                    <View style={[styles.cuisineTrack, { backgroundColor: colors.muted }]}>
-                      <View style={[styles.cuisineFill, { backgroundColor: colors.primary, width: `${Math.round((c.count / 18) * 100)}%` as any }]} />
+              {(() => {
+                const cookedList = liveRecipes.filter((r) => cookedRecipes.includes(r.id));
+                const cuisineCounts: Record<string, number> = {};
+                cookedList.forEach((r) => {
+                  cuisineCounts[r.cuisine] = (cuisineCounts[r.cuisine] ?? 0) + 1;
+                });
+                const topCuisines = Object.entries(cuisineCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 6)
+                  .map(([name, count]) => ({ name, count, flag: CUISINE_FLAGS[name] ?? "🍽" }));
+                const maxCount = topCuisines[0]?.count ?? 1;
+
+                if (topCuisines.length === 0) {
+                  return (
+                    <View style={[styles.cuisineCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 28 }]}>
+                      <Text style={{ fontSize: 32, marginBottom: 10 }}>🌍</Text>
+                      <Text style={[styles.cuisineCardTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold", textAlign: "center" }]}>
+                        Cook recipes to see your cuisine breakdown
+                      </Text>
                     </View>
-                    <Text style={[styles.cuisineCount, { color: colors.textMuted, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{c.count}</Text>
+                  );
+                }
+
+                return (
+                  <View style={[styles.cuisineCard, { backgroundColor: colors.card, borderColor: colors.border, overflow: "hidden" }]}>
+                    <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, backgroundColor: colors.primary }} />
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, marginBottom: 2 }}>
+                      <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: colors.primary }} />
+                      <Text style={{ fontSize: 10, letterSpacing: 1.5, fontFamily: "Inter_600SemiBold", color: colors.primary, textTransform: "uppercase" }}>
+                        Top Cuisines
+                      </Text>
+                    </View>
+                    {topCuisines.map((c, i) => (
+                      <View key={c.name} style={styles.cuisineRow}>
+                        <Text style={[styles.cuisineRank, { color: colors.textMuted, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
+                          {String(i + 1).padStart(2, "0")}
+                        </Text>
+                        <Text style={styles.cuisineFlag}>{c.flag}</Text>
+                        <Text style={[styles.cuisineName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{c.name}</Text>
+                        <View style={[styles.cuisineTrack, { backgroundColor: colors.muted }]}>
+                          <View style={[styles.cuisineFill, { backgroundColor: colors.primary, width: `${Math.round((c.count / maxCount) * 100)}%` as any }]} />
+                        </View>
+                        <Text style={[styles.cuisineCount, { color: colors.textMuted, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{c.count}</Text>
+                      </View>
+                    ))}
                   </View>
-                ))}
-              </View>
+                );
+              })()}
             </View>
           )}
 
