@@ -1,0 +1,31 @@
+kind = "video"
+previewPath = "/pantryswipe-video/"
+title = "PantrySwipe Launch Video"
+version = "1.0.0"
+id = "artifacts/pantryswipe-video"
+router = "path"
+
+[[integratedSkills]]
+name = "video-js"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/pantryswipe-video/" ]
+localPort = 23063
+
+[services.development]
+run = "pnpm --filter @workspace/pantryswipe-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pantryswipe-video", "run", "build" ]
+publicDir = "artifacts/pantryswipe-video/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23063"
+BASE_PATH = "/pantryswipe-video/"

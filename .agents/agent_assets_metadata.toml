@@ -41,3 +41,33 @@ id = "MEtNMd95peMH6ip4gb1zx"
 uri = "file://.local/outputs/pantryswipe.pptx"
 type = "slides"
 title = "pantryswipe.pptx"
+
+[[outputs]]
+id = "yzADy-qRoNIsn3KZI6idF"
+uri = "file://artifacts/pantryswipe-video/public/images/food-bg1.jpg"
+type = "image"
+title = "appetizing cinematic food cooking high quality restaurant"
+
+[[outputs]]
+id = "JyDJB46QrKU7JPcHF1NBy"
+uri = "file://artifacts/pantryswipe-video/public/images/pantry-bg.jpg"
+type = "image"
+title = "fresh vegetables and ingredients on a kitchen counter"
+
+[[outputs]]
+id = "bIby00R99KRNVcWSa-dNP"
+uri = "file://artifacts/pantryswipe-video/public/images/party-bg.jpg"
+type = "image"
+title = "delicious party food spread high end"
+
+[[outputs]]
+id = "UOwUMZTbr2PG1PB5HanOA"
+uri = "file://artifacts/pantryswipe-video/public/images/cook-mode.jpg"
+type = "image"
+title = "chef cooking in a modern kitchen"
+
+[[outputs]]
+id = "IdXsZO9thr1QtILRfH_g0"
+uri = "file://artifacts/pantryswipe-video/public/images/social-food.jpg"
+type = "image"
+title = "gourmet plated dish restaurant style"
