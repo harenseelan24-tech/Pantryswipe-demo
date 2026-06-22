@@ -197,7 +197,8 @@ export default function PlannerScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPadding + 6 }]}>
-        <View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text style={{ fontSize: 24 }}>📅</Text>
           <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Meal Planner</Text>
         </View>
         <TouchableOpacity
@@ -319,7 +320,7 @@ export default function PlannerScreen() {
                 ]}
                 onPress={() => { setActiveMealType(isActive ? null : meal); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
               >
-                <Text style={{ fontSize: 13 }}>{MEAL_EMOJI[meal]}</Text>
+                <Text style={{ fontSize: 16 }}>{MEAL_EMOJI[meal]}</Text>
                 <Text style={[styles.mealTypePillText, { color: isActive ? "#fff" : colors.textSecondary, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_500Medium" }]}>{meal}</Text>
               </TouchableOpacity>
             );
@@ -472,23 +473,23 @@ export default function PlannerScreen() {
 
         {/* ── PARTY PLANNER CARD ── */}
         <TouchableOpacity
-          style={styles.partyCard}
+          style={[styles.partyCard, { backgroundColor: colors.card, borderColor: colors.primary + "30" }]}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/party-planner"); }}
           activeOpacity={0.88}
         >
-          <View style={styles.partyCardIcon}>
-            <Text style={{ fontSize: 26 }}>🎉</Text>
+          <View style={[styles.partyCardIcon, { backgroundColor: colors.primary + "33" }]}>
+            <Feather name="star" size={24} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <View style={styles.partyCardNewBadge}>
-              <Text style={styles.partyCardNewText}>NEW</Text>
+            <View style={[styles.partyCardNewBadge, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.partyCardNewText, { color: "#141210" }]}>NEW</Text>
             </View>
-            <Text style={[styles.partyCardTitle, { fontFamily: "Inter_700Bold" }]}>Party Planner</Text>
-            <Text style={[styles.partyCardSub, { fontFamily: "Inter_400Regular" }]}>
+            <Text style={[styles.partyCardTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Party Planner</Text>
+            <Text style={[styles.partyCardSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
               Build a full event menu — starters, mains, desserts & timeline
             </Text>
           </View>
-          <View style={styles.partyCardArrow}>
+          <View style={[styles.partyCardArrow, { backgroundColor: colors.primary }]}>
             <Feather name="chevron-right" size={20} color="#fff" />
           </View>
         </TouchableOpacity>
@@ -568,42 +569,42 @@ const styles = StyleSheet.create({
   navBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   weekLabel: { fontSize: 14 },
   summaryRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
-  summaryCard: { flex: 1, alignItems: "center", paddingVertical: 14, borderRadius: 14, borderWidth: 1, gap: 4 },
-  summaryIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  summaryValue: { fontSize: 22 },
-  summaryLabel: { fontSize: 10, textAlign: "center" },
-  budgetBanner: { flexDirection: "row", borderRadius: 12, borderWidth: 1, marginBottom: 14, overflow: "hidden" },
+  summaryCard: { flex: 1, alignItems: "center", paddingVertical: 16, borderRadius: 18, borderWidth: 1, gap: 4 },
+  summaryIconBox: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  summaryValue: { fontSize: 28, letterSpacing: -0.5 },
+  summaryLabel: { fontSize: 11, textAlign: "center" },
+  budgetBanner: { flexDirection: "row", borderRadius: 16, borderWidth: 1, marginBottom: 16, overflow: "hidden" },
   budgetAccent: { width: 4 },
-  budgetBody: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  budgetIconBox: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  budgetBody: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  budgetIconBox: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   budgetBannerText: { flex: 1, fontSize: 13 },
   budgetGoalPill: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 100 },
-  mealTypeRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
-  mealTypePill: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 9, borderRadius: 12, borderWidth: 1 },
-  mealTypePillText: { fontSize: 12 },
+  mealTypeRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
+  mealTypePill: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 16, borderWidth: 1 },
+  mealTypePillText: { fontSize: 13 },
 
-  emptyState: { borderRadius: 18, borderWidth: 1, padding: 24, alignItems: "center", gap: 10, marginBottom: 16 },
-  emptyStateEmoji: { fontSize: 44 },
-  emptyStateTitle: { fontSize: 20, letterSpacing: -0.3 },
-  emptyStateText: { fontSize: 14, lineHeight: 21, textAlign: "center" },
-  emptyStateCTA: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 13, borderRadius: 100, marginTop: 4 },
-  emptyStateCTAText: { color: "#fff", fontSize: 15 },
+  emptyState: { borderRadius: 18, borderWidth: 1, padding: 32, alignItems: "center", gap: 12, marginBottom: 16, borderStyle: "dashed" },
+  emptyStateEmoji: { fontSize: 48 },
+  emptyStateTitle: { fontSize: 22, letterSpacing: -0.3 },
+  emptyStateText: { fontSize: 15, lineHeight: 22, textAlign: "center" },
+  emptyStateCTA: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 100, marginTop: 8 },
+  emptyStateCTAText: { color: "#fff", fontSize: 16 },
 
-  grid: { flexDirection: "row", gap: 5, marginBottom: 8 },
-  dayColumn: { flex: 1, gap: 4 },
-  dayHeader: { borderRadius: 8, paddingVertical: 5, alignItems: "center", marginBottom: 2 },
-  dayLabel: { fontSize: 10, textTransform: "uppercase" },
-  dayDate: { fontSize: 13, marginTop: 1 },
-  mealCell: { height: 72, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center", padding: 4, gap: 2 },
-  mealCellAccent: { position: "absolute", top: 0, left: 0, right: 0, height: 3, borderTopLeftRadius: 10, borderTopRightRadius: 10 },
-  mealRecipeName: { fontSize: 8, textAlign: "center", lineHeight: 11 },
-  mealCalories: { fontSize: 8, textAlign: "center" },
-  gridHint: { fontSize: 11, textAlign: "center", marginBottom: 16 },
+  grid: { flexDirection: "row", gap: 6, marginBottom: 12 },
+  dayColumn: { flex: 1, gap: 6 },
+  dayHeader: { borderRadius: 10, paddingVertical: 6, alignItems: "center", marginBottom: 2 },
+  dayLabel: { fontSize: 11, textTransform: "uppercase" },
+  dayDate: { fontSize: 14, marginTop: 2 },
+  mealCell: { height: 78, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center", padding: 4, gap: 2 },
+  mealCellAccent: { position: "absolute", top: 0, left: 0, right: 0, height: 4, borderTopLeftRadius: 12, borderTopRightRadius: 12 },
+  mealRecipeName: { fontSize: 9, textAlign: "center", lineHeight: 12 },
+  mealCalories: { fontSize: 9, textAlign: "center" },
+  gridHint: { fontSize: 12, textAlign: "center", marginBottom: 16 },
 
-  dayView: { gap: 10, marginBottom: 16 },
-  dayViewTitle: { fontSize: 20, marginBottom: 4 },
-  dayMealRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
-  dayMealIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  dayView: { gap: 12, marginBottom: 16 },
+  dayViewTitle: { fontSize: 22, marginBottom: 6 },
+  dayMealRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: 18, borderWidth: 1 },
+  dayMealIcon: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   dayMealType: { fontSize: 12 },
   dayMealName: { fontSize: 15 },
   dayMealEmpty: { fontSize: 13 },
@@ -618,34 +619,29 @@ const styles = StyleSheet.create({
   monthDot: { width: 4, height: 4, borderRadius: 2 },
 
   partyCard: {
-    flexDirection: "row", alignItems: "center", gap: 14,
-    marginHorizontal: 16, marginTop: 20, marginBottom: 8,
-    backgroundColor: "#1E1535",
+    flexDirection: "row", alignItems: "center", gap: 16,
+    marginHorizontal: 16, marginTop: 20, marginBottom: 24,
     borderRadius: 20, padding: 16,
-    borderWidth: 1, borderColor: "#7C3AED40",
-    shadowColor: "#7C3AED",
+    borderWidth: 1,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25, shadowRadius: 12, elevation: 6,
+    shadowOpacity: 0.15, shadowRadius: 12, elevation: 4,
   },
   partyCardIcon: {
-    width: 52, height: 52, borderRadius: 16,
-    backgroundColor: "#2D1B69",
+    width: 56, height: 56, borderRadius: 18,
     alignItems: "center", justifyContent: "center",
   },
   partyCardNewBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#7C3AED",
-    borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2,
-    marginBottom: 5,
+    borderRadius: 100, paddingHorizontal: 8, paddingVertical: 3,
+    marginBottom: 6,
   },
   partyCardNewText: {
-    color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold", letterSpacing: 0.8,
+    fontSize: 9, fontFamily: "Inter_700Bold", letterSpacing: 0.8,
   },
-  partyCardTitle: { color: "#fff", fontSize: 17, marginBottom: 3 },
-  partyCardSub: { color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 18 },
+  partyCardTitle: { fontSize: 18, marginBottom: 4 },
+  partyCardSub: { fontSize: 14, lineHeight: 20 },
   partyCardArrow: {
-    width: 36, height: 36, borderRadius: 12,
-    backgroundColor: "#7C3AED",
+    width: 40, height: 40, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
   },
 
