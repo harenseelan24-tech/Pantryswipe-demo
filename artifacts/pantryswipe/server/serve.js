@@ -63,7 +63,7 @@ function getBaseUrl(req) {
   return `${protocol}://${host}`;
 }
 
-function serveManifest(platform, res) {
+function serveManifest(req, platform, res) {
   const manifestPath = path.join(STATIC_ROOT, platform, "manifest.json");
 
   if (!fs.existsSync(manifestPath)) {
@@ -74,13 +74,58 @@ function serveManifest(platform, res) {
     return;
   }
 
-  const manifest = fs.readFileSync(manifestPath, "utf-8");
+  const rawManifest = fs.readFileSync(manifestPath, "utf-8");
+  const manifest = JSON.parse(rawManifest);
+  const requestBase = getBaseUrl(req);
+
+  // Rewrite all URLs in the manifest to match the host that received the request.
+  // The manifest is built against one domain (e.g. pantryswipe.app) but must work
+  // from any domain (e.g. pantryswipe-demo.replit.app). We replace the origin in
+  // every URL field so Expo Go's host-validation doesn't reject the bundle.
+  const { protocol, host } = new URL(requestBase);
+  function rewriteUrl(url) {
+    if (!url || typeof url !== "string") return url;
+    try {
+      const rewritten = new URL(url);
+      rewritten.protocol = protocol;
+      rewritten.host = host;
+      return rewritten.toString();
+    } catch {
+      return url;
+    }
+  }
+
+  if (manifest.launchAsset) {
+    manifest.launchAsset.url = rewriteUrl(manifest.launchAsset.url);
+  }
+
+  if (Array.isArray(manifest.assets)) {
+    manifest.assets.forEach((asset) => {
+      if (asset.url) asset.url = rewriteUrl(asset.url);
+    });
+  }
+
+  if (manifest.extra) {
+    if (manifest.extra.expoClient) {
+      if (manifest.extra.expoClient.hostUri) {
+        manifest.extra.expoClient.hostUri =
+          new URL(requestBase).host + "/" + platform;
+      }
+    }
+    if (manifest.extra.expoGo) {
+      if (manifest.extra.expoGo.debuggerHost) {
+        manifest.extra.expoGo.debuggerHost =
+          new URL(requestBase).host + "/" + platform;
+      }
+    }
+  }
+
   res.writeHead(200, {
     "content-type": "application/json",
     "expo-protocol-version": "1",
     "expo-sfv-version": "0",
   });
-  res.end(manifest);
+  res.end(JSON.stringify(manifest));
 }
 
 function serveLandingPage(req, res, landingPageTemplate, appName) {
@@ -216,7 +261,7 @@ const server = http.createServer((req, res) => {
   if (pathname === "/" || pathname === "/manifest") {
     const platform = req.headers["expo-platform"];
     if (platform === "ios" || platform === "android") {
-      return serveManifest(platform, res);
+      return serveManifest(req, platform, res);
     }
 
     if (pathname === "/") {
