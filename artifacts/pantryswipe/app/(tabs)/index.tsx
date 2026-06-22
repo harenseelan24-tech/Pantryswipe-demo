@@ -403,9 +403,6 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.aiChefBtn} onPress={() => router.push("/ai-chef")}>
             <Text style={{ fontSize: 19 }}>👨‍🍳</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.partyBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/party-planner"); }}>
-            <Text style={{ fontSize: 19 }}>🎉</Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
             onPress={() => router.push("/notifications")}
@@ -848,14 +845,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#F5A623",
     alignItems: "center", justifyContent: "center",
     shadowColor: "#F5A623",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.38, shadowRadius: 10, elevation: 6,
-  },
-  partyBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: "#4CAF76",
-    alignItems: "center", justifyContent: "center",
-    shadowColor: "#4CAF76",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.38, shadowRadius: 10, elevation: 6,
   },

@@ -469,6 +469,29 @@ export default function PlannerScreen() {
             </View>
           </View>
         )}
+
+        {/* ── PARTY PLANNER CARD ── */}
+        <TouchableOpacity
+          style={styles.partyCard}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/party-planner"); }}
+          activeOpacity={0.88}
+        >
+          <View style={styles.partyCardIcon}>
+            <Text style={{ fontSize: 26 }}>🎉</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={styles.partyCardNewBadge}>
+              <Text style={styles.partyCardNewText}>NEW</Text>
+            </View>
+            <Text style={[styles.partyCardTitle, { fontFamily: "Inter_700Bold" }]}>Party Planner</Text>
+            <Text style={[styles.partyCardSub, { fontFamily: "Inter_400Regular" }]}>
+              Build a full event menu — starters, mains, desserts & timeline
+            </Text>
+          </View>
+          <View style={styles.partyCardArrow}>
+            <Feather name="chevron-right" size={20} color="#fff" />
+          </View>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* ── Meal Detail Modal ── */}
@@ -593,6 +616,38 @@ const styles = StyleSheet.create({
   monthCell: { width: "14.28%", aspectRatio: 1, alignItems: "center", justifyContent: "center", gap: 2 },
   monthDayNum: { fontSize: 13 },
   monthDot: { width: 4, height: 4, borderRadius: 2 },
+
+  partyCard: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    marginHorizontal: 16, marginTop: 20, marginBottom: 8,
+    backgroundColor: "#1E1535",
+    borderRadius: 20, padding: 16,
+    borderWidth: 1, borderColor: "#7C3AED40",
+    shadowColor: "#7C3AED",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25, shadowRadius: 12, elevation: 6,
+  },
+  partyCardIcon: {
+    width: 52, height: 52, borderRadius: 16,
+    backgroundColor: "#2D1B69",
+    alignItems: "center", justifyContent: "center",
+  },
+  partyCardNewBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#7C3AED",
+    borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2,
+    marginBottom: 5,
+  },
+  partyCardNewText: {
+    color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold", letterSpacing: 0.8,
+  },
+  partyCardTitle: { color: "#fff", fontSize: 17, marginBottom: 3 },
+  partyCardSub: { color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 18 },
+  partyCardArrow: {
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: "#7C3AED",
+    alignItems: "center", justifyContent: "center",
+  },
 
   modal: { flex: 1, padding: 24 },
   modalHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 20 },
