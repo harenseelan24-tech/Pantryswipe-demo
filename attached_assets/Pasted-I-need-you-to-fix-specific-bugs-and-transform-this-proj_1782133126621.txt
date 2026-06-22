@@ -1,0 +1,146 @@
+I need you to fix specific bugs and transform this project into a clean demo. Work through each phase in order. Do not skip steps.
+
+## PHASE 1 — Fix Fresh User State (No Pre-filled Data)
+
+### 1a. AppContext.tsx — fix initial pantry state
+Find this line:
+  const [pantryItems, setPantryItems] = useState<PantryItem[]>(INITIAL_PANTRY);
+Replace with:
+  const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
+
+### 1b. AppContext.tsx — fix signOut to clear to empty pantry, not INITIAL_PANTRY
+Find:
+  setPantryItems(INITIAL_PANTRY);
+Replace with:
+  setPantryItems([]);
+
+### 1c. mockData.ts — set all badges to earned: false
+In the BADGES array, change every instance of `earned: true` to `earned: false`.
+Badge earning will be computed dynamically from real user activity instead.
+
+### 1d. mockData.ts — set all social post liked/saved to false
+In MOCK_SOCIAL_POSTS, change every instance of `liked: true` to `liked: false`
+and every instance of `saved: true` to `saved: false`.
+These will be driven by the user's actual savedPostIds state instead.
+
+### 1e. profile.tsx — fix hardcoded followers count
+Find the hardcoded number 48 in the stats row next to "Followers".
+Replace with: 0
+
+### 1f. profile.tsx — fix ALL_CUISINES to derive from real cooked data
+Remove the hardcoded ALL_CUISINES array. Replace the Stats tab cuisine section with:
+- Compute which cuisines the user has actually cooked from:
+  liveRecipes.filter(r => cookedRecipes.includes(r.id))
+- Group by cuisine and count
+- If the user has cooked 0 recipes, show an empty state:
+  "Cook recipes to see your cuisine breakdown" with a 🌍 emoji
+- If they have data, show the top 6 cuisines with real counts
+
+## PHASE 2 — Fix AI Chef Freemium Logic
+
+### 2a. Find the file artifacts/pantryswipe/hooks/useAIChefUsage.ts (or .tsx)
+Read it and report back what FREE_DAILY_LIMIT is set to, and how the daily reset works.
+Verify the reset checks calendar day (YYYY-MM-DD string comparison), NOT a 24-hour rolling window.
+If it uses a timestamp/millisecond comparison instead of date string, fix it to:
+  const today = new Date().toISOString().split('T')[0];
+  const lastReset = await AsyncStorage.getItem('aiChefLastReset');
+  if (lastReset !== today) {
+    await AsyncStorage.setItem('aiChefLastReset', today);
+    await AsyncStorage.setItem('aiChefUsageCount', '0');
+  }
+
+### 2b. Find artifacts/pantryswipe/services/aiChef.ts (or .tsx)
+Read it and report what API it calls and what environment variable it uses for the key.
+If it references EXPO_PUBLIC_INFSH_API_KEY or any non-Anthropic service, note this.
+The real AI route goes through the Express server at /api/recipes/ai-chef which uses
+the ANTHROPIC_API_KEY secret — make sure the mobile app is hitting that route correctly.
+
+### 2c. ai-chef.tsx — fix usage increment so mock fallback also counts
+In the sendMessage function, the increment() call must fire for ALL non-subscribed users
+regardless of which code path responded (real API, mock, or fallback).
+Move the `if (!isSubscribed) await increment()` call into the finally block,
+after setIsTyping(false), so it always fires when a response is delivered to a free user.
+
+### 2d. ai-chef.tsx — fix conversation history growing unbounded
+Find:
+  conversationRef.current = [
+    ...history,
+    { role: "user", content: text },
+    { role: "assistant", content: aiMsg.content },
+  ];
+Replace with:
+  conversationRef.current = [
+    ...history,
+    { role: "user", content: text },
+    { role: "assistant", content: aiMsg.content },
+  ].slice(-10);
+
+### 2e. ai-chef.tsx — add double-send guard
+Add a useRef at the top of the component:
+  const isSendingRef = useRef(false);
+At the start of sendMessage, add:
+  if (!text || isTyping || isSendingRef.current) return;
+  isSendingRef.current = true;
+In the finally block, add:
+  isSendingRef.current = false;
+
+## PHASE 3 — Fix Expiry Date Logic
+
+### 3a. mockData.ts — remove all hardcoded expiryDate values from INITIAL_PANTRY
+Even though INITIAL_PANTRY is now not shown to users (Phase 1 fix), the expiry logic
+in buildPremiumResponse still checks pantry items. Update the expiry check in
+artifacts/pantryswipe/app/ai-chef.tsx inside buildPremiumResponse:
+Find:
+  return new Date(i.expiryDate) <= twoDays;
+Replace with:
+  const expDate = new Date(i.expiryDate);
+  return expDate >= now && expDate <= twoDays;
+
+## PHASE 4 — Fix Double Cooking Stats
+
+### 4a. AppContext.tsx — remove markCooked or make it a no-op wrapper
+The markCooked and cookDish functions both update stats.mealsCooked, stats.xp, and stats.streak.
+If both are called for the same cook event, the user gets double XP and double streak count.
+Check which screens call markCooked vs cookDish. If markCooked is called from cook mode
+and cookDish is called from a separate modal, one of them must be removed or deduplicated.
+Make markCooked call cookDish internally with default params, or remove the stats update
+from markCooked entirely and leave it only in cookDish.
+
+## PHASE 5 — Wire Up Real AI and Verify API Key
+
+### 5a. Verify ANTHROPIC_API_KEY is available to the server
+In the api-server, add a startup log:
+  console.log('Anthropic key present:', !!process.env.ANTHROPIC_API_KEY);
+Run the server and confirm this logs `true`. If false, the secret is not being
+picked up — check that Replit Secrets has ANTHROPIC_API_KEY (not AI_INTEGRATIONS_ANTHROPIC_API_KEY).
+
+### 5b. Test the AI Chef route directly
+Use the Replit shell to test:
+  curl -X POST http://localhost:8080/api/recipes/ai-chef \
+    -H "Content-Type: application/json" \
+    -d '{"message":"what can I make with eggs?","pantry_items":["eggs","butter"],"user_profile":{}}'
+Confirm you get a real non-mock response back. Report the response.
+
+## PHASE 6 — Fix Social Posts recipeId gaps
+
+### 6a. mockData.ts — add recipeId to posts s11 and s12
+Post s11 (Butter Chicken) — add: recipeId: "r103"
+Post s12 (Dal Makhani) — there is no matching recipe in MOCK_RECIPES.
+Either add a Dal Makhani entry to MOCK_RECIPES or remove post s12 from MOCK_SOCIAL_POSTS.
+
+## PHASE 7 — Confirm Everything Runs
+
+1. Run pnpm install from root
+2. Start API server: pnpm --filter @workspace/api-server run dev
+3. Start Expo app: pnpm --filter @workspace/pantryswipe run dev
+4. Confirm QR code appears in terminal
+5. Run through this checklist and report results:
+   [ ] Fresh launch shows Welcome screen (not tabs directly)
+   [ ] After onboarding, Profile shows 0 cooked, 0 followers, 0 following
+   [ ] Pantry tab is empty (no pre-filled items)
+   [ ] All 8 badges show as Locked
+   [ ] Social feed shows posts but all liked/saved = false
+   [ ] AI Chef sends a message and gets a REAL Anthropic response (check server log)
+   [ ] After 5 AI Chef messages, paywall modal appears
+   [ ] Stats tab shows "Cook recipes to see your cuisine breakdown" (not fake data)
+   [ ] All 5 tabs navigate without crashing
