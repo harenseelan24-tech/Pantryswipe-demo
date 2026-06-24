@@ -373,8 +373,8 @@ export default function AIChefScreen() {
       setMessages((prev) => [aiMsg, ...prev]);
       conversationRef.current = [
         ...history,
-        { role: "user", content: text },
-        { role: "assistant", content: aiMsg.content },
+        { role: "user" as const, content: text },
+        { role: "assistant" as const, content: aiMsg.content },
       ].slice(-10);
 
       // Show gate preemptively when 1 remaining (after this one is used)

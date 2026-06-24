@@ -1,0 +1,582 @@
+## CONTEXT — READ BEFORE TOUCHING ANYTHING
+
+This is a React Native / Expo SDK 54 app (Expo Router v6, TypeScript, pnpm workspaces).
+The AI layer for party planning lives ONLY in:
+
+  artifacts/pantryswipe/services/aiChef.ts  →  generatePartyMenu()
+
+This function calls Claude Sonnet (claude-sonnet-4-6) via inference.sh.
+Do NOT move party planning logic to the Express backend (/api routes).
+Do NOT break the existing fallback chain in aiChef.ts.
+
+BEFORE editing generatePartyMenu(), scroll to the bottom of aiChef.ts and find the
+comment that says "fallback chain" or similar. Note the structure. Your edits must
+preserve that exact try/catch/fallback pattern — only change what's inside the
+primary Claude call path.
+
+---
+
+## BUG #1 — SAME OUTPUT EVERY TIME (P0 — fix this first)
+
+Problem: Output is identical regardless of user inputs.
+
+Step 1 — Diagnose:
+Add this line immediately before the Claude API call inside generatePartyMenu():
+  console.log('[PartyPlanner] prompt:', JSON.stringify({ occasion, guestCount, servingStyle, budget, dietaryRestrictions, additionalPreferences, arrivalTime }))
+
+Run the app, change any input, generate. If the log values are all the same → the
+form is not passing updated state into the function. If the log values differ but
+output is the same → the prompt string is not using the variables.
+
+Step 2 — Fix the prompt construction:
+Replace whatever static string is currently used with this dynamic template:
+
+  const safePreferences = (additionalPreferences ?? '').replace(/[`"\\]/g, ' ').trim()
+  const safeRestrictions = (dietaryRestrictions ?? [])
+    .map(r => r.replace(/[`"\\]/g, '').trim())
+    .filter(Boolean)
+    .join(', ') || 'None'
+
+  const userPrompt = `
+Generate a party plan with these exact parameters:
+
+Occasion: ${occasion}
+Number of guests: ${guestCount}
+Serving style: ${servingStyle}
+Total budget: $${budget} USD (this is the HARD MAXIMUM — do not exceed it)
+Dietary restrictions: ${safeRestrictions}
+Additional preferences: ${safePreferences || 'None'}
+Guest arrival time: ${arrivalTime ? new Date(arrivalTime).toLocaleString() : 'Not specified'}
+
+Return ONLY a JSON object. No markdown fences. No text before or after the JSON.
+`
+
+The sanitisation (replacing backticks, quotes, backslashes) prevents user free-text
+from breaking the prompt string or confusing Claude.
+
+Step 3 — Verify:
+Change occasion → confirm log and output change.
+Change dietary tag → confirm restricted items disappear from output.
+If they don't, the bug is in state passing, not in the prompt. Check the form's
+onPress handler and confirm it reads current state, not a stale closure.
+
+---
+
+## BUG #2 — UNREALISTIC FOOD FOR OCCASION
+
+Fix: Add this system prompt to the Claude call inside generatePartyMenu():
+
+  system: `You are an expert party planner and caterer. Follow ALL rules below without exception.
+
+RULE 1 — OCCASION REALISM:
+Before suggesting any food item, ask yourself: "Can this realistically be prepared
+and served at this exact type of event using only the equipment present there?"
+
+Occasion equipment guide (strict — never exceed this):
+- BBQ / Grill: grill only. Cold prep (salads, dips, sliced fruit) is fine. NO oven,
+  NO stove, NO baking, NO tarts, NO soufflés, NO anything requiring kitchen equipment.
+- Picnic: cold or room-temp foods only. Pre-made or assembly foods. NO hot cooking.
+- Dinner party: full kitchen assumed. Plated courses fine.
+- Birthday party: casual crowd-pleasing foods. Mixed ages assumed.
+- Cocktail party: finger foods and canapés only. No full meals or cutlery-required items.
+- Other occasions: use strict common sense about what equipment is available.
+
+RULE 2 — BUDGET IS A HARD MAXIMUM:
+Calculate a realistic per-person cost. If budget / guests < $8, suggest budget staples
+only (sausages, bread rolls, coleslaw, chips). If < $15, no premium cuts of meat.
+Never suggest ingredients whose retail cost would exceed the stated budget.
+
+RULE 3 — DIETARY RESTRICTIONS ARE ABSOLUTE:
+Each restriction means zero of that item in any form:
+- No pork → no bacon, ham, prosciutto, lard, pork sausages, pork ribs
+- No beef → no burgers, steak, beef mince, beef stock
+- No shellfish → no prawns, crab, lobster, oysters, mussels
+- Vegetarian → no meat or fish of any kind
+- Vegan → no meat, fish, dairy, eggs, or honey
+- Halal → all meat must be explicitly halal; no alcohol in cooking
+- Kosher → follow kosher food separation rules
+- Gluten-free → no wheat, barley, rye, or hidden gluten sources
+- Dairy-free → no milk, butter, cream, cheese, or ghee
+- Nut-free → no nuts or nut oils in any item
+
+RULE 4 — SERVING STYLE:
+- Finger food: every item must be bite-sized, no cutlery needed
+- Buffet: items must hold temperature well in trays for 1+ hour
+- Plated: individual portioned servings
+
+RULE 5 — OUTPUT FORMAT:
+Return ONLY valid JSON matching the schema exactly as specified in the user message.
+No markdown. No prose. No comments inside the JSON. Numbers must be plain numbers
+(not strings). Costs in USD as plain floats rounded to 2 decimal places.`,
+
+---
+
+## FEATURE #1 — DIETARY PREFERENCES UI
+
+Location: find the party planner form component by searching for "generatePartyMenu"
+in the codebase — the screen that calls it is where this UI goes.
+
+### A) Preset restriction chips (multi-select)
+
+Define this constant OUTSIDE the component (never inside render):
+  const DIETARY_TAGS = [
+    'No pork', 'No beef', 'No shellfish', 'No alcohol',
+    'Vegetarian', 'Vegan', 'Halal', 'Kosher',
+    'Gluten-free', 'Dairy-free', 'Nut-free', 'Low spice',
+  ] as const
+  type DietaryTag = typeof DIETARY_TAGS[number]
+
+State:
+  const [selectedTags, setSelectedTags] = useState([])
+
+Toggle handler:
+  const toggleTag = (tag: DietaryTag) =>
+    setSelectedTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    )
+
+Render as a wrapping row using ScrollView horizontal={false} with flexWrap:
+  
+    {DIETARY_TAGS.map(tag => (
+       toggleTag(tag)}
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          borderRadius: 20,
+          borderWidth: 1,
+          borderColor: selectedTags.includes(tag) ? '#007AFF' : '#C7C7CC',
+          backgroundColor: selectedTags.includes(tag) ? '#EAF3FB' : 'transparent',
+        }}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: selectedTags.includes(tag) }}
+        accessibilityLabel={tag}
+      >
+        
+          {tag}
+        
+      
+    ))}
+  
+
+### B) Free-text overflow field
+  const [additionalPreferences, setAdditionalPreferences] = useState('')
+
+  
+
+Pass both into generatePartyMenu():
+  generatePartyMenu({ occasion, guestCount, servingStyle, budget,
+    dietaryRestrictions: selectedTags, additionalPreferences, arrivalTime })
+
+---
+
+## FEATURE #2 — GUEST ARRIVAL TIME PICKER
+
+Check package.json first. If @react-native-community/datetimepicker is not listed,
+install it: npx expo install @react-native-community/datetimepicker
+
+State:
+  const [arrivalTime, setArrivalTime] = useState(null)
+  const [showPicker, setShowPicker] = useState(false)
+
+IMPORTANT — cross-platform behaviour:
+- iOS: picker renders inline or as a modal. Wrap in a Modal component.
+- Android: picker is a native dialog, auto-dismisses on selection.
+- Use Platform.OS to handle both:
+
+  import { Platform } from 'react-native'
+  import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
+
+  const onDateChange = (event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') setShowPicker(false)
+    if (event.type === 'set' && selected) setArrivalTime(selected)
+  }
+
+  // Render:
+   setShowPicker(true)}>
+    {arrivalTime ? arrivalTime.toLocaleString() : 'Set guest arrival time'}
+  
+
+  {showPicker && (
+    
+  )}
+
+  {Platform.OS === 'ios' && showPicker && (
+     setShowPicker(false)}>
+      Done
+    
+  )}
+
+Pass arrivalTime.getTime() (Unix ms timestamp, NOT the Date object itself) into
+generatePartyMenu() so serialisation is safe across async boundaries.
+
+---
+
+## FEATURE #3 — STRUCTURED OUTPUT SCHEMA
+
+generatePartyMenu() must instruct Claude to return this exact JSON schema.
+Put this schema description in the userPrompt (not the system prompt):
+
+"Return a JSON object with this exact structure:
+{
+  \"menu\": [
+    {
+      \"course\": \"string — one of: Mains, Sides, Drinks, Desserts, Snacks\",
+      \"items\": [
+        {
+          \"name\": \"string\",
+          \"quantity\": \"string e.g. 3kg for 15 people\",
+          \"estimatedCost\": number (USD, 2 decimal places),
+          \"prepNote\": \"string — brief cook/prep instruction\"
+        }
+      ]
+    }
+  ],
+  \"shoppingList\": [
+    { \"item\": \"string\", \"quantity\": \"string\", \"estimatedCost\": number }
+  ],
+  \"timeline\": [
+    { \"hoursBeforeArrival\": number, \"task\": \"string\" }
+  ],
+  \"costBreakdown\": {
+    \"totalEstimated\": number,
+    \"budgetRemaining\": number,
+    \"costPerPerson\": number
+  },
+  \"hostTips\": [\"string\"]
+}
+All number fields must be plain JSON numbers, never strings. Costs are USD floats."
+
+### Parsing — IMPORTANT:
+Wrap JSON.parse in a robust helper. Add this function to aiChef.ts:
+
+  function parseClaudeJSON(raw: string): T {
+    // Strip markdown fences Claude sometimes adds despite instructions
+    const cleaned = raw
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/i, '')
+      .trim()
+    try {
+      return JSON.parse(cleaned) as T
+    } catch (e) {
+      console.error('[PartyPlanner] JSON parse failed. Raw response:', raw)
+      throw new Error('Party plan could not be parsed. Please try again.')
+    }
+  }
+
+Use this instead of bare JSON.parse everywhere in generatePartyMenu().
+
+### Rendering — display costs correctly:
+Never render raw floats. Always format:
+  const fmt = (n: number) => `$${Number(n).toFixed(2)}`
+  // e.g. fmt(9.2) → "$9.20"  |  fmt(9.200000000001) → "$9.20"
+
+Remove the canEdit field from the schema entirely — it was unused and creates confusion.
+
+The shoppingList is the source of truth for cost. The menu item estimatedCost is
+display-only and does NOT sync back to the shopping list if edited. Make this clear
+with a comment in code: // Note: editing menu item cost here is cosmetic only
+
+---
+
+## FEATURE #4 — EDITABLE PLAN + SECTION REGENERATION
+
+### State shape for the plan (TypeScript):
+  type MenuItem = { name: string; quantity: string; estimatedCost: number; prepNote: string }
+  type MenuCourse = { course: string; items: MenuItem[] }
+  type PartyPlan = {
+    menu: MenuCourse[]
+    shoppingList: { item: string; quantity: string; estimatedCost: number }[]
+    timeline: { hoursBeforeArrival: number; task: string }[]
+    costBreakdown: { totalEstimated: number; budgetRemaining: number; costPerPerson: number }
+    hostTips: string[]
+  }
+  const [plan, setPlan] = useState(null)
+  const [regeneratingSections, setRegeneratingSections] = useState>(new Set())
+
+### Editing a menu item (no Claude call — local state only):
+  const updateMenuItem = (courseIdx: number, itemIdx: number, updates: Partial) => {
+    setPlan(prev => {
+      if (!prev) return prev
+      const newMenu = prev.menu.map((course, ci) =>
+        ci !== courseIdx ? course : {
+          ...course,
+          items: course.items.map((item, ii) =>
+            ii !== itemIdx ? item : { ...item, ...updates }
+          )
+        }
+      )
+      return { ...prev, menu: newMenu }
+    })
+  }
+
+Each item renders an edit icon. Tapping opens an inline form with TextInput fields
+for name, quantity, estimatedCost, prepNote. On confirm, call updateMenuItem().
+No Claude call. No network request. Local state only.
+
+### Partial section regeneration:
+IMPORTANT — guard against concurrent regeneration:
+  const regenerateSection = async (courseName: string) => {
+    if (regeneratingSections.has(courseName)) return  // prevent double-tap
+    setRegeneratingSections(prev => new Set(prev).add(courseName))
+
+    try {
+      // Build locked context: all sections EXCEPT the one being regenerated
+      // Truncate to prevent token overflow: max 800 chars per locked section
+      const lockedMenu = plan!.menu
+        .filter(c => c.course !== courseName)
+        .map(c => ({
+          course: c.course,
+          items: c.items.map(i => i.name).slice(0, 8)  // names only, max 8
+        }))
+
+      const regenPrompt = `
+The following party plan sections are confirmed and must NOT change:
+${JSON.stringify(lockedMenu).slice(0, 800)}
+
+Regenerate ONLY the "${courseName}" course with fresh ideas.
+All original constraints apply: occasion=${occasion}, guests=${guestCount},
+budget=$${budget}, dietary=${safeRestrictions}.
+Return ONLY a JSON object:
+{ "course": "${courseName}", "items": [ { "name": ..., "quantity": ...,
+  "estimatedCost": ..., "prepNote": ... } ] }
+No markdown. No other keys.
+`
+      const raw = await callClaudeWithPrompt(regenPrompt)  // use existing Claude call helper
+      const newCourse = parseClaudeJSON(raw)
+
+      setPlan(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          menu: prev.menu.map(c =>
+            c.course === courseName ? newCourse : c
+          )
+        }
+      })
+    } catch (err) {
+      Alert.alert('Could not regenerate', 'Please try again.')
+    } finally {
+      setRegeneratingSections(prev => {
+        const next = new Set(prev)
+        next.delete(courseName)
+        return next
+      })
+    }
+  }
+
+While regenerating a section, disable its edit icons and show a spinner in place of
+the "Regenerate" button. Use regeneratingSections.has(course.course) to gate this.
+
+---
+
+## FEATURE #5 — ARRIVAL-TIME NOTIFICATIONS
+
+### Step 1 — Check and install
+Check package.json for expo-notifications. If missing:
+  npx expo install expo-notifications
+
+### Step 2 — Store notification IDs (NOT cancel-all)
+CRITICAL: Do NOT use Notifications.cancelAllScheduledNotificationsAsync().
+That cancels every notification in the app including non-party ones.
+Instead, store only party notification IDs:
+
+  import AsyncStorage from '@react-native-async-storage/async-storage'
+  const PARTY_NOTIF_KEY = 'partyPlannerNotifIds'
+
+  const clearPartyNotifications = async () => {
+    try {
+      const raw = await AsyncStorage.getItem(PARTY_NOTIF_KEY)
+      const ids: string[] = raw ? JSON.parse(raw) : []
+      await Promise.all(ids.map(id => Notifications.cancelScheduledNotificationAsync(id)))
+      await AsyncStorage.removeItem(PARTY_NOTIF_KEY)
+    } catch { /* ignore — best effort */ }
+  }
+
+### Step 3 — Request permissions with denied-state handling
+  import * as Notifications from 'expo-notifications'
+  import Constants from 'expo-constants'
+
+  const requestAndGetPushToken = async (): Promise => {
+    const { status } = await Notifications.requestPermissionsAsync()
+    if (status !== 'granted') {
+      console.warn('[Notifications] Permission denied — skipping push token')
+      return null  // graceful — in-app reminders still work
+    }
+    try {
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId
+      if (!projectId) {
+        console.warn('[Notifications] No EAS projectId found in app config')
+        return null
+      }
+      const token = await Notifications.getExpoPushTokenAsync({ projectId })
+      return token.data
+    } catch (e) {
+      console.error('[Notifications] Push token fetch failed:', e)
+      return null
+    }
+  }
+
+### Step 4 — Schedule party notifications
+  const schedulePartyNotifications = async (
+    timeline: { hoursBeforeArrival: number; task: string }[],
+    arrivalTimeMs: number  // Unix timestamp in ms — use arrivalTime.getTime()
+  ) => {
+    await clearPartyNotifications()
+    const scheduledIds: string[] = []
+
+    for (const entry of timeline) {
+      const triggerMs = arrivalTimeMs - (entry.hoursBeforeArrival * 3600 * 1000)
+      if (triggerMs <= Date.now()) continue  // skip past times silently
+
+      try {
+        const id = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '🎉 Party prep reminder',
+            body: entry.task,
+          },
+          trigger: { type: 'date', date: new Date(triggerMs) },
+        })
+        scheduledIds.push(id)
+      } catch (e) {
+        console.warn('[Notifications] Failed to schedule:', entry.task, e)
+        // Continue — partial scheduling is better than total failure
+      }
+    }
+
+    // Persist IDs so we can cancel individually later
+    await AsyncStorage.setItem(PARTY_NOTIF_KEY, JSON.stringify(scheduledIds))
+
+    // Request push token (non-blocking — don't await in main save flow)
+    requestAndGetPushToken().then(token => {
+      if (token) AsyncStorage.setItem('partyPlannerPushToken', token)
+    })
+  }
+
+Call schedulePartyNotifications(plan.timeline, arrivalTime.getTime()) after the plan
+is saved. Also call it after any regeneration that changes the timeline.
+
+### Step 5 — In-app countdown (with cleanup)
+  const [nextTask, setNextTask] = useState<{ label: string; msUntil: number } | null>(null)
+
+  useEffect(() => {
+    if (!plan || !arrivalTime) return
+
+    const computeNext = () => {
+      const now = Date.now()
+      const arrivalMs = arrivalTime.getTime()
+      const upcoming = plan.timeline
+        .map(t => ({
+          label: t.task,
+          msUntil: arrivalMs - (t.hoursBeforeArrival * 3600 * 1000) - now,
+        }))
+        .filter(t => t.msUntil > 0)
+        .sort((a, b) => a.msUntil - b.msUntil)
+      setNextTask(upcoming[0] ?? null)
+    }
+
+    computeNext()
+    const interval = setInterval(computeNext, 60_000)
+    return () => clearInterval(interval)  // REQUIRED — prevents memory leak
+  }, [plan, arrivalTime])
+
+  // Render the countdown card if nextTask exists:
+  {nextTask && (
+    
+      Next: {nextTask.label}
+      In {Math.round(nextTask.msUntil / 60_000)} minutes
+    
+  )}
+
+---
+
+## MOCK PAYLOAD FOR DEVELOPMENT (paste this to skip Claude calls while building UI)
+
+Use this hardcoded response in generatePartyMenu() while building the UI.
+Comment it in during development, remove before shipping:
+
+  // DEV MOCK — remove before shipping
+  // return {
+  //   menu: [
+  //     { course: 'Mains', items: [
+  //       { name: 'Grilled chicken thighs', quantity: '3kg', estimatedCost: 22.00, prepNote: 'Marinate 2hrs, grill 25min' },
+  //       { name: 'Beef sausages', quantity: '2kg', estimatedCost: 14.00, prepNote: 'Grill 15min, turning regularly' },
+  //     ]},
+  //     { course: 'Sides', items: [
+  //       { name: 'Coleslaw', quantity: '1.5kg tub', estimatedCost: 8.00, prepNote: 'Ready-made, serve cold' },
+  //       { name: 'Bread rolls', quantity: '20 pack', estimatedCost: 5.00, prepNote: 'Slice and butter ahead' },
+  //     ]},
+  //     { course: 'Drinks', items: [
+  //       { name: 'Soft drinks assorted', quantity: '4x 1.5L bottles', estimatedCost: 12.00, prepNote: 'Chill in ice bucket' },
+  //     ]},
+  //     { course: 'Desserts', items: [
+  //       { name: 'Watermelon slices', quantity: '2 melons', estimatedCost: 10.00, prepNote: 'Pre-slice, keep cool' },
+  //     ]},
+  //   ],
+  //   shoppingList: [
+  //     { item: 'Chicken thighs', quantity: '3kg', estimatedCost: 22.00 },
+  //     { item: 'Beef sausages', quantity: '2kg', estimatedCost: 14.00 },
+  //     { item: 'Coleslaw', quantity: '1.5kg tub', estimatedCost: 8.00 },
+  //     { item: 'Bread rolls', quantity: '20 pack', estimatedCost: 5.00 },
+  //     { item: 'Soft drinks', quantity: '4x 1.5L', estimatedCost: 12.00 },
+  //     { item: 'Watermelon', quantity: '2 melons', estimatedCost: 10.00 },
+  //   ],
+  //   timeline: [
+  //     { hoursBeforeArrival: 24, task: 'Buy all groceries' },
+  //     { hoursBeforeArrival: 2, task: 'Marinate chicken thighs' },
+  //     { hoursBeforeArrival: 1, task: 'Prep coleslaw and slice bread rolls' },
+  //     { hoursBeforeArrival: 0.5, task: 'Light the grill' },
+  //     { hoursBeforeArrival: 0.25, task: 'Start grilling sausages' },
+  //   ],
+  //   costBreakdown: { totalEstimated: 71.00, budgetRemaining: 79.00, costPerPerson: 4.73 },
+  //   hostTips: [
+  //     'Set up a self-serve drink station so you can stay at the grill',
+  //     'Pre-cut watermelon the night before and refrigerate',
+  //   ],
+  // }
+
+---
+
+## TESTING CHECKLIST
+
+UI / form:
+□ Change occasion → console.log confirms prompt changes → output food changes
+□ Change guest count 5 → 30 → quantities in menu and shopping list scale
+□ Change budget $50 → $500 → ingredient quality visibly changes
+□ Select "No pork" → zero pork in all sections (check Mains, Sides, hostTips)
+□ Select "Halal" → all meat items noted as halal, no alcohol in cooking
+□ Type "guests love very spicy food" → spice reflected in at least one item
+□ Select both "Vegetarian" AND "No shellfish" → both rules honoured simultaneously
+
+Occasion realism:
+□ BBQ → zero oven/baked items, no tarts, no items needing kitchen equipment
+□ Picnic → all items cold or pre-made
+□ Dinner party → plated courses are acceptable
+
+Editing:
+□ Edit a food item name → change saves without any Claude call (check network tab)
+□ Edit and then tap "Regenerate this section" → edited section updates, other sections untouched
+□ Tap "Regenerate" twice fast → second tap is ignored (no double request)
+
+Notifications:
+□ Set arrival time → plan saves → check Expo Go notification list (Settings > Notifications)
+□ Past timeline items (hoursBeforeArrival that would be in the past) are silently skipped
+□ Regenerate plan → old party notifications cancelled, new ones scheduled
+□ Navigate away from screen and back → countdown interval does not duplicate
+□ Deny notification permission → app continues without crash, no push token stored
+□ No-EAS-projectId environment → warning logged, no crash
+
+Cost display:
+□ All cost values display as $X.XX format, never raw floats like 9.200000000001
+
+hostTips:
+□ hostTips array renders on screen (confirm it is not silently dropped from render)
+
+---
+
+## DO NOT CHANGE
+
+- The fallback chain structure in aiChef.ts (inference.sh → Express → mock responses)
+- Any screen, component, or feature outside the party planner flow
+- Existing AsyncStorage keys used by other features (do not wipe AsyncStorage)
+- The Expo Router file/folder structure
+- Any existing notification logic outside party planner (use per-ID cancellation only)
