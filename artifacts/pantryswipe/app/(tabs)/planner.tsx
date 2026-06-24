@@ -327,6 +327,29 @@ export default function PlannerScreen() {
           })}
         </View>
 
+        {/* ── PARTY PLANNER CARD ── */}
+        <TouchableOpacity
+          style={[styles.partyCard, { backgroundColor: colors.card, borderColor: colors.primary + "30" }]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/party-planner"); }}
+          activeOpacity={0.88}
+        >
+          <View style={[styles.partyCardIcon, { backgroundColor: colors.primary + "33" }]}>
+            <Feather name="star" size={24} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={[styles.partyCardNewBadge, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.partyCardNewText, { color: "#141210" }]}>NEW</Text>
+            </View>
+            <Text style={[styles.partyCardTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Party Planner</Text>
+            <Text style={[styles.partyCardSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+              Build a full event menu — starters, mains, desserts & timeline
+            </Text>
+          </View>
+          <View style={[styles.partyCardArrow, { backgroundColor: colors.primary }]}>
+            <Feather name="chevron-right" size={20} color="#fff" />
+          </View>
+        </TouchableOpacity>
+
         {/* ── DAY VIEW ── */}
         {view === "Day" && (
           <View style={styles.dayView}>
@@ -471,28 +494,6 @@ export default function PlannerScreen() {
           </View>
         )}
 
-        {/* ── PARTY PLANNER CARD ── */}
-        <TouchableOpacity
-          style={[styles.partyCard, { backgroundColor: colors.card, borderColor: colors.primary + "30" }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/party-planner"); }}
-          activeOpacity={0.88}
-        >
-          <View style={[styles.partyCardIcon, { backgroundColor: colors.primary + "33" }]}>
-            <Feather name="star" size={24} color={colors.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={[styles.partyCardNewBadge, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.partyCardNewText, { color: "#141210" }]}>NEW</Text>
-            </View>
-            <Text style={[styles.partyCardTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Party Planner</Text>
-            <Text style={[styles.partyCardSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-              Build a full event menu — starters, mains, desserts & timeline
-            </Text>
-          </View>
-          <View style={[styles.partyCardArrow, { backgroundColor: colors.primary }]}>
-            <Feather name="chevron-right" size={20} color="#fff" />
-          </View>
-        </TouchableOpacity>
       </ScrollView>
 
       {/* ── Meal Detail Modal ── */}
