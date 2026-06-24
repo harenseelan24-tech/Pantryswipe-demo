@@ -256,6 +256,15 @@ export default function ProfileScreen() {
                 <Feather name="settings" size={15} color={colors.foreground} />
               </TouchableOpacity>
             </View>
+            {/* Party Planner pill */}
+            <TouchableOpacity
+              style={[styles.editBtn, { borderColor: colors.primary + "55", backgroundColor: colors.primary + "12", alignSelf: "center" }]}
+              onPress={() => { router.push("/party-planner"); }}
+              activeOpacity={0.75}
+            >
+              <Feather name="star" size={13} color={colors.primary} />
+              <Text style={[styles.editBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>Party Planner</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Identity block */}

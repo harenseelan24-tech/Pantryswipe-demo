@@ -327,29 +327,6 @@ export default function PlannerScreen() {
           })}
         </View>
 
-        {/* ── PARTY PLANNER CARD ── */}
-        <TouchableOpacity
-          style={[styles.partyCard, { backgroundColor: colors.card, borderColor: colors.primary + "30" }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/party-planner"); }}
-          activeOpacity={0.88}
-        >
-          <View style={[styles.partyCardIcon, { backgroundColor: colors.primary + "33" }]}>
-            <Feather name="star" size={24} color={colors.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={[styles.partyCardNewBadge, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.partyCardNewText, { color: "#141210" }]}>NEW</Text>
-            </View>
-            <Text style={[styles.partyCardTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Party Planner</Text>
-            <Text style={[styles.partyCardSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-              Build a full event menu — starters, mains, desserts & timeline
-            </Text>
-          </View>
-          <View style={[styles.partyCardArrow, { backgroundColor: colors.primary }]}>
-            <Feather name="chevron-right" size={20} color="#fff" />
-          </View>
-        </TouchableOpacity>
-
         {/* ── DAY VIEW ── */}
         {view === "Day" && (
           <View style={styles.dayView}>
@@ -618,33 +595,6 @@ const styles = StyleSheet.create({
   monthCell: { width: "14.28%", aspectRatio: 1, alignItems: "center", justifyContent: "center", gap: 2 },
   monthDayNum: { fontSize: 13 },
   monthDot: { width: 4, height: 4, borderRadius: 2 },
-
-  partyCard: {
-    flexDirection: "row", alignItems: "center", gap: 16,
-    marginHorizontal: 16, marginTop: 20, marginBottom: 24,
-    borderRadius: 20, padding: 16,
-    borderWidth: 1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15, shadowRadius: 12, elevation: 4,
-  },
-  partyCardIcon: {
-    width: 56, height: 56, borderRadius: 18,
-    alignItems: "center", justifyContent: "center",
-  },
-  partyCardNewBadge: {
-    alignSelf: "flex-start",
-    borderRadius: 100, paddingHorizontal: 8, paddingVertical: 3,
-    marginBottom: 6,
-  },
-  partyCardNewText: {
-    fontSize: 9, fontFamily: "Inter_700Bold", letterSpacing: 0.8,
-  },
-  partyCardTitle: { fontSize: 18, marginBottom: 4 },
-  partyCardSub: { fontSize: 14, lineHeight: 20 },
-  partyCardArrow: {
-    width: 40, height: 40, borderRadius: 14,
-    alignItems: "center", justifyContent: "center",
-  },
 
   modal: { flex: 1, padding: 24 },
   modalHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 20 },
