@@ -28,4 +28,12 @@ config.resolver.extraNodeModules = {
   "expo-router": expoRouterPath,
 };
 
+// Exclude transient skill/tool temp directories under .local from Metro's file watcher.
+// These directories can be created and deleted mid-session, causing Metro to crash
+// with ENOENT when it tries to watch a path that no longer exists.
+const escapedWorkspace = workspaceRoot.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&");
+config.resolver.blockList = new RegExp(
+  `^${escapedWorkspace}/\\.local/.*`
+);
+
 module.exports = config;
