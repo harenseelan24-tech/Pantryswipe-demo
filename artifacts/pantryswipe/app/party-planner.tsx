@@ -529,11 +529,18 @@ No markdown. No other keys.`;
                   style={{ flex: 1, color: colors.foreground, fontSize: 14, outlineStyle: "none" } as any}
                   placeholderTextColor={colors.mutedForeground}
                   {...{ type: "datetime-local" } as any}
-                  value={arrivalTime ? arrivalTime.toISOString().slice(0, 16) : ""}
+                  value={(() => {
+                    try {
+                      return arrivalTime && !isNaN(arrivalTime.getTime()) ? arrivalTime.toISOString().slice(0, 16) : "";
+                    } catch {
+                      return "";
+                    }
+                  })()}
                   onChange={((e: any) => {
                     const val = e.target?.value ?? e.nativeEvent?.text ?? "";
-                    if (val) setArrivalTime(new Date(val));
-                    else setArrivalTime(null);
+                    if (!val) { setArrivalTime(null); return; }
+                    const d = new Date(val);
+                    if (!isNaN(d.getTime())) setArrivalTime(d);
                   }) as any}
                 />
                 {arrivalTime && (
