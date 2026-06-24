@@ -259,17 +259,68 @@ export async function generatePartyMenu(
     JSON.stringify({ occasion, guestCount, servingStyle, budget, dietaryRestrictions, additionalPreferences, arrivalTime })
   );
 
-  const userPrompt = `Generate a party plan with these exact parameters:
+  // Build dietary block — each restriction gets its own explicit "NO X" line so Claude can't miss it
+  const dietaryBlock =
+    (dietaryRestrictions ?? []).length > 0
+      ? `
+━━━ DIETARY RESTRICTIONS — ABSOLUTE HARD RULES — ZERO EXCEPTIONS ━━━
+${(dietaryRestrictions ?? [])
+  .map((r) => {
+    const expansions: Record<string, string> = {
+      "No pork": "NO PORK — no bacon, ham, prosciutto, lard, pork sausages, pork ribs, chorizo",
+      "No beef": "NO BEEF — no beef sausages, burgers, steak, mince, brisket, beef stock, anything from cows",
+      "No shellfish": "NO SHELLFISH — no prawns, shrimp, crab, lobster, oysters, mussels, clams",
+      "No alcohol": "NO ALCOHOL — no wine, beer, spirits in cooking or as drinks",
+      Vegetarian: "VEGETARIAN — no meat or fish of any kind whatsoever",
+      Vegan: "VEGAN — no meat, fish, dairy, eggs, honey, or any animal product",
+      Halal: "HALAL — all meat must be explicitly halal; absolutely no alcohol in cooking or drinks",
+      Kosher: "KOSHER — follow strict kosher rules including no pork, no shellfish, no mixing of meat and dairy",
+      "Gluten-free": "GLUTEN-FREE — no wheat, barley, rye, standard soy sauce, or any hidden gluten",
+      "Dairy-free": "DAIRY-FREE — no milk, butter, cream, cheese, yoghurt, ghee",
+      "Nut-free": "NUT-FREE — no nuts or nut oils (peanuts, almonds, cashews, etc.) anywhere",
+      "Low spice": "LOW SPICE — no chilli, hot sauce, pepper, or any significant heat",
+    };
+    return `⛔ ${expansions[r] ?? `NO ${r.toUpperCase()}`}`;
+  })
+  .join("\n")}
 
-Occasion: ${occasion}
+CHECK EVERY SINGLE ITEM in menu, shoppingList, and hostTips against the rules above.
+If ANY restricted ingredient appears anywhere in your response, that response is INVALID.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+      : "";
+
+  // Build preferences block — make it a central design brief, not a footnote
+  const preferencesBlock = safePreferences
+    ? `
+━━━ HOST'S SPECIAL REQUEST — BUILD THE ENTIRE MENU AROUND THIS ━━━
+"${safePreferences}"
+This is the host's vision. Every section (Mains, Sides, Drinks, Desserts) should reflect or complement this request.
+Do NOT treat it as optional. If it names a dish style or technique, make that the centrepiece.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+    : "";
+
+  // Occasion-specific cooking equipment rules
+  const occasionRules: Record<string, string> = {
+    BBQ: "BBQ means GRILL ONLY. No oven, no stove, no baking. Cold-prep sides (salads, dips, sliced fruit) are fine. No tarts, soufflés, or anything needing indoor kitchen equipment.",
+    Picnic: "Picnic means cold or room-temperature foods only. Everything must be pre-made or assembly-based. No hot cooking equipment available.",
+    "Dinner Party": "Full kitchen with oven, stove, and all equipment assumed. Plated courses are appropriate.",
+    "Movie Night": "Simple, hand-held snacks. Minimal prep. No formal courses needed.",
+    Brunch: "Brunch foods only — eggs, pastries, fruit, lighter fare. Suitable for mid-morning serving.",
+  };
+  const occasionRule = occasionRules[occasion] ?? "";
+
+  const userPrompt = `You are an expert party planner. Generate a complete, realistic party plan.
+${dietaryBlock}
+${preferencesBlock}
+━━━ EVENT DETAILS ━━━
+Occasion: ${occasion}${occasionRule ? `\nOccasion rule: ${occasionRule}` : ""}
 Number of guests: ${guestCount}
 Serving style: ${servingStyle}
-Total budget: $${budget} USD (this is the HARD MAXIMUM — do not exceed it)
-Dietary restrictions: ${safeRestrictions}
-Additional preferences: ${safePreferences || "None"}
+Total budget: $${budget} USD — this is the HARD MAXIMUM. Your totalEstimated MUST be ≤ $${budget}.
 Guest arrival time: ${arrivalTime ? new Date(arrivalTime).toLocaleString() : "Not specified"}
 
-Return a JSON object with this exact structure:
+━━━ JSON OUTPUT ━━━
+Return ONLY a JSON object with this exact structure:
 {
   "menu": [
     {

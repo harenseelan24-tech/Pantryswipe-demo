@@ -520,39 +520,63 @@ No markdown. No other keys.`;
             />
 
             <Text style={[styles.label, { color: colors.foreground }]}>Guest arrival time</Text>
-            <TouchableOpacity
-              style={[
-                styles.dateBtn,
-                { backgroundColor: colors.card, borderColor: arrivalTime ? colors.primary : colors.border },
-              ]}
-              onPress={() => setShowPicker(true)}
-            >
-              <Feather name="clock" size={16} color={arrivalTime ? colors.primary : colors.mutedForeground} />
-              <Text style={{ color: arrivalTime ? colors.foreground : colors.mutedForeground, flex: 1, fontSize: 14 }}>
-                {arrivalTime ? arrivalTime.toLocaleString() : "Set guest arrival time (optional)"}
-              </Text>
-              {arrivalTime && (
-                <TouchableOpacity onPress={() => setArrivalTime(null)}>
-                  <Feather name="x" size={14} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              )}
-            </TouchableOpacity>
 
-            {showPicker && DateTimePicker && Platform.OS !== "web" && (
-              <DateTimePicker
-                value={arrivalTime ?? new Date(Date.now() + 3600 * 1000)}
-                mode="datetime"
-                display={Platform.OS === "ios" ? "inline" : "default"}
-                onChange={onDateChange}
-              />
-            )}
-            {Platform.OS === "ios" && showPicker && (
-              <TouchableOpacity
-                onPress={() => setShowPicker(false)}
-                style={[styles.chip, { alignSelf: "flex-end", backgroundColor: colors.primary, borderColor: colors.primary }]}
-              >
-                <Text style={{ color: "#fff", fontWeight: "600" }}>Done</Text>
-              </TouchableOpacity>
+            {Platform.OS === "web" ? (
+              /* Web: native HTML datetime-local input via React Native Web */
+              <View style={[styles.dateBtn, { backgroundColor: colors.card, borderColor: arrivalTime ? colors.primary : colors.border }]}>
+                <Feather name="clock" size={16} color={arrivalTime ? colors.primary : colors.mutedForeground} />
+                <TextInput
+                  style={{ flex: 1, color: colors.foreground, fontSize: 14, outlineStyle: "none" } as any}
+                  placeholderTextColor={colors.mutedForeground}
+                  {...{ type: "datetime-local" } as any}
+                  value={arrivalTime ? arrivalTime.toISOString().slice(0, 16) : ""}
+                  onChange={((e: any) => {
+                    const val = e.target?.value ?? e.nativeEvent?.text ?? "";
+                    if (val) setArrivalTime(new Date(val));
+                    else setArrivalTime(null);
+                  }) as any}
+                />
+                {arrivalTime && (
+                  <TouchableOpacity onPress={() => setArrivalTime(null)}>
+                    <Feather name="x" size={14} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              /* Native iOS / Android */
+              <>
+                <TouchableOpacity
+                  style={[styles.dateBtn, { backgroundColor: colors.card, borderColor: arrivalTime ? colors.primary : colors.border }]}
+                  onPress={() => setShowPicker(true)}
+                >
+                  <Feather name="clock" size={16} color={arrivalTime ? colors.primary : colors.mutedForeground} />
+                  <Text style={{ color: arrivalTime ? colors.foreground : colors.mutedForeground, flex: 1, fontSize: 14 }}>
+                    {arrivalTime ? arrivalTime.toLocaleString() : "Tap to set guest arrival time (optional)"}
+                  </Text>
+                  {arrivalTime && (
+                    <TouchableOpacity onPress={() => setArrivalTime(null)}>
+                      <Feather name="x" size={14} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+
+                {showPicker && DateTimePicker && (
+                  <DateTimePicker
+                    value={arrivalTime ?? new Date(Date.now() + 3600 * 1000)}
+                    mode="datetime"
+                    display={Platform.OS === "ios" ? "inline" : "default"}
+                    onChange={onDateChange}
+                  />
+                )}
+                {Platform.OS === "ios" && showPicker && (
+                  <TouchableOpacity
+                    onPress={() => setShowPicker(false)}
+                    style={[styles.chip, { alignSelf: "flex-end", backgroundColor: colors.primary, borderColor: colors.primary }]}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "600" }}>Done</Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
 
             <TouchableOpacity
