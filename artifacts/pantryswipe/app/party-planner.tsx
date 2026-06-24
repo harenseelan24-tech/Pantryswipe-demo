@@ -256,8 +256,11 @@ export default function PartyPlannerScreen() {
         arrivalTime: arrivalTime?.getTime(),
       });
       setPlan(result);
-      setIsAI(true);
-    } catch {
+      // Mark as AI if the plan looks non-trivial (more than 2 courses)
+      setIsAI(result.menu.length > 1);
+    } catch (err) {
+      console.error("[PartyPlanner] unexpected error:", err);
+      // generatePartyMenu always falls back internally — this path is a safety net only
       setPlan(SAMPLE_PLAN);
       setIsAI(false);
     }
