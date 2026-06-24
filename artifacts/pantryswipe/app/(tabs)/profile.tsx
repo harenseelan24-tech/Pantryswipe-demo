@@ -242,29 +242,31 @@ export default function ProfileScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* Edit Profile + Settings */}
-            <View style={styles.editRow}>
+            {/* Edit Profile + Settings + Party Planner — stacked column on the right */}
+            <View style={{ flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+              <View style={styles.editRow}>
+                <TouchableOpacity
+                  style={[styles.editBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+                  onPress={openEditModal}
+                  activeOpacity={0.75}
+                >
+                  <Feather name="edit-2" size={13} color={colors.foreground} />
+                  <Text style={[styles.editBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Edit Profile</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.settingsBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={() => router.push("/settings")} activeOpacity={0.75}>
+                  <Feather name="settings" size={15} color={colors.foreground} />
+                </TouchableOpacity>
+              </View>
+              {/* Party Planner pill */}
               <TouchableOpacity
-                style={[styles.editBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-                onPress={openEditModal}
+                style={[styles.editBtn, { borderColor: colors.primary + "55", backgroundColor: colors.primary + "12" }]}
+                onPress={() => { router.push("/party-planner"); }}
                 activeOpacity={0.75}
               >
-                <Feather name="edit-2" size={13} color={colors.foreground} />
-                <Text style={[styles.editBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Edit Profile</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.settingsBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={() => router.push("/settings")} activeOpacity={0.75}>
-                <Feather name="settings" size={15} color={colors.foreground} />
+                <Feather name="star" size={13} color={colors.primary} />
+                <Text style={[styles.editBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>Party Planner</Text>
               </TouchableOpacity>
             </View>
-            {/* Party Planner pill */}
-            <TouchableOpacity
-              style={[styles.editBtn, { borderColor: colors.primary + "55", backgroundColor: colors.primary + "12", alignSelf: "center" }]}
-              onPress={() => { router.push("/party-planner"); }}
-              activeOpacity={0.75}
-            >
-              <Feather name="star" size={13} color={colors.primary} />
-              <Text style={[styles.editBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>Party Planner</Text>
-            </TouchableOpacity>
           </View>
 
           {/* Identity block */}
