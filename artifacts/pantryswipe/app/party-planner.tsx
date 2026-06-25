@@ -525,31 +525,73 @@ No markdown. No other keys.`;
             <Text style={[styles.label, { color: colors.foreground }]}>Guest arrival time</Text>
 
             {Platform.OS === "web" ? (
-              /* Web: native HTML datetime-local input via React Native Web */
-              <View style={[styles.dateBtn, { backgroundColor: colors.card, borderColor: arrivalTime ? colors.primary : colors.border }]}>
-                <Feather name="clock" size={16} color={arrivalTime ? colors.primary : colors.mutedForeground} />
-                <TextInput
-                  style={{ flex: 1, color: colors.foreground, fontSize: 14, outlineStyle: "none" } as any}
-                  placeholderTextColor={colors.mutedForeground}
-                  {...{ type: "datetime-local" } as any}
-                  value={(() => {
-                    try {
-                      return arrivalTime && !isNaN(arrivalTime.getTime()) ? arrivalTime.toISOString().slice(0, 16) : "";
-                    } catch {
-                      return "";
-                    }
-                  })()}
-                  onChange={((e: any) => {
-                    const val = e.target?.value ?? e.nativeEvent?.text ?? "";
-                    if (!val) { setArrivalTime(null); return; }
-                    const d = new Date(val);
-                    if (!isNaN(d.getTime())) setArrivalTime(d);
-                  }) as any}
-                />
-                {arrivalTime && (
-                  <TouchableOpacity onPress={() => setArrivalTime(null)}>
-                    <Feather name="x" size={14} color={colors.mutedForeground} />
-                  </TouchableOpacity>
+              /* Web: separate date + time visual pickers (no typing required) */
+              <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  {/* Date picker card */}
+                  <View style={[
+                    styles.pickerCard,
+                    { flex: 1, backgroundColor: colors.card, borderColor: arrivalTime ? colors.primary : colors.border },
+                  ]}>
+                    <Feather name="calendar" size={15} color={arrivalTime ? colors.primary : colors.mutedForeground} />
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 2 }}>Date</Text>
+                    <TextInput
+                      style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", outlineStyle: "none", width: "100%" } as any}
+                      {...{ type: "date" } as any}
+                      value={(() => {
+                        try { return arrivalTime && !isNaN(arrivalTime.getTime()) ? arrivalTime.toISOString().slice(0, 10) : ""; }
+                        catch { return ""; }
+                      })()}
+                      onChange={((e: any) => {
+                        const dateStr = e.target?.value ?? "";
+                        if (!dateStr) { setArrivalTime(null); return; }
+                        const base = arrivalTime && !isNaN(arrivalTime.getTime()) ? arrivalTime : new Date();
+                        const timeStr = `${String(base.getHours()).padStart(2, "0")}:${String(base.getMinutes()).padStart(2, "0")}`;
+                        const d = new Date(`${dateStr}T${timeStr}`);
+                        if (!isNaN(d.getTime())) setArrivalTime(d);
+                      }) as any}
+                    />
+                  </View>
+
+                  {/* Time picker card */}
+                  <View style={[
+                    styles.pickerCard,
+                    { flex: 1, backgroundColor: colors.card, borderColor: arrivalTime ? colors.primary : colors.border },
+                  ]}>
+                    <Feather name="clock" size={15} color={arrivalTime ? colors.primary : colors.mutedForeground} />
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 2 }}>Time</Text>
+                    <TextInput
+                      style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", outlineStyle: "none", width: "100%" } as any}
+                      {...{ type: "time" } as any}
+                      value={(() => {
+                        try { return arrivalTime && !isNaN(arrivalTime.getTime()) ? `${String(arrivalTime.getHours()).padStart(2,"0")}:${String(arrivalTime.getMinutes()).padStart(2,"0")}` : ""; }
+                        catch { return ""; }
+                      })()}
+                      onChange={((e: any) => {
+                        const timeStr = e.target?.value ?? "";
+                        if (!timeStr) return;
+                        const base = arrivalTime && !isNaN(arrivalTime.getTime()) ? arrivalTime : new Date();
+                        const dateStr = base.toISOString().slice(0, 10);
+                        const d = new Date(`${dateStr}T${timeStr}`);
+                        if (!isNaN(d.getTime())) setArrivalTime(d);
+                      }) as any}
+                    />
+                  </View>
+                </View>
+
+                {/* Summary row */}
+                {arrivalTime && !isNaN(arrivalTime.getTime()) && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Feather name="check-circle" size={13} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "600", flex: 1 }}>
+                      {arrivalTime.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
+                      {" at "}
+                      {arrivalTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </Text>
+                    <TouchableOpacity onPress={() => setArrivalTime(null)}>
+                      <Feather name="x" size={14} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             ) : (
@@ -963,6 +1005,7 @@ const styles = StyleSheet.create({
   prefInput: { borderRadius: 12, borderWidth: 1, padding: 12, fontSize: 14, minHeight: 64, textAlignVertical: "top" },
 
   dateBtn: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1.5 },
+  pickerCard: { flexDirection: "column", alignItems: "flex-start", gap: 2, padding: 12, borderRadius: 12, borderWidth: 1.5 },
 
   nextBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 100 },
   nextBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
