@@ -31,6 +31,12 @@ function makeToken(userId: string, email: string, name: string): string {
 }
 
 // POST /api/auth/register
+//
+// Security note: registration is intentionally decoupled from immediate login.
+// We return the same 200 response regardless of whether the email is already
+// registered. This prevents user-enumeration: an attacker cannot distinguish
+// a new account from an existing one by observing status codes or bodies.
+// Clients must call /auth/login to obtain a session token.
 router.post("/auth/register", async (req: Request, res: Response) => {
   const parsed = RegisterSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -41,28 +47,30 @@ router.post("/auth/register", async (req: Request, res: Response) => {
     return;
   }
 
+  const GENERIC_OK = {
+    message:
+      "If this email address is not already registered, your account has been created. Please log in to continue.",
+  } as const;
+
   try {
-    const user = await createUser(
+    await createUser(
       parsed.data.name,
       parsed.data.email,
       parsed.data.password
     );
-    const token = makeToken(user.id, user.email, user.name);
-    res.status(201).json({
-      token,
-      user: { id: user.id, name: user.name, email: user.email },
-    });
   } catch (err: unknown) {
     if (err instanceof Error && err.message === "EMAIL_EXISTS") {
-      res.status(409).json({
-        error:
-          "An account with this email already exists. Please sign in instead.",
-      });
+      // Intentional no-op: return the same response as a successful registration
+      // so callers cannot determine whether the email is already enrolled.
+      res.status(200).json(GENERIC_OK);
       return;
     }
     req.log.error({ err }, "Registration error");
     res.status(500).json({ error: "Registration failed. Please try again." });
+    return;
   }
+
+  res.status(200).json(GENERIC_OK);
 });
 
 // POST /api/auth/login
@@ -74,16 +82,16 @@ router.post("/auth/login", async (req: Request, res: Response) => {
   }
 
   const user = findUserByEmail(parsed.data.email);
+  // Use a single generic message for both "unknown email" and "wrong password"
+  // so the endpoint cannot be used to enumerate registered email addresses.
   if (!user) {
-    res.status(401).json({
-      error: "No account found with that email. Please sign up first.",
-    });
+    res.status(401).json({ error: "Invalid email or password." });
     return;
   }
 
   const valid = await verifyPassword(user, parsed.data.password);
   if (!valid) {
-    res.status(401).json({ error: "Incorrect password. Please try again." });
+    res.status(401).json({ error: "Invalid email or password." });
     return;
   }
 
