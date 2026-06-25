@@ -1,0 +1,475 @@
+You are redesigning ONLY the visual styling of the Pantry screen in the
+PantrySwipe Expo app. The app is at artifacts/pantryswipe/. It uses
+Expo SDK 54, expo-router v6, React Native, TypeScript, and pnpm workspaces.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BEFORE YOU WRITE A SINGLE LINE OF CODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step 1 — Read these files first, do not guess at their contents:
+  - artifacts/pantryswipe/constants/colors.ts
+  - artifacts/pantryswipe/data/mockData.ts
+  - artifacts/pantryswipe/app/(tabs)/pantry.tsx
+  - artifacts/pantryswipe/app/_layout.tsx
+  - artifacts/pantryswipe/package.json
+
+Step 2 — Identify every component imported by pantry.tsx.
+For each one, check if it is also imported by ANY other screen.
+If it is shared, DO NOT modify it directly. Create a local
+styled wrapper in artifacts/pantryswipe/components/pantry/ instead.
+
+Step 3 — Check package.json for these packages:
+  expo-linear-gradient, expo-blur, @expo-google-fonts/epilogue
+Note which are present and which are missing before writing any import.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ABSOLUTE DO NOT TOUCH LIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Never modify these files under any circumstances:
+  - artifacts/pantryswipe/context/AppContext.tsx (or any context file)
+  - artifacts/pantryswipe/data/mockData.ts
+  - artifacts/pantryswipe/app/_layout.tsx  ← EXCEPTION: font loading
+    only (see Font Setup below), nothing else
+  - Any component file that is imported by more than one screen
+  - Any file containing PanResponder, useAnimatedValue, or gesture logic
+  - All navigation/routing files
+  - All onPress, navigation.navigate, and state logic — do not move,
+    rename, or rewire any of these
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PACKAGE INSTALLATION (do this first)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Only install packages that are genuinely missing from package.json.
+Use the exact commands below — no other install method:
+
+  expo-linear-gradient (if missing):
+    npx expo install expo-linear-gradient
+
+  expo-blur (if missing):
+    npx expo install expo-blur
+
+  Epilogue font (if missing):
+    npx expo install @expo-google-fonts/epilogue expo-font
+
+Do NOT run npm install or yarn — this is a pnpm workspace.
+After installing, verify the package appears in
+artifacts/pantryswipe/package.json before continuing.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FONT SETUP (one change to _layout.tsx only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+In artifacts/pantryswipe/app/_layout.tsx, add Epilogue font loading
+using this exact pattern — do not change anything else in _layout.tsx:
+
+  import { useFonts, Epilogue_400Regular,
+    Epilogue_700Bold } from '@expo-google-fonts/epilogue';
+  import * as SplashScreen from 'expo-splash-screen';
+
+  SplashScreen.preventAutoHideAsync();
+
+  Inside the root layout component, before the return:
+    const [fontsLoaded] = useFonts({
+      Epilogue_400Regular,
+      Epilogue_700Bold,
+    });
+
+    useEffect(() => {
+      if (fontsLoaded) SplashScreen.hideAsync();
+    }, [fontsLoaded]);
+
+    if (!fontsLoaded) return null;
+
+If SplashScreen is already used in _layout.tsx, merge into the
+existing pattern — do not add a second SplashScreen.preventAutoHideAsync().
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DESIGN TOKENS — read colors.ts first
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All colors must be imported from colors.ts. Do NOT hardcode any hex
+value directly in pantry.tsx or any component file. If a token does
+not exist in colors.ts, add it there first, then import it.
+
+Required tokens (add to colors.ts if missing):
+  primary:       '#F5A623'   // Saffron
+  secondary:     '#4CAF76'   // Herb Green
+  background:    '#FAFAF8'   // Warm off-white
+  surface:       '#FFFFFF'
+  textPrimary:   '#141210'
+  textMuted:     '#7A7570'
+  danger:        '#E84040'
+  amber:         '#F5A623'
+
+Font references (use these exact strings after font loading):
+  fontFamily: 'Epilogue_700Bold'    // headings
+  fontFamily: 'Epilogue_400Regular' // body
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CROSS-PLATFORM SHADOW HELPER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Create this helper at the top of pantry.tsx (or in a local utils file)
+and use it for every element that needs a shadow. Never write raw
+shadow props inline:
+
+  import { Platform } from 'react-native';
+
+  const cardShadow = Platform.select({
+    ios: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.06,
+      shadowRadius: 12,
+    },
+    android: { elevation: 3 },
+    web: { boxShadow: '0 4px 12px rgba(0,0,0,0.06)' },
+  });
+
+  const fabShadow = Platform.select({
+    ios: {
+      shadowColor: '#F5A623',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 12,
+    },
+    android: { elevation: 8 },
+    web: { boxShadow: '0 4px 12px rgba(245,166,35,0.4)' },
+  });
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY ICON TINT MAP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Read mockData.ts and identify every category key used. Then create
+this lookup — expand it to cover every category that exists in the
+data, not just these examples:
+
+  const CATEGORY_TINTS: Record<string, string> = {
+    produce:   'rgba(76, 175, 118, 0.12)',
+    dairy:     'rgba(245, 166, 35, 0.10)',
+    grain:     'rgba(245, 166, 35, 0.08)',
+    condiment: 'rgba(232, 64, 64, 0.08)',
+    oil:       'rgba(76, 175, 118, 0.10)',
+    default:   'rgba(200, 196, 190, 0.15)',
+  };
+
+  Usage in card: backgroundColor: CATEGORY_TINTS[item.category]
+    ?? CATEGORY_TINTS.default
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STYLING RULES — MANDATORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ALL styles must be in StyleSheet.create() at the bottom of each
+   file. Zero inline style objects inside render/return. This is
+   non-negotiable — inline objects cause FlatList re-renders with
+   32+ items.
+
+   WRONG:  style={{ borderRadius: 16, padding: 12 }}
+   RIGHT:  style={styles.card}
+
+2. The only exception: dynamic values (e.g. width as a percentage of
+   screen size, or color from CATEGORY_TINTS lookup) may use an array:
+   style={[styles.iconCircle, { backgroundColor: tint }]}
+
+3. Every touchable element must have minHeight: 44 and minWidth: 44
+   to meet Apple HIG tap target requirements. This includes the cart
+   icon, pencil icon, and sort toggle.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TAB BAR — PLATFORM GUARD REQUIRED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BlurView causes GPU stuttering on mid-range Android devices.
+Use Platform.select for the tab bar background:
+
+  import { BlurView } from 'expo-blur';
+  import { Platform, View } from 'react-native';
+
+  const TabBarBackground = () =>
+    Platform.OS === 'ios' ? (
+      <BlurView tint="light" intensity={80}
+        style={StyleSheet.absoluteFill} />
+    ) : (
+      <View style={[StyleSheet.absoluteFill,
+        { backgroundColor: 'rgba(250,250,248,0.97)' }]} />
+    );
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PANTRY INTELLIGENCE BANNER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Wrap the LinearGradient import in a try-safe pattern:
+
+  import { LinearGradient } from 'expo-linear-gradient';
+
+If expo-linear-gradient is confirmed present in package.json, use:
+
+  <LinearGradient
+    colors={['#F5A623', '#E8C46A']}
+    start={{ x: 0, y: 0 }}
+    end={{ x: 1, y: 1 }}
+    style={styles.banner}
+  >
+    {/* banner contents */}
+  </LinearGradient>
+
+If expo-linear-gradient is NOT in package.json and installation fails,
+use this fallback — do not leave a broken import:
+
+  <View style={[styles.banner, { backgroundColor: '#F5A623' }]}>
+    {/* banner contents */}
+  </View>
+
+Banner styles:
+  banner: {
+    borderRadius: 20,
+    padding: 20,
+    marginHorizontal: 16,
+    marginBottom: 24,
+  }
+  bannerLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: 'rgba(0,0,0,0.45)',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    fontFamily: 'Epilogue_700Bold',
+  }
+  bannerHeadline: {
+    fontSize: 22,
+    fontFamily: 'Epilogue_700Bold',
+    color: '#141210',   // ← move to colors token
+    marginBottom: 8,
+  }
+  bannerBody: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#3D3520',   // ← move to colors token
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY TABS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  tabScrollContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,           // if RN version supports gap; else use marginRight: 8
+  }
+  tabActive: {
+    backgroundColor: Colors.textPrimary,   // '#141210'
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+  }
+  tabInactive: {
+    backgroundColor: '#F0EDE8',
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+  }
+  tabActiveText: {
+    fontFamily: 'Epilogue_700Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  }
+  tabInactiveText: {
+    fontFamily: 'Epilogue_400Regular',
+    fontSize: 14,
+    color: Colors.textMuted,
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ITEM CARDS (2-column FlatList)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The card must be wrapped in a memo() component to prevent unnecessary
+re-renders. Create it as a separate component at the bottom of
+pantry.tsx or in artifacts/pantryswipe/components/pantry/PantryCard.tsx.
+
+  const PantryCard = React.memo(({ item }: { item: PantryItem }) => {
+    const tint = CATEGORY_TINTS[item.category] ?? CATEGORY_TINTS.default;
+    const statusColor = getStatusColor(item.status); // see helper below
+    return (
+      <View style={[styles.card, cardShadow]}>
+        {/* status dot */}
+        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+        {/* icon circle */}
+        <View style={[styles.iconCircle, { backgroundColor: tint }]}>
+          {/* existing icon/emoji — do not change */}
+        </View>
+        {/* name + quantity */}
+        <Text style={styles.itemName}>{item.name}</Text>
+        <Text style={styles.itemQty}>{item.quantity}</Text>
+        {/* status row */}
+        <StatusRow item={item} statusColor={statusColor} />
+      </View>
+    );
+  });
+
+Status color helper — add above StyleSheet.create():
+
+  const STATUS_COLORS: Record<string, string> = {
+    expires:   Colors.danger,
+    low:       Colors.primary,
+    refill:    Colors.danger,
+    inStock:   Colors.secondary,
+    fresh:     Colors.secondary,
+    good:      Colors.secondary,
+  };
+
+  function getStatusColor(status: string): string {
+    return STATUS_COLORS[status] ?? Colors.textMuted;
+  }
+
+StatusRow component (handles LOW STOCK progress bar):
+
+  Read item.quantity and item.maxQuantity from mockData.
+  If maxQuantity exists: progressWidth = (item.quantity / item.maxQuantity) * 100
+  If maxQuantity does NOT exist in mockData: do not render the progress
+  bar at all — render only the status label text.
+  Never hardcode a fixed percentage width for the progress bar.
+
+Card styles:
+  card: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 14,
+    margin: 6,
+    position: 'relative',
+  }
+  statusDot: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  }
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  }
+  itemName: {
+    fontSize: 15,
+    fontFamily: 'Epilogue_700Bold',
+    color: Colors.textPrimary,
+    marginBottom: 2,
+  }
+  itemQty: {
+    fontSize: 12,
+    fontFamily: 'Epilogue_400Regular',
+    color: Colors.textMuted,
+    marginBottom: 8,
+  }
+  actionIcon: {
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FLOATING ACTION BUTTON
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Do NOT change the onPress handler. Only change the style:
+
+  fab: {
+    position: 'absolute',
+    bottom: 90,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...fabShadow,
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION HEADER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  sectionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  }
+  sectionTitle: {
+    fontSize: 20,
+    fontFamily: 'Epilogue_700Bold',
+    color: Colors.textPrimary,
+  }
+  sectionSubtitle: {
+    fontSize: 13,
+    fontFamily: 'Epilogue_400Regular',
+    color: Colors.textMuted,
+    marginTop: 2,
+  }
+  sortButton: {
+    fontSize: 13,
+    fontFamily: 'Epilogue_400Regular',
+    color: Colors.primary,
+    fontWeight: '600',
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCREEN CONTAINER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  }
+  listContent: {
+    paddingHorizontal: 10,
+    paddingBottom: 100,
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY FINAL STEPS — DO NOT SKIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After all edits are complete, run these in order:
+
+1. Verify no shared component was modified:
+   grep -r "from '../components/" artifacts/pantryswipe/app/(tabs)/pantry.tsx
+   For each result, confirm that component is NOT imported by any
+   other file in app/(tabs)/. If it is, revert your change to that
+   component and create a local wrapper instead.
+
+2. Run TypeScript check and fix ALL errors before finishing:
+   cd artifacts/pantryswipe && pnpm run typecheck
+
+3. Confirm these still work by reading their logic (not running the
+   app — just read the code and confirm the logic is untouched):
+   - Category tab switching (active state toggle)
+   - Pantry Intelligence banner onPress navigation
+   - FAB onPress add-item flow
+   - Sort by Status toggle
+   - FlatList data source from AppContext or mockData
+
+4. Report back with:
+   - Every file you modified (list them)
+   - Every package you installed (or "none needed")
+   - Any assumption you made about mockData structure
+   - Any place where you could NOT apply the design spec because
+     the data or component structure didn't support it
+   - TypeScript check result (pass / errors found + fixed)

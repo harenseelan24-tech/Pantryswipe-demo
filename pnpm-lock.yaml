@@ -454,6 +454,9 @@ importers:
 
   artifacts/pantryswipe:
     dependencies:
+      '@expo-google-fonts/epilogue':
+        specifier: ^0.4.2
+        version: 0.4.2
       '@expo-google-fonts/fraunces':
         specifier: ^0.4.1
         version: 0.4.1
@@ -1381,6 +1384,9 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [linux]
+
+  '@expo-google-fonts/epilogue@0.4.2':
+    resolution: {integrity: sha512-69gLWq6t92cfULCQ6lhbdC6zTa04sXJXlXF8BeTV4G8/wYf9PuEaBoPQUy7Wr8TJSaxgKHyOxpoJTXJbaIljTA==}
 
   '@expo-google-fonts/fraunces@0.4.1':
     resolution: {integrity: sha512-gYc9P92ObyWvz1rWPOeWSvVKyBFIuA8hgOdhvo4DSiPBaWLbFA6v8uLIEIBwW+0oWTlXbBzjeBReHQI2H7UNjQ==}
@@ -7843,6 +7849,8 @@ snapshots:
 
   '@esbuild/linux-x64@0.28.1':
     optional: true
+
+  '@expo-google-fonts/epilogue@0.4.2': {}
 
   '@expo-google-fonts/fraunces@0.4.1': {}
 
