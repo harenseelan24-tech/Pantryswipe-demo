@@ -16,12 +16,12 @@ import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 
-// ── API base (server-side Anthropic key — never exposed to client bundle) ─────
-const API_DOMAIN =
-  typeof process !== "undefined"
-    ? (process.env.EXPO_PUBLIC_API_DOMAIN ?? "zip-repl-cactusussy24.replit.app")
-    : "zip-repl-cactusussy24.replit.app";
-const API_BASE = `https://${API_DOMAIN}`;
+// ── API base: relative on web (proxy handles routing), full HTTPS on native ────
+// EXPO_PUBLIC_DOMAIN is always injected by the dev script as $REPLIT_DEV_DOMAIN
+const API_BASE =
+  Platform.OS !== "web"
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN ?? process.env.EXPO_PUBLIC_API_DOMAIN ?? "793ecd86-87bd-45bf-a997-455057de1a61-00-14m4lfwa4iiar.pike.replit.dev"}`
+    : "";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface PartyPlanForm {
@@ -94,6 +94,22 @@ const INITIAL_FORM: PartyPlanForm = {
   arrivalTime: "",
   additionalPreferences: "",
 };
+
+// ── Time slot picker helpers ───────────────────────────────────────────────────
+function generateTimeSlots(): { label: string; value: string }[] {
+  const slots: { label: string; value: string }[] = [];
+  for (let h = 10; h <= 23; h++) {
+    for (const m of [0, 30]) {
+      const value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+      const period = h < 12 ? "AM" : "PM";
+      const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      const label = `${hour12}:${m.toString().padStart(2, "0")} ${period}`;
+      slots.push({ label, value });
+    }
+  }
+  return slots;
+}
+const TIME_SLOTS = generateTimeSlots();
 
 // ── parsePlan (exact per spec) ────────────────────────────────────────────────
 function parsePlan(text: string): Record<string, string> {
@@ -480,39 +496,42 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // Step 6 – Arrival time
+  // Step 6 – Arrival time (tap-to-select chip grid)
   function renderStep6() {
     return (
       <View>
         {renderStepLabel("When are guests arriving?")}
-        {Platform.OS === "web" ? (
-          <View style={[s.timeCard, { backgroundColor: colors.card, borderColor: form.arrivalTime ? colors.primary : colors.border }]}>
-            <Feather name="clock" size={18} color={form.arrivalTime ? colors.primary : colors.mutedForeground} />
-            <TextInput
-              style={{ flex: 1, color: colors.foreground, fontSize: 16, outlineStyle: "none" } as any}
-              {...{ type: "time" } as any}
-              value={form.arrivalTime}
-              onChange={((e: any) => {
-                const val = e.target?.value ?? "";
-                setForm((f) => ({ ...f, arrivalTime: val }));
-                if (val) setStepError("");
-              }) as any}
-            />
-          </View>
-        ) : (
-          <View style={[s.timeCard, { backgroundColor: colors.card, borderColor: form.arrivalTime ? colors.primary : colors.border }]}>
-            <Feather name="clock" size={18} color={form.arrivalTime ? colors.primary : colors.mutedForeground} />
-            <TextInput
-              style={[s.timeInput, { color: colors.foreground }]}
-              value={form.arrivalTime}
-              onChangeText={(v) => { setForm((f) => ({ ...f, arrivalTime: v })); if (v) setStepError(""); }}
-              placeholder="e.g. 17:00"
-              placeholderTextColor={colors.mutedForeground}
-              keyboardType="numbers-and-punctuation"
-            />
-          </View>
-        )}
-        <Text style={[s.stepHint, { color: colors.mutedForeground }]}>
+        <Text style={[s.stepHint, { color: colors.mutedForeground, marginBottom: 16 }]}>
+          Tap to pick guest arrival time
+        </Text>
+        <View style={s.timeGrid}>
+          {TIME_SLOTS.map((slot) => {
+            const selected = form.arrivalTime === slot.value;
+            return (
+              <TouchableOpacity
+                key={slot.value}
+                onPress={() => {
+                  setForm((f) => ({ ...f, arrivalTime: slot.value }));
+                  setStepError("");
+                  Haptics.selectionAsync();
+                }}
+                style={[
+                  s.timeChip,
+                  {
+                    backgroundColor: selected ? colors.primary : colors.card,
+                    borderColor: selected ? colors.primary : colors.border,
+                  },
+                ]}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.timeChipText, { color: selected ? "#fff" : colors.foreground }]}>
+                  {slot.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <Text style={[s.stepHint, { color: colors.mutedForeground, marginTop: 12 }]}>
           Used to build your preparation timeline
         </Text>
       </View>
@@ -1019,8 +1038,9 @@ const s = StyleSheet.create({
   restrictionLabel: { fontSize: 15, fontWeight: "600" },
 
   // Arrival time
-  timeCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, borderWidth: 1.5 },
-  timeInput: { flex: 1, fontSize: 16 },
+  timeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  timeChip: { borderRadius: 10, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 10, minWidth: "22%" },
+  timeChipText: { fontSize: 13, fontWeight: "600", textAlign: "center" },
 
   // Preferences
   prefInput: { borderRadius: 14, borderWidth: 1.5, padding: 14, fontSize: 15, minHeight: 100, textAlignVertical: "top" },
