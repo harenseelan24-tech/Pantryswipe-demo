@@ -201,7 +201,7 @@ export default function PartyPlannerScreen() {
     setStepError("");
     switch (wizardStep) {
       case 1: if (!form.occasion)                              { setStepError("Please select an occasion.");                       return false; } break;
-      case 2: if (form.guestCount < 1 || form.guestCount > 500) { setStepError("Guest count must be between 1 and 500.");         return false; } break;
+      case 2: if (form.guestCount < 1 || form.guestCount > 99)  { setStepError("Guest count must be between 1 and 99.");          return false; } break;
       case 3: if (!form.budget || form.budget <= 0)            { setStepError("Please enter a budget greater than SGD $0.");      return false; } break;
       case 4: if (!form.servingStyle)                          { setStepError("Please select a serving style.");                  return false; } break;
       case 6: if (!form.arrivalTime.trim())                    { setStepError("Please select a guest arrival time.");             return false; } break;
@@ -385,6 +385,7 @@ export default function PartyPlannerScreen() {
             activeOpacity={0.8}
             style={[s.counterBtn, { backgroundColor: form.guestCount <= 1 ? colors.muted : colors.primary }]}
             onPress={() => form.guestCount > 1 && setForm((f) => ({ ...f, guestCount: f.guestCount - 1 }))}
+
           >
             <Feather name="minus" size={22} color={form.guestCount <= 1 ? colors.mutedForeground : "#fff"} />
           </TouchableOpacity>
@@ -394,17 +395,17 @@ export default function PartyPlannerScreen() {
           </View>
           <TouchableOpacity
             activeOpacity={0.8}
-            style={[s.counterBtn, { backgroundColor: form.guestCount >= 500 ? colors.muted : colors.primary }]}
-            onPress={() => form.guestCount < 500 && setForm((f) => ({ ...f, guestCount: f.guestCount + 1 }))}
+            style={[s.counterBtn, { backgroundColor: form.guestCount >= 99 ? colors.muted : colors.primary }]}
+            onPress={() => form.guestCount < 99 && setForm((f) => ({ ...f, guestCount: f.guestCount + 1 }))}
           >
-            <Feather name="plus" size={22} color={form.guestCount >= 500 ? colors.mutedForeground : "#fff"} />
+            <Feather name="plus" size={22} color={form.guestCount >= 99 ? colors.mutedForeground : "#fff"} />
           </TouchableOpacity>
         </View>
         <View style={s.quickAddRow}>
           {GUEST_QUICK_ADD.map((n) => (
             <TouchableOpacity key={n} activeOpacity={0.75}
               style={[s.quickAddBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-              onPress={() => { setForm((f) => ({ ...f, guestCount: Math.min(f.guestCount + n, 500) })); Haptics.selectionAsync(); }}
+              onPress={() => { setForm((f) => ({ ...f, guestCount: Math.min(f.guestCount + n, 99) })); Haptics.selectionAsync(); }}
             >
               <Text style={[s.quickAddText, { color: colors.primary }]}>+{n}</Text>
             </TouchableOpacity>
@@ -416,7 +417,6 @@ export default function PartyPlannerScreen() {
             <Text style={[s.quickAddText, { color: colors.mutedForeground }]}>Reset</Text>
           </TouchableOpacity>
         </View>
-        <Text style={[s.stepHint, { color: colors.mutedForeground, textAlign: "center" }]}>1 – 500 guests</Text>
       </View>
     );
   }
@@ -913,7 +913,6 @@ export default function PartyPlannerScreen() {
           onPress={() => { setAppState("wizard"); setWizardStep(1); }}
         >
           <Feather name="arrow-left" size={15} color={colors.mutedForeground} />
-          <Text style={[s.planBackText, { color: colors.mutedForeground }]}>Edit setup</Text>
         </TouchableOpacity>
 
         {restrictionWarning && (
