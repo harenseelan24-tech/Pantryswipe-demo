@@ -167,7 +167,8 @@ const MENUS: Record<string, OccasionMenu> = {
     mains: [
       { name: "Whole Roast Chicken", reason: "Centrepiece dish with broad multi-generational appeal — easy to carve and share family-style", costPerPerson: 3, minCost: 18, qty: n => `${Math.ceil(n / 6)} chickens`, tags: ["meat"] },
       { name: "Wok-Tossed Fried Rice", reason: "Universally loved comfort food — scales perfectly for large groups and pairs with everything", costPerPerson: 1.5, minCost: 10, qty: n => `${Math.ceil(n * 0.25)} kg`, tags: ["eggs"] },
-      { name: "Chicken or Beef Curry", reason: "Hearty warming family dish — develops better flavour when made in large batches", costPerPerson: 2.5, minCost: 15, qty: n => `${Math.ceil(n * 0.3)} kg`, tags: ["meat"] },
+      { name: "Chicken Curry", reason: "Hearty warming family dish — develops better flavour when made in large batches", costPerPerson: 2.5, minCost: 15, qty: n => `${Math.ceil(n * 0.3)} kg`, tags: ["meat"] },
+      { name: "Beef Rendang", reason: "Rich slow-cooked dry curry — bold flavour that improves when made ahead for a crowd", costPerPerson: 3, minCost: 18, qty: n => `${Math.ceil(n * 0.3)} kg`, tags: ["meat", "beef"] },
       { name: "Steamed Fish (Ginger & Soy)", reason: "Light healthy option loved by elderly guests — impressive presentation with minimal prep", costPerPerson: 3.5, minCost: 20, qty: n => `${Math.ceil(n / 6)} fish`, tags: ["seafood"] },
       { name: "Braised Tofu & Vegetable Stir-Fry", reason: "Vegetarian-friendly main — light complement to heavier meat dishes on the spread", costPerPerson: 1.5, minCost: 10, qty: n => `1 large wok`, tags: [] },
     ],
