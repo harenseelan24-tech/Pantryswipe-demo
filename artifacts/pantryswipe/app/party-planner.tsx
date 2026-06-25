@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -9,1078 +8,1108 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Notifications from "expo-notifications";
-import Constants from "expo-constants";
 import { useColors } from "@/hooks/useColors";
-import {
-  generatePartyMenu,
-  callClaudeWithPrompt,
-  parseClaudeJSON,
-  PARTY_SYSTEM_PROMPT,
-  PartyPlan,
-  MenuItem,
-  MenuCourse,
-} from "@/services/aiChef";
 
-// DateTimePicker — lazy-loaded: not available on web or if package is missing
-let DateTimePicker: React.ComponentType<any> | null = null;
-try {
-  DateTimePicker = require("@react-native-community/datetimepicker").default;
-} catch {}
+// ── API base (server-side Anthropic key — never exposed to client bundle) ─────
+const API_DOMAIN =
+  typeof process !== "undefined"
+    ? (process.env.EXPO_PUBLIC_API_DOMAIN ?? "zip-repl-cactusussy24.replit.app")
+    : "zip-repl-cactusussy24.replit.app";
+const API_BASE = `https://${API_DOMAIN}`;
 
-// ── Constants (defined outside component — never inside render) ───────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface PartyPlanForm {
+  occasion: string;
+  guestCount: number;
+  budget: number;
+  servingStyle: string;
+  restrictions: string[];
+  arrivalTime: string;
+  additionalPreferences: string;
+}
 
-const DIETARY_TAGS = [
-  "No pork",
-  "No beef",
-  "No shellfish",
-  "No alcohol",
-  "Vegetarian",
-  "Vegan",
-  "Halal",
-  "Kosher",
-  "Gluten-free",
-  "Dairy-free",
-  "Nut-free",
-  "Low spice",
-] as const;
-type DietaryTag = (typeof DIETARY_TAGS)[number];
+interface PlanMeta {
+  occasion: string;
+  guestCount: number;
+  budget: number;
+  restrictions: string[];
+}
 
-const EVENT_TYPES = [
-  { label: "Birthday", icon: "gift" as const },
+type AppState = "wizard" | "loading" | "error" | "plan";
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const OCCASIONS = [
   { label: "BBQ", icon: "sun" as const },
+  { label: "Birthday Party", icon: "gift" as const },
+  { label: "Family Gathering", icon: "users" as const },
   { label: "Dinner Party", icon: "moon" as const },
-  { label: "Holiday Feast", icon: "star" as const },
-  { label: "Graduation", icon: "award" as const },
   { label: "Movie Night", icon: "film" as const },
   { label: "Brunch", icon: "coffee" as const },
+  { label: "Holiday Fest", icon: "star" as const },
   { label: "Wedding", icon: "heart" as const },
 ];
 
-const SERVING_STYLES = ["Buffet", "Plated", "Finger Food", "Family Style"];
+const SERVING_STYLES = [
+  { label: "Buffet", icon: "grid" as const },
+  { label: "Finger Food", icon: "layers" as const },
+  { label: "Plated", icon: "circle" as const },
+  { label: "Family Style", icon: "share-2" as const },
+];
 
-const SAMPLE_PLAN: PartyPlan = {
-  menu: [
-    {
-      course: "Mains",
-      items: [
-        { name: "Grilled chicken thighs", quantity: "3kg", estimatedCost: 22.0, prepNote: "Marinate 2hrs, grill 25min" },
-        { name: "Beef sausages", quantity: "2kg", estimatedCost: 14.0, prepNote: "Grill 15min, turning regularly" },
-      ],
-    },
-    {
-      course: "Sides",
-      items: [
-        { name: "Coleslaw", quantity: "1.5kg tub", estimatedCost: 8.0, prepNote: "Ready-made, serve cold" },
-        { name: "Bread rolls", quantity: "20 pack", estimatedCost: 5.0, prepNote: "Slice and butter ahead" },
-      ],
-    },
-    {
-      course: "Drinks",
-      items: [
-        { name: "Soft drinks assorted", quantity: "4x 1.5L bottles", estimatedCost: 12.0, prepNote: "Chill in ice bucket" },
-      ],
-    },
-    {
-      course: "Desserts",
-      items: [
-        { name: "Watermelon slices", quantity: "2 melons", estimatedCost: 10.0, prepNote: "Pre-slice, keep cool" },
-      ],
-    },
-  ],
-  shoppingList: [
-    { item: "Chicken thighs", quantity: "3kg", estimatedCost: 22.0 },
-    { item: "Beef sausages", quantity: "2kg", estimatedCost: 14.0 },
-    { item: "Coleslaw", quantity: "1.5kg tub", estimatedCost: 8.0 },
-    { item: "Bread rolls", quantity: "20 pack", estimatedCost: 5.0 },
-    { item: "Soft drinks", quantity: "4x 1.5L", estimatedCost: 12.0 },
-    { item: "Watermelon", quantity: "2 melons", estimatedCost: 10.0 },
-  ],
-  timeline: [
-    { hoursBeforeArrival: 24, task: "Buy all groceries" },
-    { hoursBeforeArrival: 2, task: "Marinate chicken thighs" },
-    { hoursBeforeArrival: 1, task: "Prep coleslaw and slice bread rolls" },
-    { hoursBeforeArrival: 0.5, task: "Light the grill" },
-    { hoursBeforeArrival: 0.25, task: "Start grilling sausages" },
-  ],
-  costBreakdown: { totalEstimated: 71.0, budgetRemaining: 79.0, costPerPerson: 4.73 },
-  hostTips: [
-    "Set up a self-serve drink station so you can stay at the grill",
-    "Pre-cut watermelon the night before and refrigerate",
-  ],
+const RESTRICTIONS = [
+  "None",
+  "Halal",
+  "No Pork",
+  "No Beef",
+  "No Shellfish",
+  "No Alcohol",
+  "Vegetarian",
+  "Vegan",
+  "Gluten-Free",
+  "Dairy-Free",
+  "Nut-Free",
+  "Low Spice",
+];
+
+const MENU_TABS = ["MAINS", "SIDES", "SNACKS", "DRINKS", "DESSERTS"];
+const SECTION_KEYS = [
+  "PARTY OVERVIEW", "MAINS", "SIDES", "SNACKS",
+  "DRINKS", "DESSERTS", "SHOPPING LIST",
+  "BUDGET BREAKDOWN", "PREPARATION TIMELINE",
+  "HOST TIPS", "VALIDATION CHECKLIST",
+];
+
+const INITIAL_FORM: PartyPlanForm = {
+  occasion: "",
+  guestCount: 10,
+  budget: 0,
+  servingStyle: "",
+  restrictions: [],
+  arrivalTime: "",
+  additionalPreferences: "",
 };
 
-const PARTY_NOTIF_KEY = "partyPlannerNotifIds";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const fmt = (n: number) => `$${Number(n).toFixed(2)}`;
-
-const clearPartyNotifications = async () => {
-  try {
-    const raw = await AsyncStorage.getItem(PARTY_NOTIF_KEY);
-    const ids: string[] = raw ? JSON.parse(raw) : [];
-    await Promise.all(ids.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
-    await AsyncStorage.removeItem(PARTY_NOTIF_KEY);
-  } catch {
-    /* ignore — best effort */
-  }
-};
-
-const requestAndGetPushToken = async (): Promise<string | null> => {
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== "granted") {
-    console.warn("[Notifications] Permission denied — skipping push token");
-    return null;
-  }
-  try {
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-    if (!projectId) {
-      console.warn("[Notifications] No EAS projectId found in app config");
-      return null;
-    }
-    const token = await Notifications.getExpoPushTokenAsync({ projectId });
-    return token.data;
-  } catch (e) {
-    console.error("[Notifications] Push token fetch failed:", e);
-    return null;
-  }
-};
-
-const schedulePartyNotifications = async (
-  timeline: { hoursBeforeArrival: number; task: string }[],
-  arrivalTimeMs: number
-) => {
-  await clearPartyNotifications();
-  const scheduledIds: string[] = [];
-
-  for (const entry of timeline) {
-    const triggerMs = arrivalTimeMs - entry.hoursBeforeArrival * 3600 * 1000;
-    if (triggerMs <= Date.now()) continue;
-
-    try {
-      const id = await Notifications.scheduleNotificationAsync({
-        content: { title: "🎉 Party prep reminder", body: entry.task },
-        trigger: { date: new Date(triggerMs) } as any,
-      });
-      scheduledIds.push(id);
-    } catch (e) {
-      console.warn("[Notifications] Failed to schedule:", entry.task, e);
+// ── parsePlan (exact per spec) ────────────────────────────────────────────────
+function parsePlan(text: string): Record<string, string> {
+  const sections: Record<string, string> = {};
+  const parts = text.split(/^##\s+/m);
+  for (const part of parts) {
+    const firstLine = part.split("\n")[0].trim().toUpperCase();
+    const matched = SECTION_KEYS.find((k) => firstLine.includes(k));
+    if (matched) {
+      sections[matched] = part.substring(part.indexOf("\n") + 1).trim();
     }
   }
+  if (Object.keys(sections).length < 5) {
+    throw new Error("Plan format could not be parsed. Please regenerate.");
+  }
+  return sections;
+}
 
-  await AsyncStorage.setItem(PARTY_NOTIF_KEY, JSON.stringify(scheduledIds));
-  requestAndGetPushToken().then((token) => {
-    if (token) AsyncStorage.setItem("partyPlannerPushToken", token);
-  });
+// ── Client-side restriction audit ─────────────────────────────────────────────
+const RESTRICTION_BLOCKLIST: Record<string, string[]> = {
+  "No Pork": ["pork", "bacon", "ham", "lard", "prosciutto"],
+  Halal: ["pork", "bacon", "ham", "lard", "prosciutto"],
+  "No Beef": ["beef", "brisket", "wagyu"],
+  "No Shellfish": ["prawn", "crab", "lobster", "scallop", "clam", "shrimp"],
+  Vegetarian: ["chicken", "duck", "pork", "beef", "lamb", "fish"],
+  Vegan: ["chicken", "duck", "pork", "beef", "lamb", "fish"],
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
+function auditRestrictions(planText: string, restrictions: string[]): boolean {
+  const parts = planText.split(/^##\s+/m);
+  const foodSections = ["MAINS", "SIDES", "SNACKS", "DESSERTS"];
+  const foodText = parts
+    .filter((p) => foodSections.some((s) => p.split("\n")[0].trim().toUpperCase().includes(s)))
+    .join("\n")
+    .toLowerCase();
+  for (const r of restrictions) {
+    const keywords = RESTRICTION_BLOCKLIST[r] ?? [];
+    for (const kw of keywords) {
+      if (foodText.includes(kw)) return true;
+    }
+  }
+  return false;
+}
 
+// ── Main component ────────────────────────────────────────────────────────────
 export default function PartyPlannerScreen() {
   const colors = useColors();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const scrollRef = useRef<ScrollView>(null);
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom;
+  // App state
+  const [appState, setAppState] = useState<AppState>("wizard");
+  const [wizardStep, setWizardStep] = useState(1);
+  const [form, setForm] = useState<PartyPlanForm>(INITIAL_FORM);
+  const [stepError, setStepError] = useState("");
+  const [budgetText, setBudgetText] = useState("");
 
-  // ── Form state ─────────────────────────────────────────────────────────────
-  const [step, setStep] = useState(0);
-  const [occasion, setOccasion] = useState("Birthday");
-  const [guestCount, setGuestCount] = useState(12);
-  const [servingStyle, setServingStyle] = useState("Buffet");
-  const [budget, setBudget] = useState(200);
-  const [selectedTags, setSelectedTags] = useState<DietaryTag[]>([]);
-  const [additionalPreferences, setAdditionalPreferences] = useState("");
-  const [arrivalTime, setArrivalTime] = useState<Date | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
+  // Plan state
+  const [planSections, setPlanSections] = useState<Record<string, string> | null>(null);
+  const [planMeta, setPlanMeta] = useState<PlanMeta | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [restrictionWarning, setRestrictionWarning] = useState(false);
+  const [menuTab, setMenuTab] = useState("MAINS");
+  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [regenLoading, setRegenLoading] = useState(false);
 
-  // ── Plan state ─────────────────────────────────────────────────────────────
-  const [generating, setGenerating] = useState(false);
-  const [plan, setPlan] = useState<PartyPlan | null>(null);
-  const [isAI, setIsAI] = useState(false);
-  const [regeneratingSections, setRegeneratingSections] = useState<Set<string>>(new Set());
-  const [editingItem, setEditingItem] = useState<{ courseIdx: number; itemIdx: number } | null>(null);
-  const [editDraft, setEditDraft] = useState({ name: "", quantity: "", estimatedCost: "", prepNote: "" });
+  const totalSteps = 7;
+  const isWide = width > 600;
 
-  // ── Countdown ──────────────────────────────────────────────────────────────
-  const [nextTask, setNextTask] = useState<{ label: string; msUntil: number } | null>(null);
-
-  useEffect(() => {
-    if (!plan || !arrivalTime) return;
-    const computeNext = () => {
-      const now = Date.now();
-      const arrivalMs = arrivalTime.getTime();
-      const upcoming = plan.timeline
-        .map((t) => ({ label: t.task, msUntil: arrivalMs - t.hoursBeforeArrival * 3600 * 1000 - now }))
-        .filter((t) => t.msUntil > 0)
-        .sort((a, b) => a.msUntil - b.msUntil);
-      setNextTask(upcoming[0] ?? null);
-    };
-    computeNext();
-    const interval = setInterval(computeNext, 60_000);
-    return () => clearInterval(interval); // prevents memory leak
-  }, [plan, arrivalTime]);
-
-  // ── Handlers ───────────────────────────────────────────────────────────────
-
-  const toggleTag = (tag: DietaryTag) =>
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
-
-  const onDateChange = (event: any, selected?: Date) => {
-    if (Platform.OS === "android") setShowPicker(false);
-    if (event.type === "set" && selected) setArrivalTime(selected);
-  };
-
-  const handleGenerate = async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setGenerating(true);
-    setIsAI(false);
-    try {
-      const result = await generatePartyMenu({
-        occasion,
-        guestCount,
-        servingStyle,
-        budget,
-        dietaryRestrictions: selectedTags as string[],
-        additionalPreferences,
-        arrivalTime: arrivalTime?.getTime(),
-      });
-      setPlan(result);
-      // Mark as AI if the plan looks non-trivial (more than 2 courses)
-      setIsAI(result.menu.length > 1);
-    } catch (err) {
-      console.error("[PartyPlanner] unexpected error:", err);
-      // generatePartyMenu always falls back internally — this path is a safety net only
-      setPlan(SAMPLE_PLAN);
-      setIsAI(false);
+  // ── Step validation ───────────────────────────────────────────────────────
+  function validateStep(): boolean {
+    setStepError("");
+    switch (wizardStep) {
+      case 1:
+        if (!form.occasion) { setStepError("Please select an occasion."); return false; }
+        break;
+      case 2:
+        if (form.guestCount < 1 || form.guestCount > 500) {
+          setStepError("Guest count must be between 1 and 500."); return false;
+        }
+        break;
+      case 3:
+        if (!form.budget || form.budget <= 0) {
+          setStepError("Please enter a budget greater than SGD $0."); return false;
+        }
+        break;
+      case 4:
+        if (!form.servingStyle) { setStepError("Please select a serving style."); return false; }
+        break;
+      case 6:
+        if (!form.arrivalTime.trim()) { setStepError("Please enter a guest arrival time."); return false; }
+        break;
     }
-    setStep(2);
-    setGenerating(false);
-  };
+    return true;
+  }
 
-  const updateMenuItem = (courseIdx: number, itemIdx: number, updates: Partial<MenuItem>) => {
-    setPlan((prev) => {
-      if (!prev) return prev;
-      const newMenu = prev.menu.map((course, ci) =>
-        ci !== courseIdx
-          ? course
-          : { ...course, items: course.items.map((item, ii) => (ii !== itemIdx ? item : { ...item, ...updates })) }
-      );
-      return { ...prev, menu: newMenu };
-    });
-    setEditingItem(null);
-  };
+  function goNext() {
+    if (!validateStep()) return;
+    Haptics.selectionAsync();
+    setWizardStep((s) => Math.min(s + 1, totalSteps));
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }
 
-  const safeRestrictions =
-    selectedTags
-      .map((r) => r.replace(/[`"\\]/g, "").trim())
-      .filter(Boolean)
-      .join(", ") || "None";
+  function goBack() {
+    setStepError("");
+    Haptics.selectionAsync();
+    setWizardStep((s) => Math.max(s - 1, 1));
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }
 
-  const regenerateSection = async (courseName: string) => {
-    if (regeneratingSections.has(courseName)) return; // prevent double-tap
-    setRegeneratingSections((prev) => new Set(prev).add(courseName));
-
-    try {
-      const lockedMenu = plan!.menu
-        .filter((c) => c.course !== courseName)
-        .map((c) => ({ course: c.course, items: c.items.map((i) => i.name).slice(0, 8) }));
-
-      const regenPrompt = `The following party plan sections are confirmed and must NOT change:
-${JSON.stringify(lockedMenu).slice(0, 800)}
-
-Regenerate ONLY the "${courseName}" course with fresh ideas.
-All original constraints apply: occasion=${occasion}, guests=${guestCount}, budget=$${budget}, dietary=${safeRestrictions}.
-Return ONLY a JSON object:
-{ "course": "${courseName}", "items": [ { "name": "string", "quantity": "string", "estimatedCost": number, "prepNote": "string" } ] }
-No markdown. No other keys.`;
-
-      const raw = await callClaudeWithPrompt(regenPrompt, PARTY_SYSTEM_PROMPT);
-      const newCourse = parseClaudeJSON<MenuCourse>(raw);
-
-      setPlan((prev) => {
-        if (!prev) return prev;
-        return { ...prev, menu: prev.menu.map((c) => (c.course === courseName ? newCourse : c)) };
-      });
-    } catch {
-      Alert.alert("Could not regenerate", "Please try again.");
-    } finally {
-      setRegeneratingSections((prev) => {
-        const next = new Set(prev);
-        next.delete(courseName);
-        return next;
-      });
-    }
-  };
-
-  const handleSavePlan = async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    if (plan && arrivalTime && Platform.OS !== "web") {
-      try {
-        await schedulePartyNotifications(plan.timeline, arrivalTime.getTime());
-        Alert.alert("Plan saved!", "Prep reminders scheduled before guest arrival.");
-      } catch {
-        Alert.alert("Plan saved!", "Could not schedule notifications — check permissions.");
-      }
+  // ── API call ──────────────────────────────────────────────────────────────
+  async function submitPlan(regen = false) {
+    if (!validateStep() && wizardStep === totalSteps) return;
+    if (regen) {
+      setRegenLoading(true);
     } else {
-      Alert.alert("Plan saved!", "Head to the kitchen and get cooking! 🎉");
+      setAppState("loading");
     }
-  };
+    setStepError("");
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+    try {
+      const res = await fetch(`${API_BASE}/api/generate-party-plan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          occasion: form.occasion,
+          guestCount: form.guestCount,
+          budget: form.budget,
+          servingStyle: form.servingStyle,
+          restrictions: form.restrictions.filter((r) => r !== "None"),
+          arrivalTime: form.arrivalTime,
+          additionalPreferences: form.additionalPreferences,
+        }),
+      });
 
-  const activePlan = plan ?? SAMPLE_PLAN;
+      const data = await res.json() as {
+        success?: boolean; plan?: string; metadata?: PlanMeta; error?: string;
+      };
 
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: topPadding + 8, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => (step > 0 ? setStep(step - 1) : router.back())}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Party Planner</Text>
-        <View style={styles.stepDots}>
-          {[0, 1, 2].map((s) => (
-            <View
-              key={s}
-              style={[styles.stepDot, { backgroundColor: s <= step ? colors.primary : colors.border }]}
-            />
-          ))}
+      if (!res.ok || !data.success || !data.plan) {
+        throw new Error(data.error ?? `Server error ${res.status}`);
+      }
+
+      const sections = parsePlan(data.plan);
+      const hasWarning = auditRestrictions(data.plan, form.restrictions.filter((r) => r !== "None"));
+
+      setPlanSections(sections);
+      setPlanMeta(data.metadata ?? null);
+      setRestrictionWarning(hasWarning);
+      setMenuTab("MAINS");
+      setCheckedItems({});
+      setGeneratedAt(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+      setAppState("plan");
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      setErrorMessage(msg);
+      setAppState("error");
+    } finally {
+      setRegenLoading(false);
+    }
+  }
+
+  // ── Restriction toggle ────────────────────────────────────────────────────
+  function toggleRestriction(tag: string) {
+    setForm((prev) => {
+      if (tag === "None") return { ...prev, restrictions: ["None"] };
+      const without = prev.restrictions.filter((r) => r !== "None" && r !== tag);
+      const hasTag = prev.restrictions.includes(tag);
+      return { ...prev, restrictions: hasTag ? without : [...without, tag] };
+    });
+  }
+
+  // ── Shopping list checkbox ────────────────────────────────────────────────
+  function toggleCheck(key: string) {
+    setCheckedItems((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // RENDER: header
+  // ────────────────────────────────────────────────────────────────────────
+  function renderHeader(title: string, showBack = true) {
+    return (
+      <View style={[s.header, { borderBottomColor: colors.border }]}>
+        {showBack ? (
+          <TouchableOpacity onPress={() => {
+            if (appState === "wizard" && wizardStep > 1) goBack();
+            else if (appState === "plan" || appState === "error") {
+              setAppState("wizard"); setWizardStep(1);
+            }
+            else router.back();
+          }} style={s.headerBtn}>
+            <Feather name="arrow-left" size={22} color={colors.foreground} />
+          </TouchableOpacity>
+        ) : <View style={s.headerBtn} />}
+        <Text style={[s.headerTitle, { color: colors.foreground }]}>{title}</Text>
+        <View style={s.headerBtn} />
+      </View>
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // RENDER: progress bar
+  // ────────────────────────────────────────────────────────────────────────
+  function renderProgress() {
+    const pct = (wizardStep / totalSteps) * 100;
+    return (
+      <View style={[s.progressWrap, { backgroundColor: colors.muted }]}>
+        <View style={[s.progressBar, { width: `${pct}%` as any, backgroundColor: colors.primary }]} />
+      </View>
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // RENDER: wizard steps
+  // ────────────────────────────────────────────────────────────────────────
+  function renderStep() {
+    switch (wizardStep) {
+      case 1: return renderStep1();
+      case 2: return renderStep2();
+      case 3: return renderStep3();
+      case 4: return renderStep4();
+      case 5: return renderStep5();
+      case 6: return renderStep6();
+      case 7: return renderStep7();
+      default: return null;
+    }
+  }
+
+  function renderStepLabel(label: string) {
+    return (
+      <View style={s.stepLabelRow}>
+        <Text style={[s.stepCounter, { color: colors.mutedForeground }]}>
+          Step {wizardStep} of {totalSteps}
+        </Text>
+        <Text style={[s.stepTitle, { color: colors.foreground }]}>{label}</Text>
+      </View>
+    );
+  }
+
+  // Step 1 – Occasion
+  function renderStep1() {
+    return (
+      <View>
+        {renderStepLabel("What's the occasion?")}
+        <View style={s.occasionGrid}>
+          {OCCASIONS.map((o) => {
+            const active = form.occasion === o.label;
+            return (
+              <TouchableOpacity
+                key={o.label}
+                style={[s.occasionCard, {
+                  backgroundColor: active ? colors.primary : colors.card,
+                  borderColor: active ? colors.primary : colors.border,
+                }]}
+                onPress={() => { setForm((f) => ({ ...f, occasion: o.label })); setStepError(""); }}
+              >
+                <Feather name={o.icon} size={24} color={active ? "#fff" : colors.mutedForeground} />
+                <Text style={[s.occasionLabel, { color: active ? "#fff" : colors.foreground }]}>
+                  {o.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
+    );
+  }
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, { paddingBottom: bottomPadding + 32 }]}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* ── STEP 0: Occasion + guest count ─────────────────────────────── */}
-        {step === 0 && (
-          <>
-            <Text style={[styles.stepTitle, { color: colors.foreground }]}>What's the occasion?</Text>
-            <View style={styles.eventGrid}>
-              {EVENT_TYPES.map((e) => (
-                <TouchableOpacity
-                  key={e.label}
-                  style={[
-                    styles.eventCard,
-                    {
-                      backgroundColor: occasion === e.label ? colors.primary + "18" : colors.card,
-                      borderColor: occasion === e.label ? colors.primary : colors.border,
-                      borderWidth: occasion === e.label ? 2 : 1,
-                    },
-                  ]}
-                  onPress={() => setOccasion(e.label)}
-                >
-                  <Feather
-                    name={e.icon}
-                    size={24}
-                    color={occasion === e.label ? colors.primary : colors.mutedForeground}
-                  />
-                  <Text style={[styles.eventCardLabel, { color: occasion === e.label ? colors.primary : colors.foreground }]}>
-                    {e.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+  // Step 2 – Guest count
+  function renderStep2() {
+    return (
+      <View>
+        {renderStepLabel("How many guests are you expecting?")}
+        <View style={[s.counterCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TouchableOpacity
+            style={[s.counterBtn, { backgroundColor: form.guestCount <= 1 ? colors.muted : colors.primary }]}
+            onPress={() => form.guestCount > 1 && setForm((f) => ({ ...f, guestCount: f.guestCount - 1 }))}
+          >
+            <Feather name="minus" size={20} color={form.guestCount <= 1 ? colors.mutedForeground : "#fff"} />
+          </TouchableOpacity>
+          <Text style={[s.counterNum, { color: colors.foreground }]}>{form.guestCount}</Text>
+          <TouchableOpacity
+            style={[s.counterBtn, { backgroundColor: form.guestCount >= 500 ? colors.muted : colors.primary }]}
+            onPress={() => form.guestCount < 500 && setForm((f) => ({ ...f, guestCount: f.guestCount + 1 }))}
+          >
+            <Feather name="plus" size={20} color={form.guestCount >= 500 ? colors.mutedForeground : "#fff"} />
+          </TouchableOpacity>
+        </View>
+        <Text style={[s.counterHint, { color: colors.mutedForeground }]}>Min 1 · Max 500</Text>
+      </View>
+    );
+  }
 
-            <Text style={[styles.label, { color: colors.foreground }]}>Number of guests</Text>
-            <View style={styles.stepper}>
+  // Step 3 – Budget
+  function renderStep3() {
+    return (
+      <View>
+        {renderStepLabel("What is your total budget?")}
+        <View style={[s.budgetRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[s.budgetPrefix, { color: colors.primary }]}>SGD $</Text>
+          <TextInput
+            style={[s.budgetInput, { color: colors.foreground }]}
+            value={budgetText}
+            onChangeText={(v) => {
+              setBudgetText(v);
+              const n = parseFloat(v);
+              if (!isNaN(n) && n > 0) { setForm((f) => ({ ...f, budget: n })); setStepError(""); }
+              else setForm((f) => ({ ...f, budget: 0 }));
+            }}
+            placeholder="e.g. 300"
+            placeholderTextColor={colors.mutedForeground}
+            keyboardType="decimal-pad"
+          />
+        </View>
+      </View>
+    );
+  }
+
+  // Step 4 – Serving style
+  function renderStep4() {
+    return (
+      <View>
+        {renderStepLabel("How will you serve food?")}
+        <View style={s.servingGrid}>
+          {SERVING_STYLES.map((s_) => {
+            const active = form.servingStyle === s_.label;
+            return (
               <TouchableOpacity
-                style={[styles.stepperBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-                onPress={() => setGuestCount(Math.max(2, guestCount - 1))}
+                key={s_.label}
+                style={[s.servingCard, {
+                  backgroundColor: active ? colors.primary : colors.card,
+                  borderColor: active ? colors.primary : colors.border,
+                }]}
+                onPress={() => { setForm((f) => ({ ...f, servingStyle: s_.label })); setStepError(""); }}
               >
-                <Feather name="minus" size={20} color={colors.foreground} />
+                <Feather name={s_.icon} size={22} color={active ? "#fff" : colors.mutedForeground} />
+                <Text style={[s.servingLabel, { color: active ? "#fff" : colors.foreground }]}>
+                  {s_.label}
+                </Text>
               </TouchableOpacity>
-              <Text style={[styles.stepperValue, { color: colors.foreground }]}>{guestCount}</Text>
-              <TouchableOpacity
-                style={[styles.stepperBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-                onPress={() => setGuestCount(Math.min(100, guestCount + 1))}
-              >
-                <Feather name="plus" size={20} color={colors.foreground} />
-              </TouchableOpacity>
-            </View>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
 
-            <TouchableOpacity
-              style={[styles.nextBtn, { backgroundColor: colors.primary }]}
-              onPress={() => setStep(1)}
-            >
-              <Text style={styles.nextBtnText}>Next: Menu Preferences</Text>
-              <Feather name="arrow-right" size={20} color="#fff" />
-            </TouchableOpacity>
-          </>
+  // Step 5 – Dietary restrictions
+  function renderStep5() {
+    return (
+      <View>
+        {renderStepLabel("Any dietary restrictions?")}
+        <Text style={[s.stepHint, { color: colors.mutedForeground }]}>Select all that apply</Text>
+        <View style={s.restrictionList}>
+          {RESTRICTIONS.map((tag) => {
+            const active = form.restrictions.includes(tag);
+            return (
+              <TouchableOpacity
+                key={tag}
+                style={[s.restrictionRow, {
+                  backgroundColor: active ? colors.primary + "18" : colors.card,
+                  borderColor: active ? colors.primary : colors.border,
+                }]}
+                onPress={() => toggleRestriction(tag)}
+              >
+                <View style={[s.checkbox, {
+                  backgroundColor: active ? colors.primary : "transparent",
+                  borderColor: active ? colors.primary : colors.border,
+                }]}>
+                  {active && <Feather name="check" size={12} color="#fff" />}
+                </View>
+                <Text style={[s.restrictionLabel, { color: colors.foreground }]}>{tag}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
+
+  // Step 6 – Arrival time
+  function renderStep6() {
+    return (
+      <View>
+        {renderStepLabel("When are guests arriving?")}
+        {Platform.OS === "web" ? (
+          <View style={[s.timeCard, { backgroundColor: colors.card, borderColor: form.arrivalTime ? colors.primary : colors.border }]}>
+            <Feather name="clock" size={18} color={form.arrivalTime ? colors.primary : colors.mutedForeground} />
+            <TextInput
+              style={{ flex: 1, color: colors.foreground, fontSize: 16, outlineStyle: "none" } as any}
+              {...{ type: "time" } as any}
+              value={form.arrivalTime}
+              onChange={((e: any) => {
+                const val = e.target?.value ?? "";
+                setForm((f) => ({ ...f, arrivalTime: val }));
+                if (val) setStepError("");
+              }) as any}
+            />
+          </View>
+        ) : (
+          <View style={[s.timeCard, { backgroundColor: colors.card, borderColor: form.arrivalTime ? colors.primary : colors.border }]}>
+            <Feather name="clock" size={18} color={form.arrivalTime ? colors.primary : colors.mutedForeground} />
+            <TextInput
+              style={[s.timeInput, { color: colors.foreground }]}
+              value={form.arrivalTime}
+              onChangeText={(v) => { setForm((f) => ({ ...f, arrivalTime: v })); if (v) setStepError(""); }}
+              placeholder="e.g. 17:00"
+              placeholderTextColor={colors.mutedForeground}
+              keyboardType="numbers-and-punctuation"
+            />
+          </View>
         )}
+        <Text style={[s.stepHint, { color: colors.mutedForeground }]}>
+          Used to build your preparation timeline
+        </Text>
+      </View>
+    );
+  }
 
-        {/* ── STEP 1: Preferences ─────────────────────────────────────────── */}
-        {step === 1 && (
-          <>
-            <Text style={[styles.stepTitle, { color: colors.foreground }]}>Menu preferences</Text>
+  // Step 7 – Additional preferences
+  function renderStep7() {
+    return (
+      <View>
+        {renderStepLabel("Anything else we should know?")}
+        <Text style={[s.stepHint, { color: colors.mutedForeground }]}>Optional</Text>
+        <TextInput
+          style={[s.prefInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+          value={form.additionalPreferences}
+          onChangeText={(v) => setForm((f) => ({ ...f, additionalPreferences: v }))}
+          placeholder="e.g. Kids attending, guests love spicy food, thinking of a cheese platter"
+          placeholderTextColor={colors.mutedForeground}
+          multiline
+          numberOfLines={4}
+        />
+      </View>
+    );
+  }
 
-            <Text style={[styles.label, { color: colors.foreground }]}>Serving style</Text>
-            <View style={styles.chipRow}>
-              {SERVING_STYLES.map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: servingStyle === s ? colors.primary : colors.card,
-                      borderColor: servingStyle === s ? colors.primary : colors.border,
-                    },
-                  ]}
-                  onPress={() => setServingStyle(s)}
-                >
-                  <Text style={{ color: servingStyle === s ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 14 }}>
-                    {s}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+  // ────────────────────────────────────────────────────────────────────────
+  // RENDER: loading overlay (in-flow, NOT position:fixed)
+  // ────────────────────────────────────────────────────────────────────────
+  function renderLoading() {
+    return (
+      <View style={[s.loadingWrap, { backgroundColor: colors.background }]}>
+        <Text style={[s.loadingAppName, { color: colors.primary }]}>🎉 PartySwipe AI</Text>
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 24 }} />
+        <Text style={[s.loadingTitle, { color: colors.foreground }]}>
+          Crafting your perfect party plan…
+        </Text>
+        <Text style={[s.loadingSub, { color: colors.mutedForeground }]}>
+          This usually takes 20–30 seconds
+        </Text>
+      </View>
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // RENDER: error state
+  // ────────────────────────────────────────────────────────────────────────
+  function renderError() {
+    return (
+      <View style={[s.errorWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Feather name="alert-circle" size={48} color={colors.danger} />
+        <Text style={[s.errorTitle, { color: colors.foreground }]}>Something went wrong.</Text>
+        <Text style={[s.errorMsg, { color: colors.mutedForeground }]}>{errorMessage}</Text>
+        <TouchableOpacity
+          style={[s.primaryBtn, { backgroundColor: colors.primary }]}
+          onPress={() => submitPlan()}
+        >
+          <Text style={s.primaryBtnText}>Try Again</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.secondaryBtn, { borderColor: colors.border }]}
+          onPress={() => { setAppState("wizard"); setWizardStep(1); }}
+        >
+          <Text style={[s.secondaryBtnText, { color: colors.foreground }]}>✏️ Edit Preferences</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // RENDER: plan cards
+  // ────────────────────────────────────────────────────────────────────────
+  function card(children: React.ReactNode, key?: string) {
+    return (
+      <View key={key} style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        {children}
+      </View>
+    );
+  }
+
+  function cardTitle(icon: string, title: string) {
+    return (
+      <View style={s.cardTitleRow}>
+        <Text style={s.cardTitleIcon}>{icon}</Text>
+        <Text style={[s.cardTitle, { color: colors.foreground }]}>{title}</Text>
+      </View>
+    );
+  }
+
+  // Card 1 – Party Overview
+  function renderOverviewCard(text: string) {
+    const rows = text.split("\n").filter(Boolean);
+    const generatedLine = generatedAt ? `Generated At: ${generatedAt}` : null;
+    const allRows = generatedLine ? [...rows, generatedLine] : rows;
+    return card(
+      <>
+        {cardTitle("🎉", "Party Overview")}
+        <View style={s.overviewGrid}>
+          {allRows.map((row, i) => {
+            const [key, ...rest] = row.split(":");
+            const value = rest.join(":").trim();
+            if (!value) return null;
+            return (
+              <View key={i} style={[s.overviewCell, { borderBottomColor: colors.border }]}>
+                <Text style={[s.overviewKey, { color: colors.mutedForeground }]}>{key.trim()}</Text>
+                <Text style={[s.overviewVal, { color: colors.foreground }]}>{value}</Text>
+              </View>
+            );
+          })}
+        </View>
+      </>
+    );
+  }
+
+  // Card 2 – Menu (tabs)
+  function renderMenuCard(sections: Record<string, string>) {
+    const availableTabs = MENU_TABS.filter((t) => sections[t]);
+    const activeText = sections[menuTab] ?? "";
+
+    function renderMenuItems(text: string) {
+      return text.split("\n").filter(Boolean).map((line, i) => {
+        const parts = line.split("|").map((p) => p.trim());
+        if (parts.length >= 2) {
+          return (
+            <View key={i} style={[s.menuRow, { borderBottomColor: colors.border }]}>
+              <Text style={[s.menuName, { color: colors.foreground }]}>{parts[0]}</Text>
+              {parts[1] && <Text style={[s.menuReason, { color: colors.mutedForeground }]}>{parts[1]}</Text>}
+              <View style={s.menuMeta}>
+                {parts[2] && <Text style={[s.menuQty, { color: colors.foreground }]}>{parts[2]}</Text>}
+                {parts[3] && <Text style={[s.menuCost, { color: colors.primary }]}>{parts[3]}</Text>}
+              </View>
             </View>
+          );
+        }
+        return (
+          <Text key={i} style={[s.menuPlain, { color: colors.foreground }]}>{line}</Text>
+        );
+      });
+    }
 
-            <Text style={[styles.label, { color: colors.foreground }]}>Total budget</Text>
-            <View style={styles.budgetDisplay}>
-              <Text style={[styles.budgetAmount, { color: colors.primary }]}>${budget}</Text>
-              <Text style={[styles.budgetPer, { color: colors.mutedForeground }]}>
-                (${Math.round(budget / guestCount)}/person)
+    return card(
+      <>
+        {cardTitle("🍽️", "Recommended Menu")}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabScroll}>
+          {availableTabs.map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[s.tab, {
+                backgroundColor: menuTab === tab ? colors.primary : "transparent",
+                borderColor: menuTab === tab ? colors.primary : colors.border,
+              }]}
+              onPress={() => setMenuTab(tab)}
+            >
+              <Text style={[s.tabText, { color: menuTab === tab ? "#fff" : colors.mutedForeground }]}>
+                {tab.charAt(0) + tab.slice(1).toLowerCase()}
               </Text>
-            </View>
-            <View style={styles.chipRow}>
-              {[100, 150, 200, 300, 500].map((v) => (
-                <TouchableOpacity
-                  key={v}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: budget === v ? colors.primary : colors.card,
-                      borderColor: budget === v ? colors.primary : colors.border,
-                    },
-                  ]}
-                  onPress={() => setBudget(v)}
-                >
-                  <Text style={{ color: budget === v ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 14 }}>
-                    ${v}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <View style={{ marginTop: 12 }}>
+          {renderMenuItems(activeText)}
+        </View>
+      </>
+    );
+  }
 
-            <Text style={[styles.label, { color: colors.foreground }]}>Dietary restrictions</Text>
-            <View style={styles.tagWrap}>
-              {DIETARY_TAGS.map((tag) => {
-                const active = selectedTags.includes(tag);
+  // Card 3 – Shopping List (with checkboxes)
+  function renderShoppingCard(text: string) {
+    const CATEGORIES = ["Produce", "Protein", "Bakery", "Dairy", "Frozen", "Beverages", "Miscellaneous"];
+    const lines = text.split("\n").filter(Boolean);
+    const grouped: Record<string, string[]> = {};
+    let current = "Miscellaneous";
+    for (const line of lines) {
+      const catMatch = CATEGORIES.find((c) => line.startsWith(c + ":"));
+      if (catMatch) {
+        current = catMatch;
+        const rest = line.replace(catMatch + ":", "").trim();
+        if (rest) {
+          if (!grouped[current]) grouped[current] = [];
+          grouped[current].push(...rest.split(",").map((x) => x.trim()).filter(Boolean));
+        }
+      } else if (line.startsWith("-") || line.startsWith("•")) {
+        if (!grouped[current]) grouped[current] = [];
+        grouped[current].push(line.replace(/^[-•]\s*/, "").trim());
+      } else if (line.trim()) {
+        if (!grouped[current]) grouped[current] = [];
+        grouped[current].push(line.trim());
+      }
+    }
+
+    return card(
+      <>
+        {cardTitle("🛒", "Shopping List")}
+        {Object.entries(grouped).map(([cat, items]) => {
+          if (!items.length) return null;
+          const allChecked = items.every((item) => checkedItems[`${cat}:${item}`]);
+          return (
+            <View key={cat} style={s.shopCat}>
+              <Text style={[s.shopCatTitle, { color: allChecked ? colors.secondary : colors.foreground }]}>
+                {cat} {allChecked ? "✓" : ""}
+              </Text>
+              {items.map((item) => {
+                const key = `${cat}:${item}`;
+                const checked = !!checkedItems[key];
                 return (
-                  <TouchableOpacity
-                    key={tag}
-                    onPress={() => toggleTag(tag)}
-                    style={[
-                      styles.dietChip,
-                      {
-                        borderColor: active ? colors.primary : colors.border,
-                        backgroundColor: active ? colors.primary + "18" : colors.card,
-                      },
-                    ]}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: active }}
-                    accessibilityLabel={tag}
-                  >
-                    {active && <Feather name="check" size={11} color={colors.primary} />}
-                    <Text
-                      style={{
-                        color: active ? colors.primary : colors.mutedForeground,
-                        fontSize: 13,
-                        fontWeight: active ? "700" : "400",
-                      }}
-                    >
-                      {tag}
-                    </Text>
+                  <TouchableOpacity key={key} style={s.shopRow} onPress={() => toggleCheck(key)}>
+                    <View style={[s.shopCheck, {
+                      backgroundColor: checked ? colors.secondary : "transparent",
+                      borderColor: checked ? colors.secondary : colors.border,
+                    }]}>
+                      {checked && <Feather name="check" size={11} color="#fff" />}
+                    </View>
+                    <Text style={[s.shopItem, {
+                      color: checked ? colors.mutedForeground : colors.foreground,
+                      textDecorationLine: checked ? "line-through" : "none",
+                    }]}>{item}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
+          );
+        })}
+      </>
+    );
+  }
 
-            <Text style={[styles.label, { color: colors.foreground }]}>Additional preferences</Text>
-            <TextInput
-              style={[
-                styles.prefInput,
-                { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground },
-              ]}
-              placeholder='e.g. "guests love very spicy food"'
-              placeholderTextColor={colors.mutedForeground}
-              value={additionalPreferences}
-              onChangeText={setAdditionalPreferences}
-              multiline
-              numberOfLines={2}
-            />
+  // Card 4 – Budget Breakdown (bars)
+  function renderBudgetCard(text: string, meta: PlanMeta) {
+    const lines = text.split("\n").filter(Boolean);
+    const budgetCeiling = meta.budget;
+    let totalLine: string | null = null;
+    let remainingLine: string | null = null;
+    const rows: { label: string; amount: number; raw: string }[] = [];
 
-            <Text style={[styles.label, { color: colors.foreground }]}>Guest arrival time</Text>
+    for (const line of lines) {
+      const match = line.match(/^(.+?):\s*SGD\s*\$?([\d.,]+)/i);
+      if (!match) continue;
+      const label = match[1].trim();
+      const amount = parseFloat(match[2].replace(",", ""));
+      if (label.toLowerCase().includes("total")) { totalLine = line; continue; }
+      if (label.toLowerCase().includes("remaining")) { remainingLine = line; continue; }
+      rows.push({ label, amount, raw: line });
+    }
 
-            {Platform.OS === "web" ? (
-              /* Web: separate date + time visual pickers (no typing required) */
-              <View style={{ gap: 8 }}>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  {/* Date picker card */}
-                  <View style={[
-                    styles.pickerCard,
-                    { flex: 1, backgroundColor: colors.card, borderColor: arrivalTime ? colors.primary : colors.border },
-                  ]}>
-                    <Feather name="calendar" size={15} color={arrivalTime ? colors.primary : colors.mutedForeground} />
-                    <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 2 }}>Date</Text>
-                    <TextInput
-                      style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", outlineStyle: "none", width: "100%" } as any}
-                      {...{ type: "date" } as any}
-                      value={(() => {
-                        try { return arrivalTime && !isNaN(arrivalTime.getTime()) ? arrivalTime.toISOString().slice(0, 10) : ""; }
-                        catch { return ""; }
-                      })()}
-                      onChange={((e: any) => {
-                        const dateStr = e.target?.value ?? "";
-                        if (!dateStr) { setArrivalTime(null); return; }
-                        const base = arrivalTime && !isNaN(arrivalTime.getTime()) ? arrivalTime : new Date();
-                        const timeStr = `${String(base.getHours()).padStart(2, "0")}:${String(base.getMinutes()).padStart(2, "0")}`;
-                        const d = new Date(`${dateStr}T${timeStr}`);
-                        if (!isNaN(d.getTime())) setArrivalTime(d);
-                      }) as any}
-                    />
-                  </View>
+    function parseAmt(line: string | null): number {
+      if (!line) return 0;
+      const m = line.match(/SGD\s*\$?([\d.,]+)/i);
+      return m ? parseFloat(m[1].replace(",", "")) : 0;
+    }
+    const total = parseAmt(totalLine);
+    const remaining = parseAmt(remainingLine);
+    const overBudget = remaining < 0;
 
-                  {/* Time picker card */}
-                  <View style={[
-                    styles.pickerCard,
-                    { flex: 1, backgroundColor: colors.card, borderColor: arrivalTime ? colors.primary : colors.border },
-                  ]}>
-                    <Feather name="clock" size={15} color={arrivalTime ? colors.primary : colors.mutedForeground} />
-                    <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 2 }}>Time</Text>
-                    <TextInput
-                      style={{ color: colors.foreground, fontSize: 13, fontWeight: "500", outlineStyle: "none", width: "100%" } as any}
-                      {...{ type: "time" } as any}
-                      value={(() => {
-                        try { return arrivalTime && !isNaN(arrivalTime.getTime()) ? `${String(arrivalTime.getHours()).padStart(2,"0")}:${String(arrivalTime.getMinutes()).padStart(2,"0")}` : ""; }
-                        catch { return ""; }
-                      })()}
-                      onChange={((e: any) => {
-                        const timeStr = e.target?.value ?? "";
-                        if (!timeStr) return;
-                        const base = arrivalTime && !isNaN(arrivalTime.getTime()) ? arrivalTime : new Date();
-                        const dateStr = base.toISOString().slice(0, 10);
-                        const d = new Date(`${dateStr}T${timeStr}`);
-                        if (!isNaN(d.getTime())) setArrivalTime(d);
-                      }) as any}
-                    />
-                  </View>
-                </View>
-
-                {/* Summary row */}
-                {arrivalTime && !isNaN(arrivalTime.getTime()) && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Feather name="check-circle" size={13} color={colors.primary} />
-                    <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "600", flex: 1 }}>
-                      {arrivalTime.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
-                      {" at "}
-                      {arrivalTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </Text>
-                    <TouchableOpacity onPress={() => setArrivalTime(null)}>
-                      <Feather name="x" size={14} color={colors.mutedForeground} />
-                    </TouchableOpacity>
-                  </View>
-                )}
+    return card(
+      <>
+        {cardTitle("💰", "Budget Breakdown")}
+        {rows.map(({ label, amount }) => {
+          const pct = Math.min((amount / budgetCeiling) * 100, 100);
+          return (
+            <View key={label} style={s.budgetBarRow}>
+              <View style={s.budgetLabelRow}>
+                <Text style={[s.budgetLabel, { color: colors.foreground }]}>{label}</Text>
+                <Text style={[s.budgetAmt, { color: colors.foreground }]}>SGD ${amount.toFixed(2)}</Text>
               </View>
-            ) : (
-              /* Native iOS / Android */
-              <>
-                <TouchableOpacity
-                  style={[styles.dateBtn, { backgroundColor: colors.card, borderColor: arrivalTime ? colors.primary : colors.border }]}
-                  onPress={() => setShowPicker(true)}
-                >
-                  <Feather name="clock" size={16} color={arrivalTime ? colors.primary : colors.mutedForeground} />
-                  <Text style={{ color: arrivalTime ? colors.foreground : colors.mutedForeground, flex: 1, fontSize: 14 }}>
-                    {arrivalTime ? arrivalTime.toLocaleString() : "Tap to set guest arrival time (optional)"}
-                  </Text>
-                  {arrivalTime && (
-                    <TouchableOpacity onPress={() => setArrivalTime(null)}>
-                      <Feather name="x" size={14} color={colors.mutedForeground} />
-                    </TouchableOpacity>
-                  )}
-                </TouchableOpacity>
+              <View style={[s.budgetBarBg, { backgroundColor: colors.muted }]}>
+                <View style={[s.budgetBarFill, { width: `${pct}%` as any, backgroundColor: colors.primary }]} />
+              </View>
+            </View>
+          );
+        })}
+        <View style={[s.budgetSummary, { borderTopColor: colors.border }]}>
+          <View style={s.budgetSumRow}>
+            <Text style={[s.budgetSumLabel, { color: colors.foreground }]}>Total Estimated Spend</Text>
+            <Text style={[s.budgetSumAmt, { color: colors.foreground }]}>SGD ${total.toFixed(2)}</Text>
+          </View>
+          <View style={s.budgetSumRow}>
+            <Text style={[s.budgetSumLabel, { color: overBudget ? colors.danger : colors.secondary }]}>
+              Remaining Budget
+            </Text>
+            <Text style={[s.budgetSumAmt, { color: overBudget ? colors.danger : colors.secondary, fontWeight: "700" }]}>
+              SGD ${remaining.toFixed(2)}
+            </Text>
+          </View>
+        </View>
+      </>
+    );
+  }
 
-                {showPicker && DateTimePicker && (
-                  <DateTimePicker
-                    value={arrivalTime ?? new Date(Date.now() + 3600 * 1000)}
-                    mode="datetime"
-                    display={Platform.OS === "ios" ? "inline" : "default"}
-                    onChange={onDateChange}
-                  />
-                )}
-                {Platform.OS === "ios" && showPicker && (
-                  <TouchableOpacity
-                    onPress={() => setShowPicker(false)}
-                    style={[styles.chip, { alignSelf: "flex-end", backgroundColor: colors.primary, borderColor: colors.primary }]}
-                  >
-                    <Text style={{ color: "#fff", fontWeight: "600" }}>Done</Text>
+  // Card 5 – Preparation Timeline
+  function renderTimelineCard(text: string) {
+    const lines = text.split("\n").filter((l) => l.trim() && l.match(/\d{1,2}:\d{2}/));
+    return card(
+      <>
+        {cardTitle("⏰", "Preparation Timeline")}
+        {lines.map((line, i) => {
+          const match = line.match(/^(\d{1,2}:\d{2})\s*[—–-]\s*(.+)$/);
+          const time = match ? match[1] : "";
+          const action = match ? match[2] : line.trim();
+          const isLast = i === lines.length - 1;
+          return (
+            <View key={i} style={s.timelineRow}>
+              <View style={s.timelineDotCol}>
+                <View style={[s.timelineDot, { backgroundColor: colors.primary }]} />
+                {!isLast && <View style={[s.timelineLine, { backgroundColor: colors.border }]} />}
+              </View>
+              <View style={s.timelineContent}>
+                {time ? <Text style={[s.timelineTime, { color: colors.primary }]}>{time}</Text> : null}
+                <Text style={[s.timelineAction, { color: colors.foreground }]}>{action}</Text>
+              </View>
+            </View>
+          );
+        })}
+      </>
+    );
+  }
+
+  // Card 6 – Host Tips
+  function renderTipsCard(text: string) {
+    const lines = text.split("\n").filter(Boolean);
+    return card(
+      <>
+        {cardTitle("💡", "Host Tips")}
+        {lines.map((line, i) => (
+          <View key={i} style={s.tipRow}>
+            <Feather name="check-circle" size={15} color={colors.secondary} style={{ marginTop: 2 }} />
+            <Text style={[s.tipText, { color: colors.foreground }]}>
+              {line.replace(/^[-•*]\s*/, "")}
+            </Text>
+          </View>
+        ))}
+      </>
+    );
+  }
+
+  // Card 7 – Validation Checklist
+  function renderChecklistCard(text: string) {
+    const lines = text.split("\n").filter(Boolean);
+    return card(
+      <>
+        {cardTitle("✅", "Dietary Validation")}
+        {lines.map((line, i) => (
+          <View key={i} style={s.checklistRow}>
+            <Text style={[s.checklistIcon, { color: colors.secondary }]}>✓</Text>
+            <Text style={[s.checklistText, { color: colors.foreground }]}>
+              {line.replace(/^✓\s*/, "")}
+            </Text>
+          </View>
+        ))}
+      </>
+    );
+  }
+
+  // Full plan render
+  function renderPlan() {
+    if (!planSections) return null;
+    return (
+      <View>
+        {restrictionWarning && (
+          <View style={[s.warnBanner, { backgroundColor: "#FFF8E1", borderColor: "#F9A825" }]}>
+            <Feather name="alert-triangle" size={16} color="#F9A825" />
+            <Text style={s.warnText}>
+              ⚠️ Some items may need review against your dietary restrictions. Please check the Validation Checklist below.
+            </Text>
+          </View>
+        )}
+        {planSections["PARTY OVERVIEW"] ? renderOverviewCard(planSections["PARTY OVERVIEW"]) : null}
+        {renderMenuCard(planSections)}
+        {planSections["SHOPPING LIST"] ? renderShoppingCard(planSections["SHOPPING LIST"]) : null}
+        {planSections["BUDGET BREAKDOWN"] && planMeta
+          ? renderBudgetCard(planSections["BUDGET BREAKDOWN"], planMeta)
+          : null}
+        {planSections["PREPARATION TIMELINE"] ? renderTimelineCard(planSections["PREPARATION TIMELINE"]) : null}
+        {planSections["HOST TIPS"] ? renderTipsCard(planSections["HOST TIPS"]) : null}
+        {planSections["VALIDATION CHECKLIST"] ? renderChecklistCard(planSections["VALIDATION CHECKLIST"]) : null}
+
+        {/* Action buttons */}
+        <View style={s.planActions}>
+          <TouchableOpacity
+            style={[s.primaryBtn, { backgroundColor: colors.primary, opacity: regenLoading ? 0.7 : 1 }]}
+            onPress={() => submitPlan(true)}
+            disabled={regenLoading}
+          >
+            {regenLoading
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={{ marginRight: 6 }}>🔄</Text>
+            }
+            <Text style={s.primaryBtnText}>{regenLoading ? "Regenerating…" : "Regenerate Plan"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.secondaryBtn, { borderColor: colors.border }]}
+            onPress={() => { setAppState("wizard"); setWizardStep(1); }}
+          >
+            <Text style={[s.secondaryBtnText, { color: colors.foreground }]}>✏️ Edit Preferences</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // MAIN RENDER
+  // ────────────────────────────────────────────────────────────────────────
+  const contentMaxWidth = isWide ? (appState === "plan" ? 800 : 600) : undefined;
+
+  return (
+    <View style={[s.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      {renderHeader(
+        appState === "plan" ? "Your Party Plan" : "Party Planner",
+        appState !== "loading"
+      )}
+
+      {appState === "wizard" && renderProgress()}
+
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={[s.centerWrap, contentMaxWidth ? { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" } : {}]}>
+
+          {appState === "wizard" && (
+            <>
+              {renderStep()}
+              {stepError ? (
+                <Text style={[s.stepError, { color: colors.danger }]}>{stepError}</Text>
+              ) : null}
+              <View style={s.navRow}>
+                {wizardStep > 1 && (
+                  <TouchableOpacity style={[s.backBtn, { borderColor: colors.border }]} onPress={goBack}>
+                    <Feather name="arrow-left" size={16} color={colors.foreground} />
+                    <Text style={[s.backBtnText, { color: colors.foreground }]}>Back</Text>
                   </TouchableOpacity>
                 )}
-              </>
-            )}
-
-            <TouchableOpacity
-              style={[styles.nextBtn, { backgroundColor: colors.primary, opacity: generating ? 0.7 : 1 }]}
-              onPress={handleGenerate}
-              disabled={generating}
-            >
-              {generating ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Feather name="zap" size={20} color="#fff" />
-              )}
-              <Text style={styles.nextBtnText}>{generating ? "Generating…" : "Generate Party Plan"}</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* ── STEP 2: Results ─────────────────────────────────────────────── */}
-        {step === 2 && (
-          <>
-            {/* Summary header */}
-            <View
-              style={[styles.partyHeader, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "30" }]}
-            >
-              <Text style={styles.partyHeaderEmoji}>🎉</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.partyHeaderTitle, { color: colors.foreground }]}>
-                  {occasion} for {guestCount}
-                </Text>
-                <Text style={[styles.partyHeaderSub, { color: colors.mutedForeground }]}>
-                  {servingStyle} · ${budget} budget
-                  {selectedTags.length > 0
-                    ? ` · ${selectedTags.slice(0, 2).join(", ")}${selectedTags.length > 2 ? ` +${selectedTags.length - 2}` : ""}`
-                    : ""}
-                </Text>
-              </View>
-            </View>
-
-            {isAI && (
-              <View
-                style={[styles.aiBadge, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "40" }]}
-              >
-                <Feather name="zap" size={12} color={colors.primary} />
-                <Text style={[styles.aiBadgeText, { color: colors.primary }]}>AI-generated plan</Text>
-              </View>
-            )}
-
-            {/* Countdown */}
-            {nextTask && (
-              <View
-                style={[styles.countdownCard, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}
-              >
-                <Feather name="bell" size={16} color={colors.primary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.countdownLabel, { color: colors.foreground }]}>
-                    Next: {nextTask.label}
-                  </Text>
-                  <Text style={[styles.countdownSub, { color: colors.primary }]}>
-                    In {Math.round(nextTask.msUntil / 60_000)} minutes
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {/* Cost breakdown */}
-            {activePlan.costBreakdown && (
-              <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 10 }]}>
-                  Cost Breakdown
-                </Text>
-                <View style={styles.costRow}>
-                  <Text style={[styles.costLabel, { color: colors.mutedForeground }]}>Total estimated</Text>
-                  <Text style={[styles.costValue, { color: colors.foreground }]}>
-                    {fmt(activePlan.costBreakdown.totalEstimated)}
-                  </Text>
-                </View>
-                <View style={styles.costRow}>
-                  <Text style={[styles.costLabel, { color: colors.mutedForeground }]}>Budget remaining</Text>
-                  <Text
-                    style={[
-                      styles.costValue,
-                      { color: activePlan.costBreakdown.budgetRemaining >= 0 ? colors.secondary : colors.danger },
-                    ]}
+                {wizardStep < totalSteps ? (
+                  <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, flex: 1, marginLeft: wizardStep > 1 ? 10 : 0 }]} onPress={goNext}>
+                    <Text style={s.primaryBtnText}>Next →</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[s.primaryBtn, { backgroundColor: colors.primary, flex: 1, marginLeft: wizardStep > 1 ? 10 : 0 }]}
+                    onPress={() => submitPlan()}
                   >
-                    {fmt(activePlan.costBreakdown.budgetRemaining)}
-                  </Text>
-                </View>
-                <View style={styles.costRow}>
-                  <Text style={[styles.costLabel, { color: colors.mutedForeground }]}>Per person</Text>
-                  <Text style={[styles.costValue, { color: colors.foreground }]}>
-                    {fmt(activePlan.costBreakdown.costPerPerson)}
-                  </Text>
-                </View>
+                    <Text style={s.primaryBtnText}>🎉 Generate My Party Plan</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            )}
+            </>
+          )}
 
-            {/* Menu sections */}
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Menu</Text>
-            {activePlan.menu.map((course, ci) => {
-              const isRegen = regeneratingSections.has(course.course);
-              return (
-                <View
-                  key={course.course}
-                  style={[styles.courseBlock, { backgroundColor: colors.card, borderColor: colors.border }]}
-                >
-                  <View style={styles.courseHeader}>
-                    <Text style={[styles.courseTitle, { color: colors.primary }]}>{course.course}</Text>
-                    <TouchableOpacity
-                      style={[
-                        styles.regenBtn,
-                        { borderColor: isRegen ? colors.border : colors.primary + "50", opacity: isRegen ? 0.5 : 1 },
-                      ]}
-                      onPress={() => regenerateSection(course.course)}
-                      disabled={isRegen}
-                    >
-                      {isRegen ? (
-                        <ActivityIndicator size="small" color={colors.primary} />
-                      ) : (
-                        <>
-                          <Feather name="refresh-cw" size={11} color={colors.primary} />
-                          <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "600" }}>Regenerate</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </View>
+          {appState === "loading" && renderLoading()}
+          {appState === "error" && renderError()}
+          {appState === "plan" && renderPlan()}
 
-                  {course.items.map((item, ii) => {
-                    const isEditing = editingItem?.courseIdx === ci && editingItem?.itemIdx === ii;
-                    return (
-                      <View key={ii}>
-                        {isEditing ? (
-                          <View
-                            style={[
-                              styles.editForm,
-                              { borderColor: colors.primary + "40", backgroundColor: colors.primary + "08" },
-                            ]}
-                          >
-                            <TextInput
-                              style={[
-                                styles.editInput,
-                                { borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground },
-                              ]}
-                              value={editDraft.name}
-                              onChangeText={(v) => setEditDraft((d) => ({ ...d, name: v }))}
-                              placeholder="Name"
-                              placeholderTextColor={colors.mutedForeground}
-                            />
-                            <TextInput
-                              style={[
-                                styles.editInput,
-                                { borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground },
-                              ]}
-                              value={editDraft.quantity}
-                              onChangeText={(v) => setEditDraft((d) => ({ ...d, quantity: v }))}
-                              placeholder="Quantity"
-                              placeholderTextColor={colors.mutedForeground}
-                            />
-                            <TextInput
-                              style={[
-                                styles.editInput,
-                                { borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground },
-                              ]}
-                              value={editDraft.estimatedCost}
-                              onChangeText={(v) => setEditDraft((d) => ({ ...d, estimatedCost: v }))}
-                              placeholder="Cost (USD)"
-                              placeholderTextColor={colors.mutedForeground}
-                              keyboardType="decimal-pad"
-                            />
-                            <TextInput
-                              style={[
-                                styles.editInput,
-                                { borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground },
-                              ]}
-                              value={editDraft.prepNote}
-                              onChangeText={(v) => setEditDraft((d) => ({ ...d, prepNote: v }))}
-                              placeholder="Prep note"
-                              placeholderTextColor={colors.mutedForeground}
-                            />
-                            <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
-                              <TouchableOpacity
-                                style={[styles.editConfirmBtn, { backgroundColor: colors.primary }]}
-                                onPress={() =>
-                                  updateMenuItem(ci, ii, {
-                                    name: editDraft.name,
-                                    quantity: editDraft.quantity,
-                                    // Note: editing menu item cost here is cosmetic only — shoppingList is source of truth
-                                    estimatedCost: parseFloat(editDraft.estimatedCost) || item.estimatedCost,
-                                    prepNote: editDraft.prepNote,
-                                  })
-                                }
-                              >
-                                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>Save</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={[styles.editConfirmBtn, { backgroundColor: colors.muted }]}
-                                onPress={() => setEditingItem(null)}
-                              >
-                                <Text style={{ color: colors.foreground, fontWeight: "600", fontSize: 13 }}>
-                                  Cancel
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        ) : (
-                          <View style={[styles.menuItemRow, { borderTopColor: colors.border }]}>
-                            <View style={{ flex: 1, gap: 3 }}>
-                              <Text style={[styles.menuItemName, { color: colors.foreground }]}>{item.name}</Text>
-                              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{item.quantity}</Text>
-                              <Text style={{ color: colors.mutedForeground, fontSize: 12, fontStyle: "italic" }}>
-                                {item.prepNote}
-                              </Text>
-                            </View>
-                            <View style={{ alignItems: "flex-end", gap: 6 }}>
-                              {/* Note: editing menu item cost here is cosmetic only */}
-                              <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 13 }}>
-                                {fmt(item.estimatedCost)}
-                              </Text>
-                              <TouchableOpacity
-                                disabled={isRegen}
-                                onPress={() => {
-                                  setEditDraft({
-                                    name: item.name,
-                                    quantity: item.quantity,
-                                    estimatedCost: String(item.estimatedCost),
-                                    prepNote: item.prepNote,
-                                  });
-                                  setEditingItem({ courseIdx: ci, itemIdx: ii });
-                                }}
-                              >
-                                <Feather
-                                  name="edit-2"
-                                  size={13}
-                                  color={isRegen ? colors.border : colors.mutedForeground}
-                                />
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              );
-            })}
-
-            {/* Shopping list */}
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Shopping List</Text>
-            <View style={[styles.courseBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {activePlan.shoppingList.map((sl, i) => (
-                <View key={i} style={[styles.menuItemRow, { borderTopColor: colors.border }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.menuItemName, { color: colors.foreground }]}>{sl.item}</Text>
-                    <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{sl.quantity}</Text>
-                  </View>
-                  <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 13 }}>
-                    {fmt(sl.estimatedCost)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Timeline */}
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Prep Timeline</Text>
-            <View style={[styles.courseBlock, { backgroundColor: colors.card, borderColor: colors.border, gap: 14 }]}>
-              {activePlan.timeline
-                .slice()
-                .sort((a, b) => b.hoursBeforeArrival - a.hoursBeforeArrival)
-                .map((t, i) => {
-                  const h = t.hoursBeforeArrival;
-                  const timeLabel =
-                    h >= 24
-                      ? `${Math.round(h / 24)}d before`
-                      : h >= 1
-                      ? `${h}h before`
-                      : `${Math.round(h * 60)}min before`;
-                  return (
-                    <View key={i} style={styles.timelineItem}>
-                      <View style={[styles.timelineDot, { backgroundColor: colors.primary }]} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.timelineTime, { color: colors.primary }]}>{timeLabel}</Text>
-                        <Text style={[styles.timelineTask, { color: colors.foreground }]}>{t.task}</Text>
-                      </View>
-                    </View>
-                  );
-                })}
-            </View>
-
-            {/* Host tips */}
-            {activePlan.hostTips && activePlan.hostTips.length > 0 && (
-              <>
-                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Host Tips</Text>
-                <View style={[styles.courseBlock, { backgroundColor: colors.card, borderColor: colors.border, gap: 12 }]}>
-                  {activePlan.hostTips.map((tip, i) => (
-                    <View key={i} style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
-                      <Text style={{ fontSize: 16 }}>💡</Text>
-                      <Text style={{ color: colors.foreground, fontSize: 14, flex: 1, lineHeight: 20 }}>{tip}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
-            )}
-
-            {/* Action buttons */}
-            <View style={styles.actionBtns}>
-              <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.primary }]} onPress={handleSavePlan}>
-                <Feather name="save" size={18} color="#fff" />
-                <Text style={styles.actionBtnText}>Save Plan</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.muted }]}
-                onPress={() => {
-                  setStep(1);
-                  setPlan(null);
-                  setIsAI(false);
-                }}
-              >
-                <Feather name="refresh-cw" size={18} color={colors.foreground} />
-                <Text style={[styles.actionBtnText, { color: colors.foreground }]}>New Plan</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
+        </View>
       </ScrollView>
     </View>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  root: { flex: 1 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
+  headerBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  headerTitle: { flex: 1, textAlign: "center", fontSize: 17, fontWeight: "700" },
+  progressWrap: { height: 4 },
+  progressBar: { height: 4, borderRadius: 2 },
+  scrollContent: { padding: 16 },
+  centerWrap: { gap: 16 },
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
-  stepDots: { flexDirection: "row", gap: 6 },
-  stepDot: { width: 8, height: 8, borderRadius: 4 },
+  // Wizard step
+  stepLabelRow: { marginBottom: 16, gap: 4 },
+  stepCounter: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.8 },
+  stepTitle: { fontSize: 22, fontWeight: "800" },
+  stepHint: { fontSize: 13, marginBottom: 12, marginTop: -8 },
+  stepError: { fontSize: 13, fontWeight: "600", marginTop: -8 },
 
-  content: { paddingHorizontal: 20, gap: 18 },
-  stepTitle: { fontSize: 24, fontWeight: "800", letterSpacing: -0.5, marginBottom: 4 },
+  // Occasion grid
+  occasionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  occasionCard: { width: "47%", aspectRatio: 1.3, alignItems: "center", justifyContent: "center", borderRadius: 14, borderWidth: 1.5, gap: 8, minHeight: 44 },
+  occasionLabel: { fontSize: 13, fontWeight: "700", textAlign: "center" },
 
-  eventGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  eventCard: { width: "22%", aspectRatio: 1, borderRadius: 14, alignItems: "center", justifyContent: "center", gap: 6 },
-  eventCardLabel: { fontSize: 10, fontWeight: "600", textAlign: "center" },
+  // Guest counter
+  counterCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 14, borderWidth: 1.5, padding: 20 },
+  counterBtn: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  counterNum: { fontSize: 42, fontWeight: "800", minWidth: 80, textAlign: "center" },
+  counterHint: { fontSize: 12, textAlign: "center", marginTop: 8 },
 
-  label: { fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.7 },
-  stepper: { flexDirection: "row", alignItems: "center", gap: 24 },
-  stepperBtn: { width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  stepperValue: { fontSize: 32, fontWeight: "800", minWidth: 60, textAlign: "center" },
+  // Budget
+  budgetRow: { flexDirection: "row", alignItems: "center", borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 16, paddingVertical: 14, gap: 4 },
+  budgetPrefix: { fontSize: 20, fontWeight: "700" },
+  budgetInput: { flex: 1, fontSize: 20, fontWeight: "600" },
 
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  chip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 100, borderWidth: 1.5 },
+  // Serving style
+  servingGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  servingCard: { width: "47%", alignItems: "center", paddingVertical: 20, borderRadius: 14, borderWidth: 1.5, gap: 10, minHeight: 44 },
+  servingLabel: { fontSize: 14, fontWeight: "700" },
 
-  budgetDisplay: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  budgetAmount: { fontSize: 40, fontWeight: "800" },
-  budgetPer: { fontSize: 16 },
+  // Restrictions
+  restrictionList: { gap: 8 },
+  restrictionRow: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: 12, borderWidth: 1.5, gap: 12, minHeight: 44 },
+  checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  restrictionLabel: { fontSize: 15, fontWeight: "600" },
 
-  tagWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  dietChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
+  // Arrival time
+  timeCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, borderWidth: 1.5 },
+  timeInput: { flex: 1, fontSize: 16 },
 
-  prefInput: { borderRadius: 12, borderWidth: 1, padding: 12, fontSize: 14, minHeight: 64, textAlignVertical: "top" },
+  // Preferences
+  prefInput: { borderRadius: 14, borderWidth: 1.5, padding: 14, fontSize: 15, minHeight: 100, textAlignVertical: "top" },
 
-  dateBtn: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1.5 },
-  pickerCard: { flexDirection: "column", alignItems: "flex-start", gap: 2, padding: 12, borderRadius: 12, borderWidth: 1.5 },
+  // Nav
+  navRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
+  backBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, minHeight: 44 },
+  backBtnText: { fontSize: 15, fontWeight: "600" },
+  primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 100, minHeight: 44, gap: 8 },
+  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  secondaryBtn: { alignItems: "center", paddingVertical: 14, borderRadius: 100, borderWidth: 1.5, minHeight: 44 },
+  secondaryBtnText: { fontSize: 15, fontWeight: "600" },
 
-  nextBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 100 },
-  nextBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  // Loading
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 80, gap: 8 },
+  loadingAppName: { fontSize: 22, fontWeight: "800" },
+  loadingTitle: { fontSize: 18, fontWeight: "700", textAlign: "center" },
+  loadingSub: { fontSize: 14, textAlign: "center", marginTop: 8 },
 
-  partyHeader: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 16, borderWidth: 1 },
-  partyHeaderEmoji: { fontSize: 36 },
-  partyHeaderTitle: { fontSize: 17, fontWeight: "700" },
-  partyHeaderSub: { fontSize: 13, marginTop: 3 },
+  // Error
+  errorWrap: { alignItems: "center", padding: 32, borderRadius: 20, borderWidth: 1, gap: 12, marginTop: 32 },
+  errorTitle: { fontSize: 20, fontWeight: "700" },
+  errorMsg: { fontSize: 14, textAlign: "center", lineHeight: 20 },
 
-  aiBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignSelf: "flex-start",
-  },
-  aiBadgeText: { fontSize: 12, fontWeight: "600" },
+  // Plan cards
+  card: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 12 },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  cardTitleIcon: { fontSize: 20 },
+  cardTitle: { fontSize: 17, fontWeight: "800" },
 
-  countdownCard: { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
-  countdownLabel: { fontSize: 14, fontWeight: "600" },
-  countdownSub: { fontSize: 13, marginTop: 2 },
+  // Overview
+  overviewGrid: { gap: 0 },
+  overviewCell: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingVertical: 10, borderBottomWidth: 1, gap: 12 },
+  overviewKey: { fontSize: 13, fontWeight: "600", flex: 1 },
+  overviewVal: { fontSize: 13, fontWeight: "700", flex: 2, textAlign: "right" },
 
-  infoCard: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 8 },
-  costRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  costLabel: { fontSize: 14 },
-  costValue: { fontSize: 14, fontWeight: "700" },
+  // Menu tabs
+  tabScroll: { marginHorizontal: -4 },
+  tab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 100, borderWidth: 1.5, marginHorizontal: 4, minHeight: 44, justifyContent: "center" },
+  tabText: { fontSize: 13, fontWeight: "700" },
+  menuRow: { paddingVertical: 12, borderBottomWidth: 1, gap: 4 },
+  menuName: { fontSize: 15, fontWeight: "700" },
+  menuReason: { fontSize: 13, lineHeight: 18 },
+  menuMeta: { flexDirection: "row", justifyContent: "space-between", marginTop: 4 },
+  menuQty: { fontSize: 13, fontWeight: "600" },
+  menuCost: { fontSize: 13, fontWeight: "700" },
+  menuPlain: { fontSize: 14, paddingVertical: 8 },
 
-  sectionTitle: { fontSize: 17, fontWeight: "700" },
+  // Shopping
+  shopCat: { marginBottom: 12 },
+  shopCatTitle: { fontSize: 14, fontWeight: "800", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.6 },
+  shopRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, minHeight: 44 },
+  shopCheck: { width: 20, height: 20, borderRadius: 4, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  shopItem: { fontSize: 14, flex: 1 },
 
-  courseBlock: { borderRadius: 14, borderWidth: 1, padding: 14 },
-  courseHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  courseTitle: { fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 },
-  regenBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 100,
-    borderWidth: 1,
-    minWidth: 32,
-    justifyContent: "center",
-  },
+  // Budget breakdown bars
+  budgetBarRow: { gap: 6, marginBottom: 8 },
+  budgetLabelRow: { flexDirection: "row", justifyContent: "space-between" },
+  budgetLabel: { fontSize: 14, fontWeight: "600" },
+  budgetAmt: { fontSize: 14, fontWeight: "700" },
+  budgetBarBg: { height: 8, borderRadius: 4, overflow: "hidden" },
+  budgetBarFill: { height: 8, borderRadius: 4 },
+  budgetSummary: { borderTopWidth: 1, paddingTop: 12, marginTop: 4, gap: 8 },
+  budgetSumRow: { flexDirection: "row", justifyContent: "space-between" },
+  budgetSumLabel: { fontSize: 14, fontWeight: "600" },
+  budgetSumAmt: { fontSize: 14 },
 
-  menuItemRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
-  menuItemName: { fontSize: 14, fontWeight: "600" },
+  // Timeline
+  timelineRow: { flexDirection: "row", gap: 12, minHeight: 44 },
+  timelineDotCol: { alignItems: "center", width: 16 },
+  timelineDot: { width: 12, height: 12, borderRadius: 6, marginTop: 4 },
+  timelineLine: { width: 2, flex: 1, marginTop: 4 },
+  timelineContent: { flex: 1, paddingBottom: 16, gap: 2 },
+  timelineTime: { fontSize: 13, fontWeight: "800" },
+  timelineAction: { fontSize: 14, lineHeight: 20 },
 
-  editForm: { borderRadius: 10, borderWidth: 1, padding: 10, gap: 8, marginVertical: 4 },
-  editInput: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14 },
-  editConfirmBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 100 },
+  // Host tips
+  tipRow: { flexDirection: "row", gap: 10, paddingVertical: 4, alignItems: "flex-start" },
+  tipText: { flex: 1, fontSize: 14, lineHeight: 20 },
 
-  timelineItem: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  timelineDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
-  timelineTime: { fontSize: 12, fontWeight: "700" },
-  timelineTask: { fontSize: 14, marginTop: 2, lineHeight: 20 },
+  // Validation checklist
+  checklistRow: { flexDirection: "row", gap: 10, paddingVertical: 6 },
+  checklistIcon: { fontSize: 16, fontWeight: "700" },
+  checklistText: { flex: 1, fontSize: 14, lineHeight: 20 },
 
-  actionBtns: { flexDirection: "row", gap: 12 },
-  actionBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 100,
-  },
-  actionBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  // Warning banner
+  warnBanner: { flexDirection: "row", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1.5, alignItems: "flex-start" },
+  warnText: { flex: 1, fontSize: 13, color: "#E65100", lineHeight: 18 },
+
+  // Plan actions
+  planActions: { gap: 10, marginTop: 8 },
 });

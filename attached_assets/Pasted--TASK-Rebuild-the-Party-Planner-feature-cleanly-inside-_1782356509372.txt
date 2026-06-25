@@ -1,0 +1,46 @@
+## TASK
+Rebuild the Party Planner feature cleanly inside this existing PartySwipe app.
+Do NOT touch any other existing pages, routes, components, or API endpoints.
+Keep all existing navigation, styling, and structure intact.
+Only rebuild the party planner feature end-to-end so it fully works.
+
+---
+
+## STEP 0 — READ THE CODEBASE FIRST
+
+Before writing any code:
+1. Read the existing file structure, especially the pages/routes directory
+2. Identify the existing party planner page file(s) and their current route paths
+3. Identify the existing state management pattern (React context, Zustand, props, etc.)
+4. Identify the existing UI component library being used (buttons, cards, inputs, etc.)
+5. Identify how other existing API routes are structured and follow the exact same pattern
+6. Do NOT create a new routing pattern — wire into the existing one
+
+---
+
+## TECH STACK
+- Framework: TypeScript / Node.js (existing repo structure)
+- AI: Anthropic Claude API, model: claude-sonnet-4-6
+- Use ANTHROPIC_API_KEY from Replit Secrets (process.env.ANTHROPIC_API_KEY)
+- NEVER expose ANTHROPIC_API_KEY in any client-side file, component, or bundle
+
+---
+
+## STEP 1 — BACKEND API ROUTE
+
+Create a single backend POST endpoint: /api/generate-party-plan
+
+### Request validation (run BEFORE calling Claude)
+Return HTTP 400 with JSON error if any of these fail:
+- occasion: must be one of: BBQ, Birthday Party, Family Gathering, Dinner Party, Movie Night, Brunch, Holiday Fest, Wedding
+- guestCount: must be an integer between 1 and 500
+- budget: must be a number greater than 0
+- servingStyle: must be one of: Buffet, Finger Food, Plated, Family Style
+- restrictions: must be an array (can be empty)
+- arrivalTime: must be a non-empty string
+- additionalPreferences: optional string, default to empty string if missing
+
+### Arrival time conversion
+Before building the user message, convert arrivalTime from 12h AM/PM format to 24h HH:MM format. Use the converted value in the Claude message so timeline arithmetic is unambiguous.
+
+### Build the user message dynamically
