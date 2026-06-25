@@ -2,16 +2,17 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../lib/logger";
 import { z } from "zod";
+import { aiLimiter } from "../middleware/rateLimiters";
 
 const router: IRouter = Router();
 
 // ── Existing route (used by callClaudeWithPrompt in aiChef.ts) ────────────────
 const BasicBodySchema = z.object({
-  prompt: z.string().min(1).max(30000),
-  systemPrompt: z.string().max(5000).optional(),
+  prompt: z.string().min(1).max(5000),
+  systemPrompt: z.string().max(2000).optional(),
 });
 
-router.post("/party-planner", async (req: Request, res: Response) => {
+router.post("/party-planner", aiLimiter, async (req: Request, res: Response) => {
   const parsed = BasicBodySchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
   const { prompt, systemPrompt } = parsed.data;

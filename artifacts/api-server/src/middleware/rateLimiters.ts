@@ -42,3 +42,15 @@ export const barcodeLimiter = rateLimit({
   legacyHeaders: false,
   handler: make429("Barcode lookup limit reached — please wait a few minutes before scanning more."),
 });
+
+/**
+ * AI/LLM endpoints (ai-chef, party-planner, recipe vary) — 30 requests per hour per IP.
+ * Each request invokes a paid Anthropic model; this limiter prevents cost-exhaustion abuse.
+ */
+export const aiLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: isDev ? 10_000 : 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: make429("AI request limit reached — maximum 30 AI requests per hour per device. Try again later."),
+});

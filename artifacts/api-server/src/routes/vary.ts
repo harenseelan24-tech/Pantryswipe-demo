@@ -1,8 +1,32 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../lib/logger";
+import { z } from "zod";
+import { aiLimiter } from "../middleware/rateLimiters";
 
 const router: IRouter = Router();
+
+const VaryBodySchema = z.object({
+  variation: z.string().min(1).max(100),
+  recipe: z.object({
+    title: z.string().min(1).max(200),
+    servings: z.number().int().min(1).max(100),
+    ingredients: z.array(
+      z.object({
+        name: z.string().min(1).max(100),
+        amount: z.string().max(50),
+        inPantry: z.boolean().default(false),
+      })
+    ).max(50),
+    steps: z.array(
+      z.object({
+        step: z.number().int().min(1),
+        instruction: z.string().min(1).max(500),
+        timerMinutes: z.number().int().min(0).nullable().optional(),
+      })
+    ).max(30),
+  }),
+});
 
 const VARIATION_PROMPTS: Record<string, string> = {
   "Make Vegetarian":
@@ -19,23 +43,18 @@ const VARIATION_PROMPTS: Record<string, string> = {
     "Optimise this recipe to be ready in under 20 minutes total (prep + cook). Simplify steps, use shortcuts (pre-cut veg, tinned ingredients, microwave steps), and reduce cooking time without sacrificing too much flavour. Add a note on the new estimated time.",
 };
 
-interface IngredientIn { name: string; amount: string; inPantry: boolean }
-interface StepIn { step: number; instruction: string; timerMinutes?: number }
-
-router.post("/recipes/vary", async (req: Request, res: Response) => {
-  const { variation, recipe } = req.body as {
-    variation: string;
-    recipe: { title: string; servings: number; ingredients: IngredientIn[]; steps: StepIn[] };
-  };
-
-  if (!variation || !recipe) {
-    res.status(400).json({ error: "variation and recipe are required" });
+router.post("/recipes/vary", aiLimiter, async (req: Request, res: Response) => {
+  const parsed = VaryBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request body" });
     return;
   }
 
+  const { variation, recipe } = parsed.data;
+
   const instructions = VARIATION_PROMPTS[variation];
   if (!instructions) {
-    res.status(400).json({ error: `Unknown variation: ${variation}` });
+    res.status(400).json({ error: "Unknown variation type" });
     return;
   }
 

@@ -4,6 +4,7 @@ import { eq, ilike, sql, and, or, inArray } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../lib/logger";
 import { z } from "zod";
+import { aiLimiter } from "../middleware/rateLimiters";
 
 const router: IRouter = Router();
 
@@ -191,7 +192,7 @@ router.get("/recipes/what-can-i-make", async (req: Request, res: Response) => {
 });
 
 // ─── POST /api/recipes/ai-chef ────────────────────────────────────────────────
-router.post("/recipes/ai-chef", async (req: Request, res: Response) => {
+router.post("/recipes/ai-chef", aiLimiter, async (req: Request, res: Response) => {
   const BodySchema = z.object({
     message: z.string().min(1).max(2000),
     conversation_history: z
