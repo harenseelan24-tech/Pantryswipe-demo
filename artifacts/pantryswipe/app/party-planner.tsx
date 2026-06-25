@@ -156,7 +156,13 @@ function parsePlan(text: string): Record<string, string> {
     const nl = part.indexOf("\n");
     if (nl === -1) continue;
     const rawHeader = part.slice(0, nl).trim().toUpperCase();
-    const body = part.slice(nl + 1).trim();
+    // Strip markdown HR separators (---) and blockquote warnings before storing
+    const body = part
+      .slice(nl + 1)
+      .split("\n")
+      .filter((l) => !/^-{3,}$/.test(l.trim()) && !/^>\s*⚠/.test(l.trim()))
+      .join("\n")
+      .trim();
     const key = SECTION_KEYS.find((k) => rawHeader.includes(k));
     if (key && body) sections[key] = body;
   }
@@ -1153,9 +1159,9 @@ const s = StyleSheet.create({
   root: { flex: 1 },
 
   // Header
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
-  headerBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTitle: { flex: 1, textAlign: "center", fontSize: 17, fontWeight: "700" },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1 },
+  headerBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  headerTitle: { flex: 1, textAlign: "center", fontSize: 17, fontWeight: "700", paddingHorizontal: 8 },
 
   // Progress dots
   progressWrap: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14, borderBottomWidth: 1 },
