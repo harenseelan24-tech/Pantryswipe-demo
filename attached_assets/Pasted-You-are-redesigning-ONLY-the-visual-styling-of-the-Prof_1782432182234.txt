@@ -1,0 +1,457 @@
+You are redesigning ONLY the visual styling of the Profile screen in the
+PantrySwipe Expo app. The app is at artifacts/pantryswipe/. Stack: Expo
+SDK 54, expo-router v6, React Native 0.81, TypeScript, pnpm workspaces,
+@expo/vector-icons (Feather), react-native-reanimated, expo-haptics.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BEFORE YOU WRITE A SINGLE LINE OF CODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step 1 — Read these files completely before touching anything:
+  - artifacts/pantryswipe/app/(tabs)/profile.tsx   ← TARGET FILE
+  - artifacts/pantryswipe/context/AppContext.tsx    ← ALL data comes from here
+  - artifacts/pantryswipe/data/mockData.ts          ← recipe image assets
+  - artifacts/pantryswipe/constants/colors.ts       ← brand tokens
+
+Step 2 — From AppContext.tsx, identify and note down:
+  - The exact field name for: user name, user avatar/image, user level,
+    user XP, user XP-to-next-level, cooking streak, recipes cooked count,
+    gourmet level or equivalent stat, saved recipes array, cooked recipes
+    array, achievements array (with earned/unlocked boolean per item)
+  - If any field does not exist, note it and use a sensible mock value
+    inline in the component — do NOT modify AppContext.tsx
+
+Step 3 — From mockData.ts, confirm what image format recipe images use
+  (require() local assets vs URI strings). Note this before writing any
+  Image component.
+
+Step 4 — Check package.json for: expo-blur, expo-linear-gradient,
+  react-native-safe-area-context. Note which are present.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ABSOLUTE DO NOT TOUCH LIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Never modify these files under any circumstances:
+  - artifacts/pantryswipe/context/AppContext.tsx
+  - artifacts/pantryswipe/data/mockData.ts
+  - artifacts/pantryswipe/constants/colors.ts  ← read only; add tokens
+    here ONLY if they are genuinely missing, then import them
+  - artifacts/pantryswipe/app/_layout.tsx      ← do not touch at all
+    for this task (font loading was handled in the pantry prompt)
+  - Any file imported by more than one screen
+  - All navigation/routing files
+  - All onPress, router.push, router.back, and state logic — do not
+    move, rename, or rewire any of these
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL TRANSLATION RULES
+(The design came from a web HTML file — these rules prevent breakage)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RULE 1 — NO WEB-ONLY CSS
+These Tailwind/CSS properties do not exist in React Native and must
+NEVER appear in StyleSheet:
+  backdrop-filter, blur(), brightness(), backdrop-blur-xl, blur-md,
+  bg-gradient-to-t, transition, :active, :hover, window.*, pageYOffset,
+  classList, document.getElementById, env(safe-area-inset-bottom)
+
+RULE 2 — NO MATERIAL SYMBOLS ICONS
+The design uses Google Material Symbols webfont. The app uses
+@expo/vector-icons Feather exclusively. Use this mapping:
+  arrow_back        → Feather "arrow-left"
+  settings          → Feather "settings"
+  stars             → Feather "star"  (filled variant via color)
+  restaurant        → Feather "coffee"  (closest food icon)
+  local_fire_department → Feather "zap"
+  eco               → Feather "sun"
+  emoji_events      → Feather "award"
+  bakery_dining     → Feather "gift"
+  wine_bar          → Feather "droplet"
+  person            → Feather "user"
+  calendar_month    → Feather "calendar"
+  explore           → Feather "compass"
+
+RULE 3 — NO EXTERNAL IMAGE URLS
+The Stitch HTML uses lh3.googleusercontent.com URLs. Do NOT use these.
+  - Avatar image: use the field from AppContext (e.g. user.avatar). If
+    the field is a URI string, use it in source={{ uri: value }}. If it
+    doesn't exist, use a placeholder View with the user's initials.
+  - Recipe grid images: use the image field from the savedRecipes /
+    cookedRecipes arrays in AppContext. Use require() if they are local
+    assets, or source={{ uri: value }} if they are URI strings. Match
+    whatever format mockData.ts uses.
+
+RULE 4 — NO DOM-BASED TAB SWITCHING
+The Stitch JS uses switchTab() with classList. Replace entirely with:
+
+  const [activeTab, setActiveTab] = useState<'saved' | 'cooked'>('saved');
+
+  Tab button: onPress={() => setActiveTab('saved')}
+  Content: {activeTab === 'saved' ? <SavedGrid /> : <CookedGrid />}
+
+  Do NOT use any DOM, document, or window reference.
+
+RULE 5 — NO window.addEventListener FOR SCROLL PARALLAX
+Replace the JS scroll parallax with React Native Animated:
+
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const heroTranslate = scrollY.interpolate({
+    inputRange: [0, 200],
+    outputRange: [0, -80],
+    extrapolate: 'clamp',
+  });
+
+  Use Animated.ScrollView with:
+    onScroll={Animated.event(
+      [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+      { useNativeDriver: true }
+    )}
+    scrollEventThrottle={16}
+
+  Apply heroTranslate as transform on the blurred hero background View.
+
+RULE 6 — NO HARDCODED STATS OR ACHIEVEMENTS
+Every number and achievement shown must come from AppContext:
+  - Recipes cooked count: from AppContext field (read Step 2 result)
+  - Day streak: from AppContext field
+  - Gourmet level / level number: from AppContext field
+  - XP bar: xpPercent = (user.xp / user.xpToNextLevel) * 100
+  - Achievements grid: .map() over the achievements array from AppContext
+
+  WRONG:  <Text>124</Text>  or  <Text>7 🔥</Text>
+  RIGHT:  <Text>{user.recipesCooked}</Text>  (using the real field name)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COLOR TOKEN MAPPING
+(Stitch Tailwind → app colors.ts equivalents)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Do NOT use Stitch color names (primary, secondary, surface-container,
+on-surface-variant etc.) directly — they are Material You tokens that
+don't exist in this app. Map them to colors.ts values:
+
+  Stitch primary (#835500)          → Colors.primary   (#F5A623 Saffron)
+  Stitch secondary (#006d3f)        → Colors.secondary (#4CAF76 Herb Green)
+  Stitch on-surface (#211a12)       → Colors.textPrimary (#141210)
+  Stitch on-surface-variant         → Colors.textMuted (add if missing: '#7A7570')
+  Stitch surface (#fff8f4)          → Colors.surface (#FFFFFF)
+  Stitch background (#fff8f4)       → Colors.background (#FAFAF8)
+  Stitch surface-container-low      → '#F5F3EF' (add to colors.ts if missing)
+  Stitch surface-container-highest  → '#E8E4DE' (add to colors.ts if missing)
+  Stitch secondary-container        → 'rgba(76,175,118,0.15)'
+  Stitch primary-fixed (#ffddb4)    → 'rgba(245,166,35,0.20)'
+  Stitch tertiary-fixed (#d9e2ff)   → 'rgba(91,142,245,0.15)'
+  Stitch on-secondary-container     → Colors.secondary
+  Stitch on-primary-fixed-variant   → '#633f00'
+  Stitch on-tertiary-fixed-variant  → '#004299'
+  Stitch error / on-error-container → Colors.danger (#E84040)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CROSS-PLATFORM HELPERS (add near top of profile.tsx)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  import { Platform } from 'react-native';
+
+  const cardShadow = Platform.select({
+    ios: {
+      shadowColor: '#835500',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 24,
+    },
+    android: { elevation: 4 },
+    web: { boxShadow: '0 8px 24px rgba(131,85,0,0.08)' },
+  });
+
+  const navShadow = Platform.select({
+    ios: {
+      shadowColor: '#835500',
+      shadowOffset: { width: 0, height: -8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 24,
+    },
+    android: { elevation: 12 },
+    web: { boxShadow: '0 -8px 24px rgba(131,85,0,0.08)' },
+  });
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SAFE AREA HANDLING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+  Inside the component:
+    const insets = useSafeAreaInsets();
+
+  Apply to header:
+    paddingTop: insets.top + 8   (replaces fixed top position)
+
+  Apply to bottom nav bar if it exists in this screen:
+    paddingBottom: insets.bottom + 12
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION-BY-SECTION VISUAL SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. HEADER BAR
+   Sits at the top, frosted appearance.
+   On iOS: wrap content in BlurView (tint="light" intensity=80) from
+     expo-blur as an absolute-positioned View, style=StyleSheet.absoluteFill
+   On Android/web: plain View with backgroundColor: 'rgba(250,250,248,0.92)'
+   Use Platform.OS === 'ios' to conditionally render.
+
+   Layout: horizontal row, space-between
+   Left: Feather "arrow-left" icon, size 24, color Colors.textPrimary
+     → onPress must call the existing back navigation (read from current file)
+   Right: Feather "settings" icon, size 24, color Colors.textMuted
+     → onPress must call the existing settings navigation (read from current file)
+
+   headerBar: {
+     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50,
+     flexDirection: 'row', justifyContent: 'space-between',
+     alignItems: 'center', paddingHorizontal: 24,
+     height: 56, (plus insets.top as paddingTop)
+   }
+   iconBtn: {
+     padding: 8, borderRadius: 20,
+     minHeight: 44, minWidth: 44,
+     alignItems: 'center', justifyContent: 'center',
+   }
+
+2. HERO SECTION (320px tall, parallax background)
+   Structure:
+   - Animated.View (absolute fill) with Animated translateY for parallax
+     Contains: user's hero/background image or gradient fallback
+     Apply: overflow hidden, scale(1.1) equivalent via transform
+   - Dark gradient overlay: LinearGradient from transparent at top to
+     Colors.background at bottom (or plain View with gradient-like opacity
+     layers if expo-linear-gradient not installed)
+   - Avatar + name overlay centered at bottom of hero
+
+   heroContainer: {
+     height: 320, overflow: 'hidden',
+     position: 'relative',
+   }
+   heroBgImage: {
+     position: 'absolute', top: -40, left: -20, right: -20, bottom: -40,
+   }
+
+   AVATAR:
+   - Size: 96x96, borderRadius 48
+   - Border: 4px solid Colors.surface
+   - shadow: cardShadow
+   - Source: user.avatar from AppContext (URI or require). If undefined,
+     show initials circle:
+     backgroundColor: Colors.primary, centered Text with user initials
+
+   PRO BADGE (bottom-right of avatar):
+   - 26x26 circle, backgroundColor: Colors.secondary
+   - Border: 2px solid Colors.surface
+   - Contains: Feather "star" icon size 12, color '#FFFFFF'
+   - Positioned absolute, bottom: -4, right: -4
+
+   USERNAME: fontFamily Epilogue_700Bold, fontSize 28, color Colors.surface
+     (white on dark hero background)
+   USER TAGLINE: fontSize 16, color 'rgba(255,255,255,0.75)'
+
+3. XP PROGRESS CARD
+   Sits below hero, overlapping by -32px (marginTop: -32, zIndex: 20)
+   Horizontal padding: 16
+
+   card: {
+     backgroundColor: Colors.surface,
+     borderRadius: 16, padding: 16,
+     ...cardShadow,
+   }
+
+   Top row: "LEVEL {user.level}" left (fontSize 12, fontWeight '700',
+     letterSpacing 1.5, color Colors.primary, fontFamily Epilogue_700Bold)
+   + "{user.xp} / {user.xpToNextLevel} XP to Level {user.level + 1}"
+     right (fontSize 11, color Colors.textMuted)
+
+   Progress bar track:
+     height: 12, borderRadius: 6,
+     backgroundColor: '#E8E4DE', overflow: 'hidden'
+
+   Progress bar fill:
+     height: '100%', borderRadius: 6,
+     backgroundColor: Colors.primary,
+     width: `${Math.min(xpPercent, 100)}%`   ← computed from AppContext
+     (Use Animated.View with useRef(new Animated.Value(0)) and
+      Animated.timing to animate to xpPercent on mount)
+
+4. STATS ROW (3 chips)
+   marginTop: 24, paddingHorizontal: 16
+   flexDirection: 'row', gap: 12 (or marginRight: 12 on each)
+
+   Each stat chip:
+     flex: 1, backgroundColor: '#F5F3EF',
+     borderRadius: 16, padding: 16,
+     alignItems: 'center',
+     borderWidth: 0.5, borderColor: 'rgba(215,195,174,0.3)'
+
+   Stat number: fontSize 28, fontFamily Epilogue_700Bold,
+     color: Colors.primary
+   Stat label: fontSize 12, color Colors.textMuted, textAlign 'center',
+     marginTop: 4
+
+   Values (all from AppContext — use field names found in Step 2):
+     Col 1: user.recipesCooked + "Recipes Cooked"
+     Col 2: user.cookingStreak + " 🔥" + "Day Streak"
+     Col 3: user.level + "Gourmet Level"
+
+5. ACHIEVEMENTS SECTION
+   marginTop: 32, paddingHorizontal: 16
+
+   Title: "Achievements" — fontSize 24, fontFamily Epilogue_700Bold,
+     color Colors.textPrimary, marginBottom: 24
+
+   Grid: 3 columns using FlatList with numColumns={3} OR a manual
+   chunked row layout. Map over user.achievements from AppContext.
+   Each achievement item:
+
+   EARNED (achievement.earned === true):
+     Circle 64x64, borderRadius 32
+     backgroundColor: mapped per achievement.type or achievement.icon:
+       cooking-related  → 'rgba(76,175,118,0.15)'  (green tint)
+       fire/spice       → 'rgba(245,166,35,0.20)'  (amber tint)
+       eco/nature       → 'rgba(91,142,245,0.15)'  (blue tint)
+       default          → 'rgba(200,196,190,0.20)'
+     Icon: Feather icon mapped from achievement.icon field (see icon map)
+       size 28, color matched to tint ramp
+     shadowLg equivalent: cardShadow
+     Label: fontSize 12, color Colors.textPrimary, textAlign 'center',
+       marginTop: 8, fontFamily Epilogue_400Regular
+
+   LOCKED (achievement.earned === false):
+     Same circle but opacity: 0.4
+     Apply grayscale effect: use tintColor: '#888' on the icon
+     backgroundColor: '#E8E4DE'
+     Icon: Feather "lock", size 28, color Colors.textMuted
+     Label: same but color Colors.textMuted
+
+   Achievement card press animation:
+     Use Pressable with react-native-reanimated:
+       const scale = useSharedValue(1);
+       const animStyle = useAnimatedStyle(() => ({
+         transform: [{ scale: scale.value }]
+       }));
+       onPressIn: scale.value = withSpring(0.92, { damping: 15 })
+       onPressOut: scale.value = withSpring(1, { damping: 15 })
+     Do NOT use CSS :active
+
+6. RECIPE TABS (Saved / Cooked)
+   marginTop: 32
+
+   Tab bar row:
+     flexDirection: 'row', borderBottomWidth: 0.5,
+     borderBottomColor: 'rgba(215,195,174,0.3)',
+     paddingHorizontal: 16
+
+   Each tab button:
+     flex: 1, paddingVertical: 16, alignItems: 'center',
+     minHeight: 44
+
+   ACTIVE tab:
+     borderBottomWidth: 3, borderBottomColor: Colors.primary
+     Text: fontFamily Epilogue_700Bold, fontSize 14,
+       letterSpacing 0.5, color Colors.primary
+
+   INACTIVE tab:
+     Text: fontFamily Epilogue_400Regular, fontSize 14,
+       color Colors.textMuted
+
+   Tab state: const [activeTab, setActiveTab] = useState<'saved'|'cooked'>('saved')
+   onPress: setActiveTab('saved') or setActiveTab('cooked')
+
+   RECIPE GRIDS:
+   Render below tabs based on activeTab state.
+   Data source: user.savedRecipes (for 'saved') or user.cookedRecipes
+     (for 'cooked') — both from AppContext.
+   Use FlatList with numColumns={2}, key={activeTab} to force re-render
+     on tab switch.
+
+   Each recipe card:
+     margin: 6, borderRadius: 16, overflow: 'hidden'
+     aspectRatio: 1 (square) as default; alternate cards can be 3/4 or 4/3
+       if the design calls for it — keep it simple with square for safety
+
+   Image: fill the card
+     source: use the same format as mockData.ts (require or URI)
+     resizeMode: 'cover'
+
+   Gradient overlay at bottom (if expo-linear-gradient available):
+     LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']}
+     position absolute, left/right/bottom 0, height: 60
+   Fallback if not available:
+     Plain View with backgroundColor: 'rgba(0,0,0,0.4)'
+
+   Recipe name label:
+     position absolute, bottom 12, left 12
+     fontSize 12, color '#FFFFFF', fontFamily Epilogue_700Bold
+
+   EMPTY STATE (if array is empty):
+     Centered View with Feather "bookmark" (saved) or "check-circle"
+       (cooked), size 48, color Colors.textMuted
+     Text: "No recipes yet", fontSize 16, color Colors.textMuted,
+       marginTop 12
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STYLING RULES — MANDATORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ALL styles in StyleSheet.create() at the bottom of the file.
+   Zero inline style objects in render/return except for:
+   - Dynamic values: style={[styles.fill, { width: `${xpPercent}%` }]}
+   - Platform.select() results spread via ...cardShadow
+
+2. Every touchable element must have minHeight: 44 and minWidth: 44.
+   This includes icon buttons, tab buttons, achievement cards.
+
+3. ALL data displayed must come from AppContext. No hardcoded numbers,
+   names, or achievement data anywhere in JSX.
+
+4. ALL images must use local require() or URI from AppContext/mockData.
+   No external URLs (no lh3.googleusercontent.com or similar).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCROLL CONTAINER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Wrap all content in Animated.ScrollView (not ScrollView) to support
+the hero parallax. Ensure contentContainerStyle has enough paddingBottom
+(at least insets.bottom + 100) so content is not hidden behind the tab bar.
+
+The header bar must sit ABOVE the scroll content using absolute
+positioning (position: 'absolute', zIndex: 50) so it stays fixed
+while the hero scrolls underneath it.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY FINAL STEPS — DO NOT SKIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After all edits, run in this exact order:
+
+1. Grep check — no shared components broken:
+   Search the file you modified for any component also imported by
+   other tab screens. If found, revert and use a local wrapper instead.
+
+2. TypeScript check — fix ALL errors:
+   cd artifacts/pantryswipe && pnpm run typecheck
+
+3. Logic integrity check — read the code and confirm:
+   - Settings button onPress calls the original settings navigation
+   - Back button onPress calls the original router.back()
+   - Tab switching uses useState only — no DOM references
+   - XP bar width is computed from AppContext fields — not hardcoded
+   - Achievements render from AppContext .map() — not hardcoded JSX
+   - Recipe grids render from AppContext arrays — not static images
+
+4. Report back with:
+   - Every file modified (list them all)
+   - Every AppContext field name you used (confirm they exist)
+   - Any field that did NOT exist in AppContext and how you handled it
+   - Any Stitch design element you could not implement and why
+   - TypeScript check result (pass / errors found + fixed)
+   - Confirmation that zero external image URLs appear in the final code

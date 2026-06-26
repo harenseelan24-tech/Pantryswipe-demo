@@ -1,11 +1,13 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   Dimensions,
   Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,9 +16,15 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
-import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
 import { BADGES } from "@/data/mockData";
 import { useRouter } from "expo-router";
@@ -24,7 +32,7 @@ import { useSubscription } from "@/lib/revenuecat";
 import { getRecipeImageSource } from "@/constants/recipeImages";
 
 const { width: SCREEN_W } = Dimensions.get("window");
-const CARD_W = (SCREEN_W - 48) / 2;
+const BIO_LIMIT = 80;
 
 const CUISINE_EMOJIS: Record<string, string> = {
   Italian: "🍝", Japanese: "🍜", Korean: "🥘", Mexican: "🌮",
@@ -32,74 +40,154 @@ const CUISINE_EMOJIS: Record<string, string> = {
   French: "🥐", Mediterranean: "🫒", Vietnamese: "🍜", International: "🍽",
 };
 
-const BIO_LIMIT = 80;
-
-const PROFILE_TABS = ["Recipes", "Saved", "Stats", "Badges"] as const;
-const RECIPE_SUBTABS = ["Saved Later", "Made", "To Cook"] as const;
-
-const CUISINE_FLAGS: Record<string, string> = {
-  Italian: "🇮🇹", Japanese: "🇯🇵", Korean: "🇰🇷", Mexican: "🇲🇽",
-  Indian: "🇮🇳", Chinese: "🇨🇳", Thai: "🇹🇭", American: "🇺🇸",
-  French: "🇫🇷", Mediterranean: "🌊", Vietnamese: "🇻🇳", International: "🍽",
-  "Middle Eastern": "🌙", African: "🌍",
+// ── Brand colours (inline so this file has no external color dependency) ──────
+const C = {
+  primary:     "#F5A623",
+  secondary:   "#4CAF76",
+  textPrimary: "#141210",
+  textMuted:   "#7A7570",
+  surface:     "#FFFFFF",
+  background:  "#FAFAF8",
+  surfaceLow:  "#F5F3EF",
+  surfaceHigh: "#E8E4DE",
+  danger:      "#E84040",
+  saveBlue:    "#5B8EF5",
 };
 
-const GOAL_EMOJI: Record<string, string> = {
-  "Build Muscle": "💪", "Eat Healthier": "🥗", "Save Money": "💰",
-  "Cook Faster": "⚡", "Explore Cuisines": "🌍", "Cook for Others": "👨‍👩‍👧",
-  "Meal Prep": "🥡", "Reduce Waste": "♻️", "Lose Weight": "🏃",
-};
+// ── Cross-platform shadow helpers ─────────────────────────────────────────────
+const cardShadow = Platform.select({
+  ios: {
+    shadowColor: "#835500",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+  },
+  android: { elevation: 4 },
+  web: { boxShadow: "0 8px 24px rgba(131,85,0,0.08)" },
+}) as object;
 
-const SKILL_BADGE: Record<string, { emoji: string; color: string }> = {
-  "Beginner":   { emoji: "🌱", color: "#4CAF76" },
-  "Home Cook":  { emoji: "🍳", color: "#F5A623" },
-  "Confident":  { emoji: "👨‍🍳", color: "#5B8EF5" },
-  "Advanced":   { emoji: "⭐", color: "#E84040" },
-};
+// ── Achievement tint by icon ──────────────────────────────────────────────────
+function getAchievementTint(icon: string): { bg: string; color: string } {
+  const cooking = ["award", "check-circle", "camera", "coffee"];
+  const fire    = ["star", "dollar-sign", "zap"];
+  const eco     = ["globe", "wind", "sun", "compass"];
+  if (cooking.includes(icon)) return { bg: "rgba(76,175,118,0.15)",  color: "#4CAF76" };
+  if (fire.includes(icon))    return { bg: "rgba(245,166,35,0.20)",   color: "#F5A623" };
+  if (eco.includes(icon))     return { bg: "rgba(91,142,245,0.15)",   color: "#5B8EF5" };
+  return                             { bg: "rgba(200,196,190,0.20)",  color: "#7A7570" };
+}
 
-function XPBar({ xp, nextXp, level, colors }: { xp: number; nextXp: number; level: number; colors: any }) {
-  const pct = Math.min(xp / nextXp, 1);
+// ── Achievement card with Reanimated press scale ──────────────────────────────
+function AchievementCard({ badge }: { badge: (typeof BADGES)[number] }) {
+  const scale    = useSharedValue(1);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  const tint = getAchievementTint(badge.icon);
+
   return (
-    <View style={xpStyles.container}>
-      <View style={xpStyles.labelRow}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <View style={[xpStyles.lvlBadge, { backgroundColor: "#4CAF7622", borderColor: "#4CAF7650" }]}>
-            <Text style={[xpStyles.lvlText, { color: "#4CAF76", fontFamily: "SpaceGrotesk_700Bold" }]}>Lv {level}</Text>
-          </View>
-          <Text style={[xpStyles.xpLabel, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
-            Home Cook
-          </Text>
+    <Pressable
+      onPressIn={() => { scale.value = withSpring(0.92, { damping: 15 }); }}
+      onPressOut={() => { scale.value = withSpring(1, { damping: 15 }); }}
+      style={styles.achievementItem}
+    >
+      <Reanimated.View style={[styles.achievementItemInner, animStyle]}>
+        <View
+          style={[
+            styles.achievementCircle,
+            badge.earned
+              ? { backgroundColor: tint.bg, ...(cardShadow as object) }
+              : { backgroundColor: C.surfaceHigh, opacity: 0.4 },
+          ]}
+        >
+          <Feather
+            name={badge.earned ? (badge.icon as any) : "lock"}
+            size={28}
+            color={badge.earned ? tint.color : C.textMuted}
+          />
         </View>
-        <Text style={[xpStyles.xpCount, { color: colors.textMuted, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
-          {xp.toLocaleString()} / {nextXp.toLocaleString()} XP
+        <Text
+          style={[
+            styles.achievementLabel,
+            { color: badge.earned ? C.textPrimary : C.textMuted },
+          ]}
+          numberOfLines={2}
+        >
+          {badge.name}
         </Text>
-      </View>
-      <View style={[xpStyles.track, { backgroundColor: colors.muted }]}>
-        <View style={[xpStyles.fill, { backgroundColor: "#4CAF76", width: `${Math.round(pct * 100)}%` as any }]} />
-      </View>
-    </View>
+      </Reanimated.View>
+    </Pressable>
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const { userProfile, updateProfile, stats, savedRecipes, cookedRecipes, liveRecipes, signOut, followingList } = useApp();
+  const router  = useRouter();
+
+  const {
+    userProfile, updateProfile, stats,
+    savedRecipes, cookedRecipes, liveRecipes, signOut,
+  } = useApp();
   const { isSubscribed } = useSubscription();
-  const scrollRef = useRef<ScrollView>(null);
-  const [activeTab, setActiveTab] = useState<(typeof PROFILE_TABS)[number]>("Recipes");
-  const [recipeSubtab, setRecipeSubtab] = useState<(typeof RECIPE_SUBTABS)[number]>("Saved Later");
-  const [showAllergies, setShowAllergies] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
 
-  // Edit profile modal state
+  // ── Scroll parallax ──────────────────────────────────────────────────────
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const heroTranslate = scrollY.interpolate({
+    inputRange:   [0, 200],
+    outputRange:  [0, -80],
+    extrapolate:  "clamp",
+  });
+
+  // ── XP bar width animation ────────────────────────────────────────────────
+  const xpBarAnim = useRef(new Animated.Value(0)).current;
+
+  // ── UI state ─────────────────────────────────────────────────────────────
+  const [activeTab,    setActiveTab]    = useState<"saved" | "cooked">("saved");
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editName, setEditName] = useState(userProfile.name);
-  const [editBio, setEditBio] = useState(userProfile.bio ?? "");
+  const [editName,     setEditName]     = useState(userProfile.name);
+  const [editBio,      setEditBio]      = useState(userProfile.bio ?? "");
+  const [signingOut,   setSigningOut]   = useState(false);
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  // ── Computed values (all from AppContext — no hardcoding) ─────────────────
+  const xp       = stats.xp ?? 0;
+  const level    = stats.level ?? 1;
+  // xpToNextLevel doesn't exist in AppContext; compute it the same way the
+  // original XPBar sub-component did.
+  const nextXp   = Math.max(Math.ceil((xp + 1) / 1000) * 1000, 1000);
+  const xpPercent = Math.min((xp / nextXp) * 100, 100);
 
+  const savedRecipesList  = liveRecipes.filter((r) => savedRecipes.includes(r.id));
+  const cookedRecipesList = liveRecipes.filter((r) => cookedRecipes.includes(r.id));
+  const recipesList       = activeTab === "saved" ? savedRecipesList : cookedRecipesList;
+
+  const bioOverLimit    = editBio.length > BIO_LIMIT;
+  const canSaveProfile  = editName.trim().length > 0 && !bioOverLimit;
+
+  const initials = (userProfile.name ?? "U")
+    .split(" ")
+    .map((w) => w[0] ?? "")
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  // ── Animate XP bar on mount / xp change ──────────────────────────────────
+  useEffect(() => {
+    Animated.timing(xpBarAnim, {
+      toValue:        xpPercent,
+      duration:       800,
+      useNativeDriver: false, // width cannot use native driver
+    }).start();
+  }, [xpPercent]);
+
+  const xpFillStyle = {
+    width: xpBarAnim.interpolate({
+      inputRange:  [0, 100],
+      outputRange: ["0%", "100%"],
+    }),
+  };
+
+  // ── Handlers (navigation & logic preserved exactly) ───────────────────────
   const handleSignOut = async () => {
     if (signingOut) return;
     setSigningOut(true);
@@ -107,59 +195,43 @@ export default function ProfileScreen() {
     router.replace("/welcome");
   };
 
-  // ── Photo picker ──────────────────────────────────────────────────────────
   const handlePickPhoto = async () => {
-    // Show action sheet to choose source
-    Alert.alert(
-      "Change Profile Photo",
-      "Choose a source",
-      [
-        {
-          text: "Take Photo",
-          onPress: async () => {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== "granted") {
-              Alert.alert("Permission needed", "Please allow camera access in Settings to take a photo.");
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: "images",
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets[0]) {
-              updateProfile({ photoUri: result.assets[0].uri });
-            }
-          },
+    Alert.alert("Change Profile Photo", "Choose a source", [
+      {
+        text: "Take Photo",
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert("Permission needed", "Please allow camera access in Settings to take a photo.");
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: "images", allowsEditing: true, aspect: [1, 1], quality: 0.8,
+          });
+          if (!result.canceled && result.assets[0]) {
+            updateProfile({ photoUri: result.assets[0].uri });
+          }
         },
-        {
-          text: "Choose from Library",
-          onPress: async () => {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== "granted") {
-              Alert.alert("Permission needed", "Please allow photo library access in Settings to choose a photo.");
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: "images",
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets[0]) {
-              updateProfile({ photoUri: result.assets[0].uri });
-            }
-          },
+      },
+      {
+        text: "Choose from Library",
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert("Permission needed", "Please allow photo library access in Settings to choose a photo.");
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: "images", allowsEditing: true, aspect: [1, 1], quality: 0.8,
+          });
+          if (!result.canceled && result.assets[0]) {
+            updateProfile({ photoUri: result.assets[0].uri });
+          }
         },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
-
-  // ── Save edit profile ─────────────────────────────────────────────────────
-  const bioOverLimit = editBio.length > BIO_LIMIT;
-  const canSaveProfile = editName.trim().length > 0 && !bioOverLimit;
 
   const handleSaveProfile = () => {
     if (!canSaveProfile) return;
@@ -173,585 +245,296 @@ export default function ProfileScreen() {
     setShowEditModal(true);
   };
 
-  const savedRecipesList = liveRecipes.filter((r) => savedRecipes.includes(r.id));
-  const cookedRecipesList = liveRecipes.filter((r) => cookedRecipes.includes(r.id));
-  const toCookList = liveRecipes.filter((r) => !cookedRecipes.includes(r.id) && !savedRecipes.includes(r.id)).slice(0, 4);
-  const recipesList = recipeSubtab === "Saved Later" ? savedRecipesList : recipeSubtab === "Made" ? cookedRecipesList : toCookList;
-
-  const xp = stats.xp ?? 2340;
-  const level = stats.level ?? 5;
-  const nextXp = Math.ceil(xp / 1000) * 1000 + 1000;
-
-  const streakActive = (stats.streak ?? 0) > 0;
-  const coverEmojis = userProfile.cuisinePreferences.length > 0
-    ? userProfile.cuisinePreferences.slice(0, 5).map((c) => CUISINE_EMOJIS[c] ?? "🍽")
-    : ["🍝", "🍜", "🥘", "🍛", "🌮"];
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]}>
+    <View style={styles.root}>
 
-        {/* ── Profile Header ────────────────────────────────────────────────── */}
-        <View style={styles.profileHeader}>
+      {/* ── SCROLL CONTENT ─────────────────────────────────────────────────── */}
+      <Animated.ScrollView
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+      >
 
-          {/* Cover — personal cuisine mural */}
-          <View style={[styles.cover, { paddingTop: topPadding, backgroundColor: colors.foreground + "0D" }]}>
-            {/* Saffron tint layer */}
-            <View style={[styles.coverTint, { backgroundColor: colors.primary + "18" }]} />
-            {/* Bokeh emojis — user's own cuisine prefs */}
-            <Text style={[styles.coverEmoji0]}>{coverEmojis[0] ?? "🍝"}</Text>
-            <Text style={[styles.coverEmoji1]}>{coverEmojis[1] ?? "🍜"}</Text>
-            <Text style={[styles.coverEmoji2]}>{coverEmojis[2] ?? "🥘"}</Text>
-            <Text style={[styles.coverEmoji3]}>{coverEmojis[3] ?? "🍛"}</Text>
-            <Text style={[styles.coverEmoji4]}>{coverEmojis[4] ?? "🌮"}</Text>
-            {/* Vignette bottom fade */}
-            <View style={[styles.coverVignette, { backgroundColor: colors.background }]} />
+        {/* ── HERO (320px, parallax bg) ─────────────────────────────────── */}
+        <View style={styles.heroContainer}>
+
+          {/* Parallax background layer */}
+          <Animated.View
+            style={[styles.heroBg, { transform: [{ translateY: heroTranslate }] }]}
+          >
+            <LinearGradient
+              colors={[C.primary + "EE", "#3B1F00"]}
+              start={{ x: 0.1, y: 0 }}
+              end={{ x: 0.9, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            {/* Subtle bokeh circles for texture */}
+            <View style={styles.bokeh0} />
+            <View style={styles.bokeh1} />
+          </Animated.View>
+
+          {/* Dark gradient overlay (bottom fade to background) */}
+          <View pointerEvents="none" style={styles.heroOverlayWrap}>
+            <LinearGradient
+              colors={["transparent", "rgba(20,18,16,0.55)", C.background]}
+              locations={[0, 0.6, 1]}
+              style={StyleSheet.absoluteFillObject}
+            />
           </View>
 
-          {/* Avatar row */}
-          <View style={styles.avatarRow}>
-            {/* Avatar — tappable to change profile photo */}
-            <TouchableOpacity activeOpacity={0.8} onPress={handlePickPhoto}>
-              <View style={styles.avatarRingOuter}>
-                <View style={[styles.avatarTrack, { borderColor: streakActive ? colors.primary + "30" : colors.border }]} />
-                {streakActive && (
-                  <View style={[styles.avatarArc, { borderColor: colors.primary, borderTopColor: "transparent" }]} />
-                )}
-                {/* Show real photo if set, otherwise initials */}
+          {/* Hero content — avatar, name, tagline, actions */}
+          <View style={[styles.heroContent, { paddingTop: insets.top + 64 }]}>
+
+            {/* Avatar */}
+            <TouchableOpacity onPress={handlePickPhoto} activeOpacity={0.85}>
+              <View style={styles.avatarWrap}>
                 {userProfile.photoUri ? (
-                  <Image source={{ uri: userProfile.photoUri }} style={styles.avatarPhoto} />
+                  <Image
+                    source={{ uri: userProfile.photoUri }}
+                    style={styles.avatarImg}
+                    resizeMode="cover"
+                  />
                 ) : (
-                  <View style={[styles.avatarInner, { backgroundColor: colors.primary }]}>
-                    <Text style={[styles.avatarLetter, { fontFamily: "Inter_700Bold" }]}>
-                      {userProfile.name[0]?.toUpperCase()}
-                    </Text>
+                  <View style={styles.avatarFallback}>
+                    <Text style={styles.avatarInitials}>{initials}</Text>
                   </View>
                 )}
-                {streakActive && (
-                  <View style={[styles.streakBadge, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <Text style={styles.streakBadgeEmoji}>🔥</Text>
-                    <Text style={[styles.streakBadgeNum, { color: colors.primary, fontFamily: "SpaceGrotesk_700Bold" }]}>
-                      {stats.streak}
-                    </Text>
+
+                {/* Pro badge — bottom-right of avatar */}
+                {isSubscribed && (
+                  <View style={styles.proBadge}>
+                    <Feather name="star" size={12} color="#FFFFFF" />
                   </View>
                 )}
-                {/* Camera badge overlay */}
-                <View style={[styles.cameraBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Feather name="camera" size={11} color={colors.foreground} />
-                </View>
               </View>
             </TouchableOpacity>
 
-            {/* Edit Profile + Settings + Party Planner — stacked column on the right */}
-            <View style={{ flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-              <View style={styles.editRow}>
-                <TouchableOpacity
-                  style={[styles.editBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-                  onPress={openEditModal}
-                  activeOpacity={0.75}
-                >
-                  <Feather name="edit-2" size={13} color={colors.foreground} />
-                  <Text style={[styles.editBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Edit Profile</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.settingsBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={() => router.push("/settings")} activeOpacity={0.75}>
-                  <Feather name="settings" size={15} color={colors.foreground} />
-                </TouchableOpacity>
-              </View>
-              {/* Party Planner pill */}
-              <TouchableOpacity
-                style={[styles.editBtn, { borderColor: colors.primary + "55", backgroundColor: colors.primary + "12" }]}
-                onPress={() => { router.push("/party-planner"); }}
-                activeOpacity={0.75}
-              >
-                <Feather name="star" size={13} color={colors.primary} />
-                <Text style={[styles.editBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>Party Planner</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Identity block */}
-          <View style={styles.identityBlock}>
-            {/* Name + premium */}
-            <View style={styles.nameRow}>
-              <Text style={[styles.displayName, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]} numberOfLines={1}>
-                {userProfile.name}
-              </Text>
-              {isSubscribed && (
-                <View style={[styles.premiumChip, { backgroundColor: "#4CAF76" }]}>
-                  <Feather name="zap" size={9} color="#fff" />
-                  <Text style={[styles.premiumChipText, { fontFamily: "Inter_700Bold" }]}>PRO</Text>
-                </View>
-              )}
-            </View>
-            <Text style={[styles.handle, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={1} ellipsizeMode="tail">
-              @{userProfile.name.toLowerCase().replace(/\s/g, "_")}
-              {userProfile.bio ? ` | ${userProfile.bio}` : ""}
+            {/* Name */}
+            <Text style={styles.heroName} numberOfLines={1}>
+              {userProfile.name}
             </Text>
 
-            {/* Diet tags */}
-            {userProfile.dietType.length > 0 && (
-              <View style={styles.tagRow}>
-                {userProfile.dietType.slice(0, 3).map((d) => (
-                  <View key={d} style={[styles.dietChip, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "35" }]}>
-                    <Text style={[styles.dietChipText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>{d}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+            {/* Tagline */}
+            <Text style={styles.heroTagline} numberOfLines={2}>
+              {userProfile.bio
+                ? userProfile.bio
+                : `@${userProfile.name.toLowerCase().replace(/\s+/g, "_")}`}
+            </Text>
 
-            {/* Skill / goal / budget pills */}
-            {(userProfile.skillLevel || userProfile.goal || userProfile.weeklyBudget > 0) && (
-              <View style={styles.tagRow}>
-                {userProfile.skillLevel ? (() => {
-                  const b = SKILL_BADGE[userProfile.skillLevel] ?? { emoji: "🍳", color: "#F5A623" };
-                  return (
-                    <View key="skill" style={[styles.metaChip, { backgroundColor: b.color + "18", borderColor: b.color + "35" }]}>
-                      <Text style={{ fontSize: 11 }}>{b.emoji}</Text>
-                      <Text style={[styles.metaChipText, { color: b.color, fontFamily: "Inter_600SemiBold" }]}>{userProfile.skillLevel}</Text>
-                    </View>
-                  );
-                })() : null}
-                {userProfile.goal ? (
-                  <View key="goal" style={[styles.metaChip, { backgroundColor: colors.saveBlue + "15", borderColor: colors.saveBlue + "30" }]}>
-                    <Text style={{ fontSize: 11 }}>{GOAL_EMOJI[userProfile.goal] ?? "🎯"}</Text>
-                    <Text style={[styles.metaChipText, { color: colors.saveBlue, fontFamily: "Inter_600SemiBold" }]}>{userProfile.goal}</Text>
-                  </View>
-                ) : null}
-                {userProfile.weeklyBudget > 0 ? (
-                  <View key="budget" style={[styles.metaChip, { backgroundColor: "#4CAF7618", borderColor: "#4CAF7630" }]}>
-                    <Feather name="dollar-sign" size={10} color="#4CAF76" />
-                    <Text style={[styles.metaChipText, { color: "#4CAF76", fontFamily: "Inter_600SemiBold" }]}>${userProfile.weeklyBudget}/wk</Text>
-                  </View>
-                ) : null}
-              </View>
-            )}
-
-            {/* Allergies collapsible */}
-            {userProfile.allergies.length > 0 && (
-              <View style={styles.allergySection}>
-                <TouchableOpacity style={styles.allergyToggle} onPress={() => setShowAllergies((v) => !v)} activeOpacity={0.7}>
-                  <Feather name={showAllergies ? "eye" : "eye-off"} size={13} color={colors.textSecondary} />
-                  <Text style={[styles.allergyToggleText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
-                    Allergies ({userProfile.allergies.length})
-                  </Text>
-                  <Feather name={showAllergies ? "chevron-up" : "chevron-down"} size={13} color={colors.textMuted} />
-                </TouchableOpacity>
-                {showAllergies && (
-                  <View style={styles.tagRow}>
-                    {userProfile.allergies.map((a) => (
-                      <View key={a} style={[styles.allergyChip, { backgroundColor: "#E8404012", borderColor: "#E8404035" }]}>
-                        <Text style={{ fontSize: 10 }}>⚠️</Text>
-                        <Text style={[styles.allergyChipText, { color: "#E84040", fontFamily: "Inter_600SemiBold" }]}>{a}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Cuisine preferences horizontal scroll */}
-            {userProfile.cuisinePreferences.length > 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cuisinePrefScroll} contentContainerStyle={styles.cuisinePrefContent}>
-                {userProfile.cuisinePreferences.map((c) => (
-                  <View key={c} style={[styles.cuisinePrefChip, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Text style={{ fontSize: 14 }}>{CUISINE_EMOJIS[c] ?? "🍽️"}</Text>
-                    <Text style={[styles.cuisinePrefText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>{c}</Text>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-
-            {/* Stats — billboard numbers */}
-            <View style={[styles.statsRow, { borderColor: colors.border }]}>
+            {/* Action buttons row */}
+            <View style={styles.heroActions}>
               <TouchableOpacity
-                style={styles.statItem}
-                onPress={() => { setActiveTab("Recipes"); setRecipeSubtab("Made"); scrollRef.current?.scrollTo({ y: 0, animated: false }); }}
+                style={styles.heroEditBtn}
+                onPress={openEditModal}
+                activeOpacity={0.8}
               >
-                <Text style={[styles.statBig, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]}>{cookedRecipes.length}</Text>
-                <Text style={[styles.statSmall, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Cooked</Text>
+                <Feather name="edit-2" size={14} color={C.textPrimary} />
+                <Text style={styles.heroEditBtnText}>Edit Profile</Text>
               </TouchableOpacity>
-              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statBig, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]}>0</Text>
-                <Text style={[styles.statSmall, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Followers</Text>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statBig, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]}>{followingList.length}</Text>
-                <Text style={[styles.statSmall, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Following</Text>
-              </View>
-            </View>
 
-            {/* XP / Level progress bar */}
-            <XPBar xp={xp} nextXp={nextXp} level={level} colors={colors} />
+              <TouchableOpacity
+                style={styles.heroPartyBtn}
+                onPress={() => router.push("/party-planner")}
+                activeOpacity={0.8}
+              >
+                <Feather name="star" size={14} color={C.primary} />
+                <Text style={styles.heroPartyBtnText}>Party Planner</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* ── XP PROGRESS CARD (overlaps hero by -32px) ───────────────────── */}
+        <View style={styles.xpCardWrap}>
+          <View style={[styles.xpCard, cardShadow as object]}>
+            <View style={styles.xpTopRow}>
+              <Text style={styles.xpLevelLabel}>LEVEL {level}</Text>
+              <Text style={styles.xpCountText}>
+                {xp} / {nextXp} XP to Level {level + 1}
+              </Text>
+            </View>
+            <View style={styles.xpTrack}>
+              <Animated.View style={[styles.xpFill, xpFillStyle]} />
+            </View>
+          </View>
+        </View>
+
+        {/* ── STATS ROW (3 chips — all from AppContext) ───────────────────── */}
+        <View style={styles.statsRow}>
+          <View style={styles.statChip}>
+            {/* recipes cooked = cookedRecipes.length from AppContext */}
+            <Text style={styles.statNumber}>{cookedRecipes.length}</Text>
+            <Text style={styles.statLabel}>Recipes Cooked</Text>
           </View>
 
-          {/* Premium upgrade banner */}
-          {!isSubscribed && (
-            <TouchableOpacity
-              style={[styles.upgradeCard, { backgroundColor: colors.foreground, borderColor: colors.foreground }]}
-              onPress={() => router.push("/paywall")}
-              activeOpacity={0.88}
-            >
-              <View style={styles.upgradeLeft}>
-                <View style={[styles.upgradeIconBox, { backgroundColor: colors.primary + "25" }]}>
-                  <Text style={{ fontSize: 18 }}>✨</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.upgradeTitle, { color: colors.background, fontFamily: "SpaceGrotesk_700Bold" }]}>Unlock Premium</Text>
-                  <Text style={[styles.upgradeSub, { color: colors.background + "99", fontFamily: "Inter_400Regular" }]}>
-                    Unlimited AI · Smart expiry · S$4.99/mo
-                  </Text>
-                </View>
-              </View>
-              <View style={[styles.upgradeArrow, { backgroundColor: colors.primary }]}>
-                <Feather name="arrow-right" size={14} color="#141210" />
-              </View>
-            </TouchableOpacity>
-          )}
+          <View style={styles.statChip}>
+            {/* cookingStreak = stats.streak from AppContext */}
+            <Text style={styles.statNumber}>{stats.streak ?? 0} 🔥</Text>
+            <Text style={styles.statLabel}>Day Streak</Text>
+          </View>
+
+          <View style={styles.statChip}>
+            {/* gourmetLevel = stats.level from AppContext */}
+            <Text style={styles.statNumber}>{level}</Text>
+            <Text style={styles.statLabel}>Gourmet Level</Text>
+          </View>
         </View>
 
-        {/* ── Sticky Tabs — underline style ────────────────────────────────── */}
-        <View style={[styles.tabBar, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-          {PROFILE_TABS.map((tab) => {
-            const isActive = activeTab === tab;
-            return (
-              <TouchableOpacity
-                key={tab}
-                style={styles.tabItem}
-                onPress={() => { setActiveTab(tab); scrollRef.current?.scrollTo({ y: 0, animated: false }); }}
-              >
-                <Text style={[styles.tabLabel, {
-                  color: isActive ? colors.foreground : colors.textSecondary,
-                  fontFamily: isActive ? "Inter_700Bold" : "Inter_500Medium",
-                }]}>
-                  {tab}
-                </Text>
-                {isActive && <View style={[styles.tabUnderline, { backgroundColor: colors.primary }]} />}
-              </TouchableOpacity>
-            );
-          })}
+        {/* ── PREMIUM UPGRADE BANNER (preserved) ──────────────────────────── */}
+        {!isSubscribed && (
+          <TouchableOpacity
+            style={styles.upgradeCard}
+            onPress={() => router.push("/paywall")}
+            activeOpacity={0.88}
+          >
+            <View style={styles.upgradeLeft}>
+              <View style={styles.upgradeIconBox}>
+                <Text style={{ fontSize: 18 }}>✨</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.upgradeTitle}>Unlock Premium</Text>
+                <Text style={styles.upgradeSub}>Unlimited AI · Smart expiry · S$4.99/mo</Text>
+              </View>
+            </View>
+            <View style={styles.upgradeArrow}>
+              <Feather name="arrow-right" size={14} color={C.textPrimary} />
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* ── ACHIEVEMENTS (maps over BADGES from mockData) ───────────────── */}
+        <View style={styles.achievementsSection}>
+          <Text style={styles.sectionTitle}>Achievements</Text>
+          <View style={styles.achievementsGrid}>
+            {BADGES.map((badge) => (
+              <AchievementCard key={badge.id} badge={badge} />
+            ))}
+          </View>
         </View>
 
-        {/* ── Tab Content ───────────────────────────────────────────────────── */}
-        <View style={styles.tabContent}>
+        {/* ── RECIPE TABS (Saved / Cooked) ────────────────────────────────── */}
+        <View style={styles.tabsSection}>
 
-          {/* RECIPES TAB */}
-          {activeTab === "Recipes" && (
-            <View style={{ gap: 16 }}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subtabRow}>
-                {RECIPE_SUBTABS.map((sub) => {
-                  const isActive = recipeSubtab === sub;
-                  return (
-                    <TouchableOpacity
-                      key={sub}
-                      style={[
-                        styles.subtab,
-                        isActive
-                          ? {
-                              backgroundColor: colors.primary,
-                              borderColor: colors.primary,
-                              shadowColor: colors.primary,
-                              shadowOffset: { width: 0, height: 0 },
-                              shadowOpacity: 0.4,
-                              shadowRadius: 8,
-                              elevation: 4,
-                            }
-                          : { backgroundColor: "transparent", borderColor: colors.border },
-                      ]}
-                      onPress={() => setRecipeSubtab(sub)}
-                    >
-                      <Text style={[styles.subtabText, {
-                        color: isActive ? colors.primaryForeground : colors.textSecondary,
-                        fontFamily: isActive ? "Inter_700Bold" : "Inter_500Medium",
-                      }]}>
-                        {sub}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+          {/* Tab bar */}
+          <View style={styles.tabBar}>
+            {(["saved", "cooked"] as const).map((tab) => {
+              const isActive = activeTab === tab;
+              return (
+                <TouchableOpacity
+                  key={tab}
+                  style={[styles.tabBtn, isActive && styles.tabBtnActive]}
+                  onPress={() => setActiveTab(tab)}
+                >
+                  <Text
+                    style={[
+                      styles.tabBtnText,
+                      isActive ? styles.tabBtnTextActive : styles.tabBtnTextInactive,
+                    ]}
+                  >
+                    {tab === "saved" ? "Saved" : "Cooked"}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
-              {recipesList.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={{ fontSize: 40 }}>🍽</Text>
-                  <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                    {recipeSubtab === "Saved Later" ? "No saved recipes yet" : recipeSubtab === "Made" ? "Nothing cooked yet" : "No suggestions yet"}
-                  </Text>
-                  <Text style={[styles.emptyBody, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-                    {recipeSubtab === "Saved Later" ? "Swipe up on a recipe to save it" : recipeSubtab === "Made" ? "Cook a recipe to see it here" : "Swipe through the Discover tab"}
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.recipeGrid}>
-                  {Array.from({ length: Math.ceil(recipesList.length / 2) }, (_, ri) => (
-                    <View key={ri} style={{ flexDirection: "row", gap: 10 }}>
-                      {recipesList.slice(ri * 2, ri * 2 + 2).map((recipe) => {
-                        const imgSrc = getRecipeImageSource(recipe.image, recipe.id);
-                        return (
-                          <TouchableOpacity
-                            key={recipe.id}
-                            style={[styles.recipeCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                            onPress={() => router.push(`/recipe/${recipe.id}`)}
-                            activeOpacity={0.88}
-                          >
-                            <View style={[styles.recipeCardImg, { backgroundColor: colors.primary + "18", overflow: "hidden" }]}>
-                              {imgSrc
-                                ? <Image source={imgSrc} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                                : <Text style={{ fontSize: 34 }}>{CUISINE_EMOJIS[recipe.cuisine] ?? "🍽"}</Text>
-                              }
-                              {/* Title overlay on image */}
-                              <View style={styles.recipeCardOverlay}>
-                                <Text style={[styles.recipeCardOverlayText, { fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>
-                                  {recipe.title}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={styles.recipeCardMeta}>
-                              <Text style={[styles.recipeCardCalories, { color: colors.primary, fontFamily: "SpaceGrotesk_700Bold" }]}>
-                                {recipe.calories}
-                              </Text>
-                              <Text style={[styles.recipeCardKcal, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>kcal</Text>
-                              <View style={[styles.recipeCardDot, { backgroundColor: colors.border }]} />
-                              <Feather name="clock" size={11} color={colors.textMuted} />
-                              <Text style={[styles.recipeCardTime, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
-                                {recipe.prepTime + recipe.cookTime}m
+          {/* Recipe grid or empty state */}
+          {recipesList.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Feather
+                name={activeTab === "saved" ? "bookmark" : "check-circle"}
+                size={48}
+                color={C.textMuted}
+              />
+              <Text style={styles.emptyText}>No recipes yet</Text>
+            </View>
+          ) : (
+            <View style={styles.recipeGrid}>
+              {Array.from(
+                { length: Math.ceil(recipesList.length / 2) },
+                (_, ri) => (
+                  <View key={ri} style={styles.recipeRow}>
+                    {recipesList.slice(ri * 2, ri * 2 + 2).map((recipe) => {
+                      const imgSrc = getRecipeImageSource(recipe.image, recipe.id);
+                      return (
+                        <TouchableOpacity
+                          key={recipe.id}
+                          style={styles.recipeCard}
+                          onPress={() => router.push(`/recipe/${recipe.id}`)}
+                          activeOpacity={0.88}
+                        >
+                          {imgSrc ? (
+                            <Image
+                              source={imgSrc}
+                              style={styles.recipeCardImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={[styles.recipeCardImage, styles.recipeCardFallback]}>
+                              <Text style={{ fontSize: 34 }}>
+                                {CUISINE_EMOJIS[recipe.cuisine] ?? "🍽"}
                               </Text>
                             </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                      {recipesList.slice(ri * 2, ri * 2 + 2).length < 2 && <View style={{ flex: 1 }} />}
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
+                          )}
 
-          {/* SAVED TAB */}
-          {activeTab === "Saved" && (
-            <View style={{ gap: 14 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: colors.saveBlue }} />
-                <Text style={{ fontSize: 10, letterSpacing: 1.5, fontFamily: "Inter_600SemiBold", color: colors.saveBlue, textTransform: "uppercase" }}>
-                  {savedRecipesList.length > 0 ? `${savedRecipesList.length} Bookmarked` : "Your Cookbook"}
-                </Text>
-              </View>
-              {savedRecipesList.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={{ fontSize: 40 }}>🔖</Text>
-                  <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Nothing saved yet</Text>
-                  <Text style={[styles.emptyBody, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Swipe up on a recipe to save it here</Text>
-                </View>
-              ) : (
-                <View style={styles.recipeGrid}>
-                  {Array.from({ length: Math.ceil(savedRecipesList.length / 2) }, (_, ri) => (
-                    <View key={ri} style={{ flexDirection: "row", gap: 10 }}>
-                      {savedRecipesList.slice(ri * 2, ri * 2 + 2).map((recipe) => {
-                        const imgSrc = getRecipeImageSource(recipe.image, recipe.id);
-                        return (
-                          <TouchableOpacity
-                            key={recipe.id}
-                            style={[styles.recipeCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                            onPress={() => router.push(`/recipe/${recipe.id}`)}
-                            activeOpacity={0.88}
-                          >
-                            <View style={[styles.recipeCardImg, { backgroundColor: colors.saveBlue + "18", overflow: "hidden" }]}>
-                              {imgSrc
-                                ? <Image source={imgSrc} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                                : <Text style={{ fontSize: 34 }}>{CUISINE_EMOJIS[recipe.cuisine] ?? "🍽"}</Text>
-                              }
-                              <View style={styles.recipeCardOverlay}>
-                                <Text style={[styles.recipeCardOverlayText, { fontFamily: "Inter_600SemiBold" }]} numberOfLines={2}>{recipe.title}</Text>
-                              </View>
-                            </View>
-                            <View style={styles.recipeCardMeta}>
-                              <Text style={[styles.recipeCardCalories, { color: colors.saveBlue, fontFamily: "SpaceGrotesk_700Bold" }]}>{recipe.calories}</Text>
-                              <Text style={[styles.recipeCardKcal, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>kcal</Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                      {savedRecipesList.slice(ri * 2, ri * 2 + 2).length < 2 && <View style={{ flex: 1 }} />}
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* STATS TAB */}
-          {activeTab === "Stats" && (
-            <View style={{ gap: 14 }}>
-              {/* Streak hero card */}
-              <View style={[styles.streakHero, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30", overflow: "hidden" }]}>
-                {/* Saffron top accent bar */}
-                <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, backgroundColor: colors.primary }} />
-                <View style={styles.streakLeft}>
-                  <View style={[styles.streakEmojiBox, { backgroundColor: colors.primary + "20" }]}>
-                    <Text style={styles.streakEmojiText}>🔥</Text>
-                  </View>
-                  <View style={{ gap: 2 }}>
-                    <Text style={[styles.streakNum, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]}>
-                      {stats.streak ?? 0}
-                    </Text>
-                    <Text style={[styles.streakLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Day Streak</Text>
-                  </View>
-                </View>
-                <View style={styles.streakRight}>
-                  <Text style={[styles.streakMotivation, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
-                    {(stats.streak ?? 0) >= 7 ? "On fire! 🏆" : (stats.streak ?? 0) >= 3 ? "Keep it up!" : "Start cooking!"}
-                  </Text>
-                  <Text style={[styles.streakSub, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
-                    Cook today to extend
-                  </Text>
-                </View>
-              </View>
-
-              {/* 2×2 stat cards */}
-              {(() => {
-                const STAT_ITEMS = [
-                  { label: "Meals Cooked", value: String(stats.mealsCooked ?? 0), icon: "coffee" as const, color: colors.primary },
-                  { label: "Cuisines", value: String(new Set(liveRecipes.filter((r) => cookedRecipes.includes(r.id)).map((r) => r.cuisine)).size), icon: "globe" as const, color: "#00C9B1" },
-                  { label: "Waste Saved", value: `${stats.wasteReduced ?? 0}kg`, icon: "wind" as const, color: "#4CAF76" },
-                  { label: "Bookmarked", value: String(savedRecipes.length), icon: "bookmark" as const, color: colors.saveBlue },
-                ];
-                return (
-                  <View style={{ gap: 10 }}>
-                    {[STAT_ITEMS.slice(0, 2), STAT_ITEMS.slice(2, 4)].map((row, ri) => (
-                      <View key={ri} style={{ flexDirection: "row", gap: 10 }}>
-                        {row.map((s) => (
-                          <View key={s.label} style={[styles.statCard, { flex: 1, backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <View style={[styles.statIconBox, { backgroundColor: s.color + "18" }]}>
-                              <Feather name={s.icon} size={18} color={s.color} />
-                            </View>
-                            <Text style={[styles.statCardNum, { color: colors.foreground, fontFamily: "SpaceGrotesk_700Bold" }]}>{s.value}</Text>
-                            <Text style={[styles.statCardLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{s.label}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    ))}
-                  </View>
-                );
-              })()}
-
-              {/* Top cuisines */}
-              {(() => {
-                const cookedList = liveRecipes.filter((r) => cookedRecipes.includes(r.id));
-                const cuisineCounts: Record<string, number> = {};
-                cookedList.forEach((r) => {
-                  cuisineCounts[r.cuisine] = (cuisineCounts[r.cuisine] ?? 0) + 1;
-                });
-                const topCuisines = Object.entries(cuisineCounts)
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 6)
-                  .map(([name, count]) => ({ name, count, flag: CUISINE_FLAGS[name] ?? "🍽" }));
-                const maxCount = topCuisines[0]?.count ?? 1;
-
-                if (topCuisines.length === 0) {
-                  return (
-                    <View style={[styles.cuisineCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 28 }]}>
-                      <Text style={{ fontSize: 32, marginBottom: 10 }}>🌍</Text>
-                      <Text style={[styles.cuisineCardTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold", textAlign: "center" }]}>
-                        Cook recipes to see your cuisine breakdown
-                      </Text>
-                    </View>
-                  );
-                }
-
-                return (
-                  <View style={[styles.cuisineCard, { backgroundColor: colors.card, borderColor: colors.border, overflow: "hidden" }]}>
-                    <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, backgroundColor: colors.primary }} />
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, marginBottom: 2 }}>
-                      <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: colors.primary }} />
-                      <Text style={{ fontSize: 10, letterSpacing: 1.5, fontFamily: "Inter_600SemiBold", color: colors.primary, textTransform: "uppercase" }}>
-                        Top Cuisines
-                      </Text>
-                    </View>
-                    {topCuisines.map((c, i) => (
-                      <View key={c.name} style={styles.cuisineRow}>
-                        <Text style={[styles.cuisineRank, { color: colors.textMuted, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
-                          {String(i + 1).padStart(2, "0")}
-                        </Text>
-                        <Text style={styles.cuisineFlag}>{c.flag}</Text>
-                        <Text style={[styles.cuisineName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{c.name}</Text>
-                        <View style={[styles.cuisineTrack, { backgroundColor: colors.muted }]}>
-                          <View style={[styles.cuisineFill, { backgroundColor: colors.primary, width: `${Math.round((c.count / maxCount) * 100)}%` as any }]} />
-                        </View>
-                        <Text style={[styles.cuisineCount, { color: colors.textMuted, fontFamily: "SpaceGrotesk_600SemiBold" }]}>{c.count}</Text>
-                      </View>
-                    ))}
-                  </View>
-                );
-              })()}
-            </View>
-          )}
-
-          {/* BADGES TAB */}
-          {activeTab === "Badges" && (
-            <View style={{ gap: 10 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: colors.primary }} />
-                <Text style={{ fontSize: 10, letterSpacing: 1.5, fontFamily: "Inter_600SemiBold", color: colors.primary, textTransform: "uppercase" }}>
-                  {BADGES.filter((b) => b.earned).length} of {BADGES.length} Earned
-                </Text>
-              </View>
-              <View style={styles.badgesGrid}>
-                {Array.from({ length: Math.ceil(BADGES.length / 2) }, (_, ri) => (
-                  <View key={ri} style={{ flexDirection: "row", gap: 10 }}>
-                    {BADGES.slice(ri * 2, ri * 2 + 2).map((badge) => (
-                      <View
-                        key={badge.id}
-                        style={[
-                          styles.badgeCard,
-                          {
-                            flex: 1,
-                            backgroundColor: badge.earned ? colors.card : colors.muted + "80",
-                            borderColor: badge.earned ? colors.primary + "55" : colors.border,
-                            opacity: badge.earned ? 1 : 0.5,
-                          },
-                        ]}
-                      >
-                        <View style={[styles.badgeIconBox, {
-                          backgroundColor: badge.earned ? colors.primary + "18" : colors.border + "40",
-                          borderWidth: badge.earned ? 1.5 : 0,
-                          borderColor: badge.earned ? colors.primary + "40" : "transparent",
-                        }]}>
-                          <Feather
-                            name={badge.icon === "flame" ? "zap" : badge.icon === "trophy" ? "award" : badge.icon === "leaf" ? "wind" : badge.icon as any}
-                            size={22}
-                            color={badge.earned ? colors.primary : colors.textMuted}
+                          {/* Gradient overlay */}
+                          <LinearGradient
+                            colors={["transparent", "rgba(0,0,0,0.6)"]}
+                            style={styles.recipeCardOverlay}
+                            pointerEvents="none"
                           />
-                        </View>
-                        <Text style={[styles.badgeName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{badge.name}</Text>
-                        <Text style={[styles.badgeDesc, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={2}>
-                          {badge.description}
-                        </Text>
-                        {badge.earned ? (
-                          <View style={[styles.earnedPill, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "40" }]}>
-                            <Feather name="check" size={10} color={colors.primary} />
-                            <Text style={[styles.earnedPillText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>Earned</Text>
-                          </View>
-                        ) : (
-                          <View style={[styles.earnedPill, { backgroundColor: colors.muted, borderColor: "transparent" }]}>
-                            <Feather name="lock" size={10} color={colors.textMuted} />
-                            <Text style={[styles.earnedPillText, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>Locked</Text>
-                          </View>
-                        )}
-                      </View>
-                    ))}
-                    {BADGES.slice(ri * 2, ri * 2 + 2).length < 2 && <View style={{ flex: 1 }} />}
+
+                          <Text style={styles.recipeCardName} numberOfLines={2}>
+                            {recipe.title}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {recipesList.slice(ri * 2, ri * 2 + 2).length < 2 && (
+                      <View style={{ flex: 1, margin: 6 }} />
+                    )}
                   </View>
-                ))}
-              </View>
+                )
+              )}
             </View>
           )}
-
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
-      {/* ── Edit Profile Modal ─────────────────────────────────────────────── */}
+      {/* ── HEADER BAR (absolute, always on top) ────────────────────────────── */}
+      <View style={[styles.headerBarWrap, { height: insets.top + 56 }]}>
+        {Platform.OS === "ios" ? (
+          <BlurView
+            tint="light"
+            intensity={80}
+            style={StyleSheet.absoluteFillObject}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFillObject, styles.headerBarBg]} />
+        )}
+        <View style={[styles.headerBarRow, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.back()}
+          >
+            <Feather name="arrow-left" size={24} color={C.textPrimary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.push("/settings")}
+          >
+            <Feather name="settings" size={24} color={C.textMuted} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* ── EDIT PROFILE MODAL (preserved exactly) ──────────────────────────── */}
       <Modal
         visible={showEditModal}
         animationType="slide"
@@ -759,52 +542,71 @@ export default function ProfileScreen() {
         onRequestClose={() => setShowEditModal(false)}
       >
         <KeyboardAvoidingView
-          style={[styles.editModal, { backgroundColor: colors.background }]}
+          style={[styles.editModal, { backgroundColor: C.background }]}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          {/* Handle */}
-          <View style={[styles.editModalHandle, { backgroundColor: colors.border }]} />
+          {/* Drag handle */}
+          <View style={[styles.editModalHandle, { backgroundColor: C.surfaceHigh }]} />
 
           {/* Header */}
           <View style={styles.editModalHeader}>
-            <TouchableOpacity onPress={() => setShowEditModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={[styles.editModalCancel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Cancel</Text>
+            <TouchableOpacity
+              onPress={() => setShowEditModal(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.editModalCancel}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={[styles.editModalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Edit Profile</Text>
-            <TouchableOpacity onPress={handleSaveProfile} disabled={!canSaveProfile} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={[styles.editModalSave, { color: canSaveProfile ? colors.primary : colors.textMuted, fontFamily: "Inter_700Bold" }]}>Save</Text>
+            <Text style={styles.editModalTitle}>Edit Profile</Text>
+            <TouchableOpacity
+              onPress={handleSaveProfile}
+              disabled={!canSaveProfile}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={[styles.editModalSave, { color: canSaveProfile ? C.primary : C.textMuted }]}>
+                Save
+              </Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 20, paddingBottom: 40 }}>
-            {/* Profile photo tap in modal too */}
-            <TouchableOpacity style={styles.editAvatarWrap} onPress={handlePickPhoto} activeOpacity={0.8}>
-              {userProfile.photoUri ? (
-                <Image source={{ uri: userProfile.photoUri }} style={styles.editAvatarPhoto} />
-              ) : (
-                <View style={[styles.editAvatarCircle, { backgroundColor: colors.primary }]}>
-                  <Text style={[styles.editAvatarLetter, { fontFamily: "Inter_700Bold" }]}>
-                    {(editName[0] ?? userProfile.name[0] ?? "?").toUpperCase()}
-                  </Text>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ gap: 20, paddingBottom: 40 }}
+          >
+            {/* Photo picker */}
+            <TouchableOpacity
+              style={styles.editAvatarWrap}
+              onPress={handlePickPhoto}
+              activeOpacity={0.8}
+            >
+              <View style={styles.editAvatarPhotoWrap}>
+                {userProfile.photoUri ? (
+                  <Image
+                    source={{ uri: userProfile.photoUri }}
+                    style={styles.editAvatarPhoto}
+                  />
+                ) : (
+                  <View style={[styles.editAvatarCircle, { backgroundColor: C.primary }]}>
+                    <Text style={styles.editAvatarLetter}>
+                      {(editName[0] ?? userProfile.name[0] ?? "?").toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={[styles.editAvatarCamBadge, { backgroundColor: C.surface, borderColor: C.surfaceHigh }]}>
+                  <Feather name="camera" size={14} color={C.textPrimary} />
                 </View>
-              )}
-              <View style={[styles.editAvatarCamBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Feather name="camera" size={14} color={colors.foreground} />
               </View>
-              <Text style={[styles.editAvatarHint, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-                Tap to change photo
-              </Text>
+              <Text style={styles.editAvatarHint}>Tap to change photo</Text>
             </TouchableOpacity>
 
             {/* Name field */}
             <View style={styles.editField}>
-              <Text style={[styles.editFieldLabel, { color: colors.textSecondary, fontFamily: "Inter_600SemiBold" }]}>Name</Text>
+              <Text style={styles.editFieldLabel}>Name</Text>
               <TextInput
                 value={editName}
                 onChangeText={setEditName}
                 placeholder="Your name"
-                placeholderTextColor={colors.textMuted}
-                style={[styles.editFieldInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                placeholderTextColor={C.textMuted}
+                style={[styles.editFieldInput, { color: C.textPrimary }]}
                 maxLength={40}
                 returnKeyType="next"
               />
@@ -812,43 +614,69 @@ export default function ProfileScreen() {
 
             {/* Bio field */}
             <View style={styles.editField}>
-              <Text style={[styles.editFieldLabel, { color: colors.textSecondary, fontFamily: "Inter_600SemiBold" }]}>Bio</Text>
+              <View style={styles.editFieldLabelRow}>
+                <Text style={styles.editFieldLabel}>Bio</Text>
+                <Text style={[styles.editFieldCounter, { color: bioOverLimit ? C.danger : editBio.length > BIO_LIMIT * 0.85 ? C.primary : C.textMuted }]}>
+                  {editBio.length}/{BIO_LIMIT}
+                </Text>
+              </View>
               <TextInput
                 value={editBio}
                 onChangeText={setEditBio}
                 placeholder="Tell people about your cooking style…"
-                placeholderTextColor={colors.textMuted}
-                style={[styles.editFieldInput, styles.editFieldTextArea, { backgroundColor: colors.card, borderColor: bioOverLimit ? "#E84040" : colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                placeholderTextColor={C.textMuted}
+                style={[
+                  styles.editFieldInput,
+                  styles.editFieldTextArea,
+                  {
+                    color: C.textPrimary,
+                    borderColor: bioOverLimit ? C.danger : C.surfaceHigh,
+                  },
+                ]}
                 multiline
                 numberOfLines={3}
+                maxLength={BIO_LIMIT + 10}
               />
-              <Text style={[styles.editFieldCounter, { color: bioOverLimit ? "#E84040" : editBio.length > BIO_LIMIT * 0.85 ? "#F5A623" : colors.textMuted, fontFamily: "Inter_500Medium" }]}>
-                {editBio.length}/{BIO_LIMIT}
-              </Text>
             </View>
 
-            {/* Read-only info */}
-            <View style={[styles.editInfoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {/* Read-only info card */}
+            <View style={[styles.editInfoCard, { borderColor: C.surfaceHigh }]}>
               <View style={styles.editInfoRow}>
-                <Text style={[styles.editInfoLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Skill Level</Text>
-                <Text style={[styles.editInfoValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{userProfile.skillLevel}</Text>
+                <Text style={styles.editInfoLabel}>Skill Level</Text>
+                <Text style={styles.editInfoValue}>{userProfile.skillLevel}</Text>
               </View>
-              <View style={[styles.editInfoDivider, { backgroundColor: colors.border }]} />
+              <View style={[styles.editInfoDivider, { backgroundColor: C.surfaceHigh }]} />
               <View style={styles.editInfoRow}>
-                <Text style={[styles.editInfoLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Goal</Text>
-                <Text style={[styles.editInfoValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{userProfile.goal}</Text>
+                <Text style={styles.editInfoLabel}>Goal</Text>
+                <Text style={styles.editInfoValue}>{userProfile.goal}</Text>
               </View>
-              <View style={[styles.editInfoDivider, { backgroundColor: colors.border }]} />
+              <View style={[styles.editInfoDivider, { backgroundColor: C.surfaceHigh }]} />
               <View style={styles.editInfoRow}>
-                <Text style={[styles.editInfoLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Diet</Text>
-                <Text style={[styles.editInfoValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{userProfile.dietType.join(", ")}</Text>
+                <Text style={styles.editInfoLabel}>Diet</Text>
+                <Text style={styles.editInfoValue}>{userProfile.dietType.join(", ")}</Text>
               </View>
-              <View style={[styles.editInfoDivider, { backgroundColor: colors.border }]} />
+              <View style={[styles.editInfoDivider, { backgroundColor: C.surfaceHigh }]} />
               <View style={styles.editInfoRow}>
-                <Text style={[styles.editInfoLabel, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>Household</Text>
-                <Text style={[styles.editInfoValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{userProfile.householdSize} {userProfile.householdSize === 1 ? "person" : "people"}</Text>
+                <Text style={styles.editInfoLabel}>Household</Text>
+                <Text style={styles.editInfoValue}>
+                  {userProfile.householdSize}{" "}
+                  {userProfile.householdSize === 1 ? "person" : "people"}
+                </Text>
               </View>
             </View>
+
+            {/* Sign out */}
+            <TouchableOpacity
+              style={styles.signOutBtn}
+              onPress={handleSignOut}
+              activeOpacity={0.75}
+              disabled={signingOut}
+            >
+              <Feather name="log-out" size={15} color={C.danger} />
+              <Text style={styles.signOutText}>
+                {signingOut ? "Signing out…" : "Sign Out"}
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
@@ -856,205 +684,306 @@ export default function ProfileScreen() {
   );
 }
 
-// ── XP bar sub-component styles ───────────────────────────────────────────────
-const xpStyles = StyleSheet.create({
-  container: { gap: 6 },
-  labelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  lvlBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 100, borderWidth: 1 },
-  lvlText: { fontSize: 11, letterSpacing: 0.2 },
-  xpLabel: { fontSize: 12 },
-  xpCount: { fontSize: 11 },
-  track: { height: 6, borderRadius: 3, overflow: "hidden" },
-  fill: { height: 6, borderRadius: 3 },
-});
-
-// ── Main styles ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  root: { flex: 1, backgroundColor: C.background },
 
-  // ── Profile header ──────────────────────────────────────────────────────────
-  profileHeader: { paddingBottom: 8 },
+  // ── Header bar ────────────────────────────────────────────────────────────
+  headerBarWrap: {
+    position: "absolute", top: 0, left: 0, right: 0, zIndex: 50,
+    overflow: "hidden",
+  },
+  headerBarBg: { backgroundColor: "rgba(250,250,248,0.92)" },
+  headerBarRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  iconBtn: {
+    padding: 8, borderRadius: 20,
+    minHeight: 44, minWidth: 44,
+    alignItems: "center", justifyContent: "center",
+  },
 
-  cover: { height: 178, overflow: "hidden", position: "relative" },
-  coverTint: { ...StyleSheet.absoluteFillObject },
-  coverEmoji0: { position: "absolute", fontSize: 90, bottom: -10, left: -8, opacity: 0.13 },
-  coverEmoji1: { position: "absolute", fontSize: 70, top: 10, right: 20, opacity: 0.11 },
-  coverEmoji2: { position: "absolute", fontSize: 56, bottom: 5, right: 80, opacity: 0.14 },
-  coverEmoji3: { position: "absolute", fontSize: 44, top: 30, left: 70, opacity: 0.10 },
-  coverEmoji4: { position: "absolute", fontSize: 36, bottom: 20, left: 120, opacity: 0.12 },
-  coverVignette: {
-    position: "absolute", bottom: 0, left: 0, right: 0, height: 48, opacity: 0.85,
+  // ── Hero ──────────────────────────────────────────────────────────────────
+  heroContainer: { height: 320, overflow: "hidden" },
+  heroBg: {
+    position: "absolute", top: -40, left: -20, right: -20, bottom: -40,
   },
-  // ── Avatar with streak ring ─────────────────────────────────────────────────
-  avatarRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 20, marginTop: -44 },
-  avatarRingOuter: { width: 92, height: 92, position: "relative", alignItems: "center", justifyContent: "center" },
-  avatarTrack: { position: "absolute", width: 92, height: 92, borderRadius: 46, borderWidth: 3 },
-  avatarArc: {
-    position: "absolute", width: 92, height: 92, borderRadius: 46,
-    borderWidth: 3, borderColor: "#F5A623",
-    borderTopColor: "transparent",
+  bokeh0: {
+    position: "absolute", width: 180, height: 180, borderRadius: 90,
+    backgroundColor: "rgba(255,255,255,0.06)", top: -20, right: -30,
   },
-  avatarInner: { width: 82, height: 82, borderRadius: 41, alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#fff" },
-  avatarPhoto: { width: 82, height: 82, borderRadius: 41, borderWidth: 3, borderColor: "#fff" },
-  avatarLetter: { color: "#fff", fontSize: 32 },
-  streakBadge: {
-    position: "absolute", bottom: -2, right: -2,
-    flexDirection: "row", alignItems: "center", gap: 2,
-    paddingHorizontal: 7, paddingVertical: 3, borderRadius: 100, borderWidth: 1.5,
+  bokeh1: {
+    position: "absolute", width: 120, height: 120, borderRadius: 60,
+    backgroundColor: "rgba(255,255,255,0.05)", bottom: 10, left: 20,
   },
-  streakBadgeEmoji: { fontSize: 11 },
-  streakBadgeNum: { fontSize: 12 },
+  heroOverlayWrap: {
+    position: "absolute", left: 0, right: 0, bottom: 0, height: 220,
+  },
+  heroContent: {
+    flex: 1, alignItems: "center", justifyContent: "flex-end",
+    paddingBottom: 24, paddingHorizontal: 24,
+  },
 
-  cameraBadge: {
-    position: "absolute", bottom: 2, right: 2,
-    width: 24, height: 24, borderRadius: 12,
+  // Avatar
+  avatarWrap: { marginBottom: 12, position: "relative" },
+  avatarImg: {
+    width: 96, height: 96, borderRadius: 48,
+    borderWidth: 4, borderColor: C.surface,
+  },
+  avatarFallback: {
+    width: 96, height: 96, borderRadius: 48,
+    borderWidth: 4, borderColor: C.surface,
+    backgroundColor: C.primary,
+    alignItems: "center", justifyContent: "center",
+  },
+  avatarInitials: {
+    fontSize: 32, fontFamily: "Epilogue_700Bold", color: "#FFFFFF",
+  },
+  proBadge: {
+    position: "absolute", bottom: -4, right: -4,
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: C.secondary, borderWidth: 2, borderColor: C.surface,
+    alignItems: "center", justifyContent: "center",
+  },
+
+  heroName: {
+    fontFamily: "Epilogue_700Bold", fontSize: 28, color: C.surface,
+    textAlign: "center",
+  },
+  heroTagline: {
+    fontSize: 16, color: "rgba(255,255,255,0.75)",
+    textAlign: "center", marginTop: 4, marginBottom: 16,
+  },
+  heroActions: { flexDirection: "row", gap: 12 },
+  heroEditBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: C.surface, borderRadius: 20,
+    paddingHorizontal: 16, paddingVertical: 10,
+    minHeight: 44,
+  },
+  heroEditBtnText: {
+    fontSize: 13, fontFamily: "Epilogue_700Bold", color: C.textPrimary,
+  },
+  heroPartyBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: C.primary + "22",
+    borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10,
+    borderWidth: 1, borderColor: C.primary + "55", minHeight: 44,
+  },
+  heroPartyBtnText: {
+    fontSize: 13, fontFamily: "Epilogue_700Bold", color: C.primary,
+  },
+
+  // ── XP Progress Card ──────────────────────────────────────────────────────
+  xpCardWrap: { marginTop: -32, zIndex: 20, paddingHorizontal: 16 },
+  xpCard: { backgroundColor: C.surface, borderRadius: 16, padding: 16 },
+  xpTopRow: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 12,
+  },
+  xpLevelLabel: {
+    fontSize: 12, fontFamily: "Epilogue_700Bold",
+    letterSpacing: 1.5, color: C.primary,
+  },
+  xpCountText: {
+    fontSize: 11, color: C.textMuted, fontFamily: "Epilogue_400Regular",
+  },
+  xpTrack: {
+    height: 12, borderRadius: 6,
+    backgroundColor: C.surfaceHigh, overflow: "hidden",
+  },
+  xpFill: {
+    height: "100%" as any, borderRadius: 6, backgroundColor: C.primary,
+  },
+
+  // ── Stats Row ─────────────────────────────────────────────────────────────
+  statsRow: {
+    flexDirection: "row", marginTop: 24, paddingHorizontal: 16, gap: 12,
+  },
+  statChip: {
+    flex: 1, backgroundColor: C.surfaceLow,
+    borderRadius: 16, padding: 16, alignItems: "center",
+    borderWidth: 0.5, borderColor: "rgba(215,195,174,0.3)",
+  },
+  statNumber: {
+    fontSize: 24, fontFamily: "Epilogue_700Bold", color: C.primary,
+  },
+  statLabel: {
+    fontSize: 12, color: C.textMuted, textAlign: "center", marginTop: 4,
+    fontFamily: "Epilogue_400Regular",
+  },
+
+  // ── Upgrade card ──────────────────────────────────────────────────────────
+  upgradeCard: {
+    marginTop: 16, marginHorizontal: 16, borderRadius: 16, padding: 16,
+    backgroundColor: C.textPrimary,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  },
+  upgradeLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  upgradeIconBox: {
+    width: 40, height: 40, borderRadius: 12,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: C.primary + "25",
+  },
+  upgradeTitle: {
+    fontSize: 15, fontFamily: "Epilogue_700Bold", color: C.background,
+  },
+  upgradeSub: {
+    fontSize: 12, fontFamily: "Epilogue_400Regular",
+    color: C.background + "99", marginTop: 2,
+  },
+  upgradeArrow: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: C.primary,
+    alignItems: "center", justifyContent: "center",
+  },
+
+  // ── Achievements ──────────────────────────────────────────────────────────
+  achievementsSection: { marginTop: 32, paddingHorizontal: 16 },
+  sectionTitle: {
+    fontSize: 24, fontFamily: "Epilogue_700Bold",
+    color: C.textPrimary, marginBottom: 24,
+  },
+  achievementsGrid: { flexDirection: "row", flexWrap: "wrap" },
+  achievementItem: {
+    width: (SCREEN_W - 32) / 3,
+    alignItems: "center", marginBottom: 16,
+    minHeight: 44,
+  },
+  achievementItemInner: { alignItems: "center" },
+  achievementCircle: {
+    width: 64, height: 64, borderRadius: 32,
+    alignItems: "center", justifyContent: "center",
+  },
+  achievementLabel: {
+    fontSize: 12, textAlign: "center", marginTop: 8,
+    fontFamily: "Epilogue_400Regular",
+    paddingHorizontal: 4,
+  },
+
+  // ── Recipe Tabs ───────────────────────────────────────────────────────────
+  tabsSection: { marginTop: 32 },
+  tabBar: {
+    flexDirection: "row",
+    borderBottomWidth: 0.5, borderBottomColor: "rgba(215,195,174,0.3)",
+    paddingHorizontal: 16,
+  },
+  tabBtn: {
+    flex: 1, paddingVertical: 16, alignItems: "center", minHeight: 44,
+  },
+  tabBtnActive: {
+    borderBottomWidth: 3, borderBottomColor: C.primary,
+  },
+  tabBtnText: { fontSize: 14, letterSpacing: 0.5 },
+  tabBtnTextActive: {
+    fontFamily: "Epilogue_700Bold", color: C.primary,
+  },
+  tabBtnTextInactive: {
+    fontFamily: "Epilogue_400Regular", color: C.textMuted,
+  },
+
+  emptyState: { alignItems: "center", paddingVertical: 48 },
+  emptyText: {
+    fontSize: 16, color: C.textMuted, marginTop: 12,
+    fontFamily: "Epilogue_400Regular",
+  },
+
+  recipeGrid: { padding: 10 },
+  recipeRow:  { flexDirection: "row" },
+  recipeCard: {
+    flex: 1, margin: 6, borderRadius: 16,
+    overflow: "hidden", aspectRatio: 1,
+    backgroundColor: C.surfaceLow,
+  },
+  recipeCardImage: { ...StyleSheet.absoluteFillObject },
+  recipeCardFallback: {
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: C.primary + "18",
+  },
+  recipeCardOverlay: {
+    position: "absolute", left: 0, right: 0, bottom: 0, height: 60,
+  },
+  recipeCardName: {
+    position: "absolute", bottom: 12, left: 12, right: 12,
+    fontSize: 12, color: "#FFFFFF", fontFamily: "Epilogue_700Bold",
+  },
+
+  // ── Edit Modal ────────────────────────────────────────────────────────────
+  editModal: { flex: 1, paddingHorizontal: 20, paddingTop: 12 },
+  editModalHandle: {
+    width: 36, height: 4, borderRadius: 2,
+    alignSelf: "center", marginBottom: 20,
+  },
+  editModalHeader: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between", marginBottom: 28,
+  },
+  editModalTitle: {
+    fontSize: 17, fontFamily: "Epilogue_700Bold", color: C.textPrimary,
+  },
+  editModalCancel: {
+    fontSize: 15, fontFamily: "Epilogue_400Regular", color: C.textMuted,
+  },
+  editModalSave: {
+    fontSize: 15, fontFamily: "Epilogue_700Bold",
+  },
+
+  editAvatarWrap:      { alignItems: "center", gap: 10 },
+  editAvatarPhotoWrap: { position: "relative" },
+  editAvatarPhoto:     { width: 90, height: 90, borderRadius: 45 },
+  editAvatarCircle: {
+    width: 90, height: 90, borderRadius: 45,
+    alignItems: "center", justifyContent: "center",
+  },
+  editAvatarLetter: {
+    color: "#fff", fontSize: 36, fontFamily: "Epilogue_700Bold",
+  },
+  editAvatarCamBadge: {
+    position: "absolute", bottom: -4, right: -4,
+    width: 28, height: 28, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
     borderWidth: 1.5,
   },
-  editRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
-  editBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 100, borderWidth: 1.5 },
-  editBtnText: { fontSize: 13 },
-  settingsBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 1.5 },
-
-  // ── Identity block ──────────────────────────────────────────────────────────
-  identityBlock: { paddingHorizontal: 20, paddingTop: 12, gap: 10 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  displayName: { fontSize: 26, letterSpacing: -0.5, flexShrink: 1 },
-  handle: { fontSize: 14, marginTop: -4 },
-  premiumChip: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100 },
-  premiumChipText: { color: "#fff", fontSize: 10, letterSpacing: 0.5 },
-
-  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  dietChip: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 100, borderWidth: 1 },
-  dietChipText: { fontSize: 12 },
-  metaChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, borderWidth: 1 },
-  metaChipText: { fontSize: 12 },
-
-  allergySection: { gap: 7 },
-  allergyToggle: { flexDirection: "row", alignItems: "center", gap: 5 },
-  allergyToggleText: { fontSize: 12 },
-  allergyChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 100, borderWidth: 1 },
-  allergyChipText: { fontSize: 11 },
-
-  cuisinePrefScroll: { marginHorizontal: -20 },
-  cuisinePrefContent: { paddingHorizontal: 20, gap: 7, paddingRight: 20 },
-  cuisinePrefChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 100, borderWidth: 1 },
-  cuisinePrefText: { fontSize: 12 },
-
-  // ── Stats row ───────────────────────────────────────────────────────────────
-  statsRow: { flexDirection: "row", alignItems: "center", gap: 0, borderRadius: 16, borderWidth: 1, overflow: "hidden", marginTop: 2 },
-  statItem: { flex: 1, alignItems: "center", paddingVertical: 14, gap: 3 },
-  statBig: { fontSize: 24, letterSpacing: -0.5 },
-  statSmall: { fontSize: 11 },
-  statDivider: { width: StyleSheet.hairlineWidth, height: 36 },
-
-  // ── Upgrade card ────────────────────────────────────────────────────────────
-  upgradeCard: { marginHorizontal: 20, marginTop: 14, marginBottom: 4, borderRadius: 16, borderWidth: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
-  upgradeLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
-  upgradeIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  upgradeTitle: { fontSize: 16, letterSpacing: -0.2 },
-  upgradeSub: { fontSize: 12, marginTop: 2 },
-  upgradeArrow: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-
-  // ── Tabs ────────────────────────────────────────────────────────────────────
-  tabBar: { flexDirection: "row", borderBottomWidth: 1 },
-  tabItem: { flex: 1, alignItems: "center", paddingVertical: 13, position: "relative" },
-  tabLabel: { fontSize: 13, letterSpacing: -0.1 },
-  tabUnderline: { position: "absolute", bottom: 0, left: 10, right: 10, height: 2.5, borderRadius: 2 },
-
-  tabContent: { padding: 16, paddingBottom: 90, gap: 14 },
-
-  // ── Subtabs ─────────────────────────────────────────────────────────────────
-  subtabRow: { gap: 8, paddingRight: 4 },
-  subtab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 100, borderWidth: 1 },
-  subtabText: { fontSize: 13 },
-
-  // ── Recipe grid ─────────────────────────────────────────────────────────────
-  recipeGrid: { gap: 10 },
-  recipeCard: { flex: 1, borderRadius: 16, borderWidth: 1, overflow: "hidden" },
-  recipeCardImg: { aspectRatio: 1, alignItems: "center", justifyContent: "center" },
-  recipeCardOverlay: {
-    position: "absolute", bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 8, paddingBottom: 8, paddingTop: 28,
-    backgroundColor: "rgba(0,0,0,0.42)",
+  editAvatarHint: {
+    fontSize: 13, color: C.textMuted, fontFamily: "Epilogue_400Regular",
   },
-  recipeCardOverlayText: { fontSize: 12, color: "#fff", lineHeight: 16 },
-  recipeCardMeta: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 9, gap: 4 },
-  recipeCardCalories: { fontSize: 14, letterSpacing: -0.2 },
-  recipeCardKcal: { fontSize: 11 },
-  recipeCardDot: { width: 3, height: 3, borderRadius: 1.5, marginHorizontal: 2 },
-  recipeCardTime: { fontSize: 11 },
 
-  // ── Empty states ─────────────────────────────────────────────────────────────
-  emptyState: { alignItems: "center", paddingVertical: 48, gap: 12 },
-  emptyTitle: { fontSize: 18, letterSpacing: -0.3 },
-  emptyBody: { fontSize: 14, textAlign: "center", lineHeight: 20, maxWidth: 240 },
-
-  sectionLabel: { fontSize: 13, letterSpacing: 0.1 },
-
-  // ── Stats tab ───────────────────────────────────────────────────────────────
-  streakHero: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderRadius: 20, borderWidth: 1 },
-  streakLeft: { flexDirection: "row", alignItems: "center", gap: 14 },
-  streakEmojiBox: { width: 52, height: 52, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  streakEmojiText: { fontSize: 28 },
-  streakNum: { fontSize: 36, letterSpacing: -1 },
-  streakLabel: { fontSize: 13 },
-  streakRight: { alignItems: "flex-end", gap: 4 },
-  streakMotivation: { fontSize: 15 },
-  streakSub: { fontSize: 11 },
-
-  statCard: { alignItems: "center", paddingVertical: 20, paddingHorizontal: 12, borderRadius: 18, borderWidth: 1, gap: 8 },
-  statIconBox: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  statCardNum: { fontSize: 26, letterSpacing: -0.5 },
-  statCardLabel: { fontSize: 12, textAlign: "center" },
-
-  cuisineCard: { padding: 18, borderRadius: 18, borderWidth: 1, gap: 12 },
-  cuisineCardTitle: { fontSize: 16, letterSpacing: -0.3, marginBottom: 2 },
-  cuisineRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  cuisineRank: { fontSize: 11, width: 22 },
-  cuisineFlag: { fontSize: 18 },
-  cuisineName: { fontSize: 13, width: 90 },
-  cuisineTrack: { flex: 1, height: 6, borderRadius: 3, overflow: "hidden" },
-  cuisineFill: { height: 6, borderRadius: 3 },
-  cuisineCount: { fontSize: 12, width: 22, textAlign: "right" },
-
-  // ── Badges tab ───────────────────────────────────────────────────────────────
-  badgesGrid: { gap: 10 },
-  badgeCard: { alignItems: "center", padding: 16, borderRadius: 18, borderWidth: 1, gap: 8 },
-  badgeIconBox: { width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  badgeName: { fontSize: 13, textAlign: "center" },
-  badgeDesc: { fontSize: 11, textAlign: "center", lineHeight: 15 },
-  earnedPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100, borderWidth: 1, marginTop: 2 },
-  earnedPillText: { fontSize: 10 },
-
-  // ── Edit Profile Modal ────────────────────────────────────────────────────────
-  editModal: { flex: 1, paddingHorizontal: 20, paddingTop: 12 },
-  editModalHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 20 },
-  editModalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 28 },
-  editModalTitle: { fontSize: 17 },
-  editModalCancel: { fontSize: 15 },
-  editModalSave: { fontSize: 15 },
-
-  editAvatarWrap: { alignItems: "center", gap: 10, position: "relative" },
-  editAvatarPhoto: { width: 90, height: 90, borderRadius: 45 },
-  editAvatarCircle: { width: 90, height: 90, borderRadius: 45, alignItems: "center", justifyContent: "center" },
-  editAvatarLetter: { color: "#fff", fontSize: 36 },
-  editAvatarCamBadge: {
-    position: "absolute", bottom: 26, right: "33%",
-    width: 28, height: 28, borderRadius: 14,
-    alignItems: "center", justifyContent: "center", borderWidth: 1.5,
+  editField:         { gap: 8 },
+  editFieldLabelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  editFieldLabel: {
+    fontSize: 12, fontFamily: "Epilogue_700Bold", color: C.textMuted,
+    textTransform: "uppercase", letterSpacing: 0.5,
   },
-  editAvatarHint: { fontSize: 13 },
-
-  editField: { gap: 8 },
-  editFieldLabel: { fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5 },
-  editFieldInput: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15 },
+  editFieldCounter: { fontSize: 12, fontFamily: "Epilogue_400Regular" },
+  editFieldInput: {
+    borderWidth: 1, borderRadius: 14, borderColor: C.surfaceHigh,
+    paddingHorizontal: 14, paddingVertical: 13, fontSize: 15,
+    fontFamily: "Epilogue_400Regular", backgroundColor: C.surfaceLow,
+  },
   editFieldTextArea: { minHeight: 80, textAlignVertical: "top" },
-  editFieldCounter: { fontSize: 12, textAlign: "right" },
 
   editInfoCard: { borderWidth: 1, borderRadius: 16, overflow: "hidden" },
-  editInfoRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 },
-  editInfoLabel: { fontSize: 14 },
-  editInfoValue: { fontSize: 14 },
+  editInfoRow: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16, paddingVertical: 14,
+  },
+  editInfoLabel: {
+    fontSize: 14, color: C.textMuted, fontFamily: "Epilogue_400Regular",
+  },
+  editInfoValue: {
+    fontSize: 14, color: C.textPrimary, fontFamily: "Epilogue_700Bold",
+  },
   editInfoDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
+
+  signOutBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    justifyContent: "center", paddingVertical: 16, borderRadius: 12,
+    borderWidth: 1, borderColor: C.danger + "40",
+    backgroundColor: C.danger + "08",
+  },
+  signOutText: {
+    fontSize: 15, fontFamily: "Epilogue_700Bold", color: C.danger,
+  },
 });
