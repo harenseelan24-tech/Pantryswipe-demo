@@ -1,0 +1,579 @@
+You are redesigning ONLY the visual styling of the Social screen in the
+PantrySwipe Expo app. Stack: Expo SDK 54, expo-router v6, React Native
+0.81, TypeScript, pnpm workspaces, @expo/vector-icons (Feather),
+react-native-reanimated, expo-blur, expo-haptics, expo-linear-gradient.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — READ BEFORE TOUCHING ANYTHING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Read these files completely. Do not guess their contents:
+  - artifacts/pantryswipe/app/(tabs)/    ← list all files, confirm
+      the exact filename of the Social screen (likely social.tsx)
+  - [TARGET FILE once confirmed]
+  - artifacts/pantryswipe/context/AppContext.tsx
+  - artifacts/pantryswipe/data/mockData.ts
+  - artifacts/pantryswipe/constants/colors.ts
+  - artifacts/pantryswipe/package.json
+
+From TARGET FILE, note the EXACT names of:
+  - The active tab state variable and all tab values
+  - The like/unlike handler and the isLiked state per post
+  - The follow/unfollow handler and the isFollowing state per user
+  - The share handler
+  - The bookmark/save handler
+  - The notification bell onPress
+  - The add/create post button onPress (top-left "+" button)
+  - The stories bar story tap handler
+  - The "View Recipe" / recipe link navigation call
+  - The near-me map search handler (if it exists)
+  - The ScrollView or FlatList ref
+
+From AppContext.tsx, note exact field names for:
+  - Social posts array (all posts)
+  - Per-post: id, author name, author avatar, timestamp, location,
+    image, title, description, likeCount, commentCount, isLiked,
+    isBookmarked, tags/cuisine, viewRecipeId
+  - Per-user: id, username, avatar, isFollowing
+  - Stories array if it exists
+  - Unread notifications count
+
+From mockData.ts, note:
+  - Post image format (require() or URI string)
+  - Story/user avatar format
+  - Whether cuisine cards have images
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ABSOLUTE DO NOT TOUCH LIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Never modify:
+  - artifacts/pantryswipe/context/AppContext.tsx
+  - artifacts/pantryswipe/data/mockData.ts
+  - artifacts/pantryswipe/app/_layout.tsx
+  - Any component imported by more than one screen
+  - ALL onPress handlers — like, follow, share, bookmark,
+    navigation, notification, add post, story tap
+  - The active tab state variable and its update logic
+  - ScrollView/FlatList data sources
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UNIFICATION RULE — READ THIS FIRST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The design came from 5 separate Stitch HTML files with conflicting
+layouts. You must unify them into ONE coherent screen using these
+rules. Do not mix card styles between views.
+
+UNIFIED DESIGN DECISIONS:
+  - Card border radius: 24 everywhere (rounded-3xl equivalent)
+  - Section header accent bar: 4px wide, 24px tall, borderRadius 2,
+    backgroundColor Colors.primary — used before every section title
+  - Tab underline indicator: explicit View, height 3, borderRadius 2,
+    backgroundColor Colors.primary, shown below active tab only
+  - Follow button active: backgroundColor Colors.primary,
+    color '#644000', borderRadius 999
+  - Follow button inactive ("Following"): backgroundColor '#EEE0D2',
+    color Colors.textMuted, borderRadius 999
+  - Post card shadow: cardShadow (from helper below)
+  - All cuisine/trending count icons: Feather "zap" (not fire emoji)
+  - Typography scale: Epilogue_700Bold for all headings,
+    Epilogue_400Regular for body — consistent everywhere
+  - No mix of aspect-square and aspect-[4/5] in the same view
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL TRANSLATION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RULE 1 — BANNED WEB-ONLY APIS:
+  window.*, document.*, querySelector(), classList,
+  icon.style.fontVariationSettings, element.style.transform,
+  mousedown, mouseup, mouseleave event listeners,
+  addEventListener(), backdrop-filter CSS, ::after pseudo-elements,
+  bg-gradient-to-tr CSS class, grid-cols-2 CSS, aspect-[] Tailwind,
+  line-clamp-2 CSS, hover:, :active CSS pseudo-classes,
+  translate-x-1/2 CSS centering, -translate-x-1/2,
+  pb-safe-area-inset Tailwind, env(safe-area-inset-bottom),
+  transition CSS, transform CSS (use RN transform array instead)
+
+RULE 2 — BANNED: EXTERNAL IMAGE URLs
+  No lh3.googleusercontent.com or any remote URL.
+  All post images → from AppContext/mockData post.image field
+  All user avatars → from AppContext/mockData user.avatar field
+  If avatar is null/undefined → show a circle with initials:
+    backgroundColor: tinted color per user index
+    Text: first letter of username, Epilogue_700Bold, color '#FFFFFF'
+
+RULE 3 — BANNED: HARDCODED POST DATA
+  No hardcoded: "Elena Rodriguez", "1.2k", "48", "2 hours ago",
+  recipe names, descriptions, or cuisine names.
+  Everything maps from AppContext socialPosts array.
+
+RULE 4 — LIKE TOGGLE: useState ONLY
+  The like heart icon state must use the existing isLiked field
+  from the post object in AppContext.
+  Active (liked): Feather "heart" filled appearance → use a solid
+    colored heart. Since Feather has no filled variant, use:
+    color Colors.danger when liked, color Colors.textMuted when not.
+  onPress: call existing like handler from TARGET FILE exactly.
+  Never use fontVariationSettings or classList toggling.
+
+RULE 5 — FOLLOW TOGGLE: preserve existing handler
+  Read the existing follow/unfollow onPress from the TARGET FILE.
+  Visual state: post.author.isFollowing from AppContext
+  Button text: isFollowing ? "Following" : "+ Follow"
+  Styles: active pill (Colors.primary bg) vs inactive ('#EEE0D2' bg)
+
+RULE 6 — TAB SWITCHING: preserve existing state
+  Read the activeTab state variable name from TARGET FILE.
+  Only restyle the tab bar appearance.
+  Active tab underline: explicit View child below Text —
+    height 3, width '100%', borderRadius 2,
+    backgroundColor Colors.primary
+  Never use ::after or border-bottom CSS.
+
+RULE 7 — line-clamp → numberOfLines
+  Replace every Tailwind line-clamp-2 with numberOfLines={2} on
+  the React Native Text component.
+
+RULE 8 — CSS grid → FlatList
+  For 2-column grids (cuisine cards, recipe masonry):
+  import { Dimensions } from 'react-native';
+  const { width: screenWidth } = Dimensions.get('window');
+  const CARD_WIDTH = (screenWidth - 16 * 3) / 2;
+  Use FlatList numColumns={2} or explicit row-based View layout.
+  Never use CSS grid or Tailwind grid classes.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COLOR TOKEN MAPPING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Import all colors from colors.ts. Add missing tokens there first.
+
+  Stitch primary (#835500)         → Colors.primary      #F5A623
+  Stitch on-primary-container      → '#644000'
+  Stitch primary-container         → Colors.primary      #F5A623
+  Stitch secondary (#006d3f)       → Colors.secondary    #4CAF76
+  Stitch on-surface (#211a12)      → Colors.textPrimary  #141210
+  Stitch on-surface-variant        → Colors.textMuted    #7A7570
+  Stitch surface (#fff8f4)         → Colors.surface      #FFFFFF
+  Stitch background                → Colors.background   #FAFAF8
+  Stitch surface-container-low     → '#FFF1E4'
+  Stitch surface-container-high    → '#F4E6D8'
+  Stitch surface-container-highest → '#EEE0D2'
+  Stitch surface-container         → '#FAEBDD'
+  Stitch outline-variant (#d7c3ae) → '#D7C3AE'
+  Stitch secondary-container       → 'rgba(76,175,118,0.15)'
+  Stitch error (#ba1a1a)           → Colors.danger       #E84040
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CROSS-PLATFORM HELPERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Add these at the top of the screen file:
+
+  import { Platform, Dimensions } from 'react-native';
+  import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  const { width: screenWidth } = Dimensions.get('window');
+  const CARD_WIDTH = (screenWidth - 16 * 3) / 2;
+
+  const cardShadow = Platform.select({
+    ios: {
+      shadowColor: 'rgba(131,85,0,1)',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 24,
+    },
+    android: { elevation: 4 },
+    web: { boxShadow: '0 8px 24px rgba(131,85,0,0.08)' },
+  });
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION-BY-SECTION VISUAL SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. HEADER BAR
+   insets = useSafeAreaInsets()
+   scrollY = useRef(new Animated.Value(0)).current
+   headerShadow = scrollY.interpolate({
+     inputRange: [0, 40], outputRange: [0, 0.10],
+     extrapolate: 'clamp'
+   })
+
+   On iOS: BlurView tint="light" intensity=80 as absoluteFill
+   On Android/web: backgroundColor 'rgba(250,250,248,0.95)'
+   Animated.View with style={{ shadowOpacity: headerShadow }}
+   paddingTop: insets.top + 8, paddingHorizontal: 24,
+   paddingBottom: 12, zIndex: 50
+
+   Layout: 3-column row
+   LEFT: TouchableOpacity minH:44 minW:44
+     Circle: width 44, height 44, borderRadius 22,
+       backgroundColor Colors.primary
+     Feather "plus" size 22, color '#FFFFFF'
+     → preserve existing add-post onPress
+
+   CENTER:
+     "FOOD COMMUNITY" — fontSize 11, fontWeight '600',
+       letterSpacing 2, color Colors.textMuted,
+       textTransform 'uppercase', textAlign 'center'
+     "Social" — fontFamily Epilogue_700Bold, fontSize 28,
+       color Colors.textPrimary, textAlign 'center',
+       letterSpacing -0.5
+
+   RIGHT: relative View
+     TouchableOpacity minH:44 minW:44
+       Circle: width 44, height 44, borderRadius 22,
+         backgroundColor '#EEE0D2'
+       Feather "heart" size 20, color Colors.textMuted
+       → preserve existing notification/likes onPress
+     Notification badge (if unreadCount > 0):
+       position absolute, top -2, right -2
+       width 20, height 20, borderRadius 10,
+       backgroundColor Colors.primary,
+       borderWidth 2, borderColor Colors.background
+       Text: unreadCount from AppContext, fontSize 10,
+         fontWeight '700', color '#644000', textAlign 'center'
+
+2. TAB BAR (For You / Following / Trending / Near Me)
+   flexDirection row, justifyContent space-between,
+   paddingHorizontal 24, paddingBottom 8,
+   borderBottomWidth 0.5, borderBottomColor '#D7C3AE'
+
+   Each tab: TouchableOpacity, paddingVertical 10,
+     minHeight 44, flex 1, alignItems 'center'
+     onPress: preserve existing setActiveTab call
+
+   Tab text:
+     Active: fontFamily Epilogue_700Bold, fontSize 14,
+       color Colors.primary
+     Inactive: fontFamily Epilogue_400Regular, fontSize 14,
+       color Colors.textMuted
+
+   Active tab underline indicator:
+     View: height 3, width '60%', borderRadius 2,
+       backgroundColor Colors.primary, marginTop 4,
+       alignSelf 'center'
+     Rendered ONLY when tab === activeTab (conditional render)
+     Never use borderBottom or ::after
+
+3. FILTER PILLS (cuisine filter row — visible on all tabs)
+   ScrollView horizontal showsHorizontalScrollIndicator={false}
+   contentContainerStyle: paddingHorizontal 16, gap 10,
+   paddingVertical 12
+
+   Active pill: backgroundColor Colors.primary, borderRadius 999,
+     paddingHorizontal 18, paddingVertical 9
+     Text: Epilogue_700Bold fontSize 13, color '#FFFFFF'
+   Inactive pill: backgroundColor '#EEE0D2', borderRadius 999,
+     paddingHorizontal 18, paddingVertical 9,
+     borderWidth 1, borderColor '#D7C3AE'
+     Text: Epilogue_400Regular fontSize 13, color Colors.textMuted
+
+   Pills: All | Italian | Japanese | Korean | Indian | Mexican
+   → preserve existing filter state and onPress handlers
+
+4. STORIES BAR (For You and Following tabs)
+   ScrollView horizontal showsHorizontalScrollIndicator={false}
+   contentContainerStyle: paddingHorizontal 16, gap 16, paddingVertical 8
+
+   Each story item: alignItems 'center', gap 6
+
+   Avatar ring — if expo-linear-gradient installed:
+     LinearGradient colors={[Colors.primary, '#FFB955']}
+       start={{x:0,y:1}} end={{x:1,y:0}}
+       width 70, height 70, borderRadius 35, padding 3
+     Inner white border: View width 64, height 64,
+       borderRadius 32, backgroundColor Colors.surface, padding 2
+     Image: width 60, height 60, borderRadius 30,
+       source from AppContext story.avatar (require or URI)
+       If null: initials circle, backgroundColor Colors.primary
+   If expo-linear-gradient NOT installed:
+     Use borderWidth 3, borderColor Colors.primary ring instead
+
+   Story label: fontFamily Epilogue_400Regular, fontSize 12,
+     color Colors.textPrimary, textAlign 'center'
+
+   → preserve existing story tap onPress
+
+5. SECTION ACCENT HEADERS
+   flexDirection row, alignItems 'center', gap 10,
+   marginBottom 16, paddingHorizontal 16
+
+   Accent bar: width 4, height 24, borderRadius 2,
+     backgroundColor Colors.primary (for main sections)
+     backgroundColor '#D7C3AE' (for secondary sections)
+
+   Title: fontFamily Epilogue_700Bold, fontSize 12,
+     letterSpacing 1.8, color Colors.textMuted,
+     textTransform 'uppercase'
+
+6. TRENDING CUISINE CARDS (horizontal scroll — Trending tab)
+   ScrollView horizontal showsHorizontalScrollIndicator={false}
+   contentContainerStyle: paddingHorizontal 16, gap 16
+
+   Each card: width 176, borderRadius 16,
+     overflow 'hidden', backgroundColor '#F4E6D8', ...cardShadow
+
+   Image area: height 128, width '100%'
+     Source from AppContext cuisine data if exists,
+     else colored placeholder View:
+       backgroundColor based on cuisine index
+       centered Text with cuisine name initial
+
+   Card body: padding 10
+     Cuisine name: fontFamily Epilogue_700Bold, fontSize 16,
+       color Colors.textPrimary, marginBottom 4
+     Trending row: flexDirection row, alignItems 'center', gap 4
+       Feather "zap" size 12, color Colors.primary
+       Count text: fontFamily Epilogue_700Bold, fontSize 12,
+         color Colors.primary
+
+   Pressable with Reanimated scale: withSpring(0.96) on pressIn
+
+7. MAIN FEED POST CARDS (vertical FlatList — all tabs)
+   FlatList data={filteredPosts from AppContext based on activeTab}
+   keyExtractor={item => item.id}
+   showsVerticalScrollIndicator={false}
+   contentContainerStyle: paddingBottom insets.bottom + 100
+
+   Each post card:
+     backgroundColor Colors.surface,
+     borderRadius 24, overflow 'hidden',
+     marginHorizontal 16, marginBottom 20, ...cardShadow
+
+   POST HEADER ROW:
+     paddingHorizontal 20, paddingVertical 16
+     flexDirection row, justifyContent space-between,
+     alignItems center
+
+     Left: flexDirection row, gap 14, alignItems center
+       Avatar: width 44, height 44, borderRadius 22,
+         source: post.author.avatar (require or URI)
+         If null: circle with initials,
+           backgroundColor: Colors.primary (vary by index)
+       Name col:
+         fontFamily Epilogue_700Bold, fontSize 14,
+           color Colors.textPrimary
+         timestamp + location: fontSize 12, color Colors.textMuted
+
+     Right: TouchableOpacity minH:44 minW:44
+       Feather "more-horizontal" size 20, color Colors.textMuted
+       → preserve existing more-options onPress
+
+   POST IMAGE:
+     width '100%', height 300, resizeMode 'cover'
+     Source: post.image from AppContext (require or URI)
+     If null: placeholder View backgroundColor '#F4E6D8',
+       centered Feather "image" size 48, color '#D7C3AE'
+
+   ACTIONS ROW:
+     paddingHorizontal 20, paddingTop 16,
+     flexDirection row, justifyContent space-between,
+     alignItems center
+
+     Left group: flexDirection row, gap 20
+       Like button: TouchableOpacity minH:44 minW:44
+         flexDirection row, alignItems center, gap 6
+         Feather "heart" size 22
+           color: post.isLiked ? Colors.danger : Colors.textMuted
+         Like count: fontFamily Epilogue_700Bold, fontSize 14,
+           color Colors.textPrimary
+         → preserve existing like onPress EXACTLY
+
+       Comment button: TouchableOpacity minH:44 minW:44
+         flexDirection row, alignItems center, gap 6
+         Feather "message-circle" size 22, color Colors.textMuted
+         Count: fontFamily Epilogue_700Bold, fontSize 14,
+           color Colors.textPrimary
+         → preserve existing comment onPress
+
+     Right group: flexDirection row, gap 16
+       Feather "share-2" size 22, color Colors.textMuted
+         → preserve existing share onPress
+       Feather "bookmark" size 22
+         color: post.isBookmarked ? Colors.primary : Colors.textMuted
+         → preserve existing bookmark onPress
+
+   POST CONTENT:
+     paddingHorizontal 20, paddingBottom 20, paddingTop 12
+
+     Title: fontFamily Epilogue_700Bold, fontSize 20,
+       color Colors.textPrimary, marginBottom 8,
+       letterSpacing -0.3
+
+     Description: fontFamily Epilogue_400Regular, fontSize 15,
+       color Colors.textMuted, lineHeight 22,
+       marginBottom 16, numberOfLines={2}
+
+     Tags row (if post.tags exists): flexDirection row,
+       flexWrap 'wrap', gap 8, marginBottom 16
+       Each tag: paddingHorizontal 10, paddingVertical 5,
+         backgroundColor '#F4E6D8', borderRadius 8
+         Text: fontSize 11, fontWeight '700',
+           color Colors.textMuted, textTransform 'uppercase',
+           letterSpacing 0.8
+
+     "View Recipe" button (if post.viewRecipeId exists):
+       TouchableOpacity: flexDirection row, alignItems center,
+         gap 8, backgroundColor Colors.primary,
+         paddingHorizontal 24, paddingVertical 12,
+         borderRadius 999, alignSelf 'flex-start',
+         shadowColor Colors.primary, shadowOpacity 0.25,
+         shadowRadius 8, shadowOffset {width:0,height:3},
+         elevation 4
+       Text: fontFamily Epilogue_700Bold, fontSize 13,
+         color '#FFFFFF'
+       Feather "arrow-right" size 16, color '#FFFFFF'
+       → preserve existing recipe navigation onPress
+
+   FOLLOW BUTTON (shown per post author — if not self):
+     shown inline below post header OR as part of header right
+     Read existing position from TARGET FILE
+     Active (isFollowing=true): backgroundColor '#EEE0D2',
+       borderRadius 999, paddingHorizontal 16, paddingVertical 8
+       Text: Epilogue_700Bold fontSize 13, color Colors.textMuted
+       Text: "Following"
+     Inactive (isFollowing=false): backgroundColor Colors.primary,
+       borderRadius 999, paddingHorizontal 16, paddingVertical 8
+       Text: Epilogue_700Bold fontSize 13, color '#FFFFFF'
+       Text: "+ Follow"
+     → preserve existing follow onPress EXACTLY
+
+   Pressable wrapper on entire card:
+     useSharedValue(1) scale, withSpring(0.98) on pressIn,
+     withSpring(1.0) on pressOut — subtle not aggressive
+
+8. MASONRY RECIPE GRID (Near Me / Trending tabs — if they exist
+   as sub-views in the current implementation)
+   If the current file has these as separate views:
+
+   2-column layout using explicit row-based Views:
+     width CARD_WIDTH, borderRadius 20, overflow 'hidden',
+     marginBottom 16, ...cardShadow
+
+   Image: width CARD_WIDTH, height CARD_WIDTH * 1.3,
+     resizeMode 'cover'
+   Gradient overlay at bottom:
+     LinearGradient colors=['transparent','rgba(0,0,0,0.75)']
+     position absolute, bottom 0, left 0, right 0, height 100
+     If not installed: plain View backgroundColor 'rgba(0,0,0,0.5)'
+
+   Card content (absolute, bottom 0, padding 14):
+     Location row: Feather "map-pin" size 12, color '#FFDDB4',
+       + distance text, fontSize 11, color '#FFDDB4'
+     Recipe name: Epilogue_700Bold fontSize 16, color '#FFFFFF',
+       numberOfLines={2}
+     Author: fontSize 12, color 'rgba(255,255,255,0.7)'
+
+   Bookmark icon (absolute top-right):
+     width 36, height 36, borderRadius 18,
+     backgroundColor 'rgba(255,255,255,0.2)'
+     If iOS: BlurView wrapper tint="dark" intensity=40
+     Feather "bookmark" size 16, color '#FFFFFF'
+     → preserve existing bookmark onPress
+
+9. COMMUNITY CHEFS ROW (if it exists in current file)
+   ScrollView horizontal showsHorizontalScrollIndicator={false}
+   contentContainerStyle: paddingHorizontal 16, gap 24
+
+   Each chef item: alignItems 'center', gap 8
+   Avatar ring:
+     Active/following chef: borderWidth 3, borderColor Colors.primary
+     Other: borderWidth 3, borderColor '#D7C3AE'
+     width 80, height 80, borderRadius 40, padding 3
+     Image: width 74, height 74, borderRadius 37,
+       source from AppContext (require or URI)
+       If null: initials circle
+   Name: fontFamily Epilogue_700Bold, fontSize 12,
+     color Colors.textPrimary, textAlign 'center'
+
+10. MAP SEARCH FAB (Near Me tab only — if it exists in current file)
+    position 'absolute', bottom: insets.bottom + 90,
+    alignSelf 'center', zIndex 40
+    (NOT translate-x or left-1/2 — use alignSelf center on a
+     centered container View with position absolute)
+
+    TouchableOpacity:
+      flexDirection row, alignItems center, gap 10,
+      backgroundColor Colors.textPrimary,
+      paddingHorizontal 24, paddingVertical 14, borderRadius 999,
+      shadowColor '#000', shadowOpacity 0.25, shadowRadius 16,
+      shadowOffset {width:0,height:4}, elevation 8
+      Feather "map" size 18, color '#FFFFFF'
+      Text: "SEARCH VIA MAP", fontFamily Epilogue_700Bold,
+        fontSize 13, letterSpacing 1.2, color '#FFFFFF'
+      → preserve existing map search onPress
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCROLL + ANIMATED HEADER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Wrap all scrollable content in Animated.ScrollView:
+  onScroll={Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { useNativeDriver: true }
+  )}
+  scrollEventThrottle={16}
+
+Header shadow animates from shadowOpacity 0 → 0.10 on scroll.
+DO NOT hide/translate the header on scroll — Files 4 and 5 do this
+but it hides the tab bar which breaks navigation usability.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STYLING RULES — MANDATORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ALL styles in StyleSheet.create() at bottom of file.
+   Zero inline style objects in render except:
+   - Dynamic values: [styles.tab, isActive && styles.tabActive]
+   - Platform.select spreads: ...cardShadow
+   - Animated values: style={[styles.header, { shadowOpacity }]}
+
+2. Every touchable: minHeight 44, minWidth 44.
+
+3. No remote image URLs anywhere in file.
+
+4. No hardcoded post data — all from AppContext.
+
+5. numberOfLines={2} on all description Text, not CSS line-clamp.
+
+6. No CSS grid, no aspect-[] Tailwind, no translate-x-1/2.
+
+7. No window.*, document.*, classList, or DOM event listeners.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY FINAL STEPS — DO NOT SKIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Grep checks — fix any found before continuing:
+   grep -n "window\." [TARGET_FILE]
+   grep -n "document\." [TARGET_FILE]
+   grep -n "classList" [TARGET_FILE]
+   grep -n "googleusercontent" [TARGET_FILE]
+   grep -n "fontVariationSettings" [TARGET_FILE]
+   grep -n "mousedown\|mouseup" [TARGET_FILE]
+
+2. TypeScript check — fix ALL errors:
+   cd artifacts/pantryswipe && pnpm run typecheck
+
+3. Logic integrity — read the code and verify:
+   - Like onPress calls original handler — no DOM logic
+   - Follow onPress calls original handler — no DOM logic
+   - Tab switching uses original state variable — no DOM logic
+   - Active tab underline is a real View, not ::after or border
+   - Header shadow uses Animated.ScrollView — no window.scroll
+   - All post images from AppContext — no remote URLs
+   - All story avatars from AppContext — no remote URLs
+   - Notification count from AppContext — not hardcoded "3"
+   - numberOfLines={2} on descriptions — no line-clamp CSS
+   - Map FAB uses alignSelf center — not translate-x-1/2
+
+4. Report back with:
+   - Confirmed exact filename of Social screen
+   - Every file modified
+   - Every AppContext field name used and confirmed to exist
+   - Any field that did NOT exist and how you handled it
+   - Grep check results (clean / issues found + fixed)
+   - TypeScript check result (pass / errors + fixed)
+   - Confirm: zero remote image URLs in final code

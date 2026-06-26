@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
+  Dimensions,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -27,6 +28,33 @@ import { useApp } from "@/context/AppContext";
 import { MOCK_SOCIAL_POSTS, SocialPost } from "@/data/mockData";
 import { getSocialImageSource, getRecipeImageSource } from "@/constants/recipeImages";
 
+// ── Brand palette ─────────────────────────────────────────────────────────────
+const C = {
+  primary:            "#F5A623",
+  secondary:          "#4CAF76",
+  textPrimary:        "#141210",
+  textMuted:          "#7A7570",
+  surface:            "#FFFFFF",
+  background:         "#FAFAF8",
+  surfaceLow:         "#FFF1E4",
+  surfaceHigh:        "#F4E6D8",
+  surfaceHighest:     "#EEE0D2",
+  onPrimaryContainer: "#644000",
+  outlineVariant:     "#D7C3AE",
+  saveBlue:           "#5B8EF5",
+  danger:             "#E84040",
+} as const;
+
+// ── Cross-platform helpers ────────────────────────────────────────────────────
+const cardShadow = Platform.select({
+  ios:     { shadowColor: "rgba(131,85,0,1)", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 24 },
+  android: { elevation: 4 },
+  web:     { boxShadow: "0 8px 24px rgba(131,85,0,0.08)" },
+});
+
+const { width: screenWidth } = Dimensions.get("window");
+const CARD_WIDTH = (screenWidth - 16 * 3) / 2;
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const DISCOVERY_TABS = ["For You", "Following", "Trending", "Near Me"] as const;
 type DiscoveryTab = (typeof DISCOVERY_TABS)[number];
@@ -42,13 +70,11 @@ const NEAR_ME_SUBURB = "Sengkang, SG";
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Comment = { id: string; user: string; text: string; avatar: string; timeAgo: string };
 
-// Stable hash-based mock distance so the same post always has the same distance
 const mockDistance = (id: string): string => {
   const h = id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   return ((h % 48) / 10 + 0.3).toFixed(1);
 };
 
-// ─── Seed comments ────────────────────────────────────────────────────────────
 const SEED_COMMENTS: Record<string, Comment[]> = {
   s1: [
     { id: "c1", user: "pasta_lover", text: "This looks incredible! What brand of pancetta do you use?", avatar: "P", timeAgo: "1h ago" },
@@ -60,32 +86,32 @@ const SEED_COMMENTS: Record<string, Comment[]> = {
   s5: [],
 };
 
-// ─── Skeleton card ────────────────────────────────────────────────────────────
-function SkeletonCard({ shimmer, colors }: { shimmer: Animated.Value; colors: ReturnType<typeof import("@/hooks/useColors").useColors> }) {
+// ─── Skeleton card ─────────────────────────────────────────────────────────────
+function SkeletonCard({ shimmer }: { shimmer: Animated.Value }) {
   return (
-    <Animated.View style={[skeletonStyles.card, { backgroundColor: colors.card, opacity: shimmer, borderColor: colors.border }]}>
+    <Animated.View style={[skeletonStyles.card, { opacity: shimmer }]}>
       <View style={skeletonStyles.header}>
-        <View style={[skeletonStyles.avatar, { backgroundColor: colors.border }]} />
+        <View style={skeletonStyles.avatar} />
         <View style={{ flex: 1, gap: 7 }}>
-          <View style={[skeletonStyles.line, { width: "55%", backgroundColor: colors.border }]} />
-          <View style={[skeletonStyles.line, { width: "30%", backgroundColor: colors.border }]} />
+          <View style={[skeletonStyles.line, { width: "55%" }]} />
+          <View style={[skeletonStyles.line, { width: "30%" }]} />
         </View>
       </View>
-      <View style={[skeletonStyles.image, { backgroundColor: colors.border }]} />
-      <View style={{ padding: 14, gap: 9 }}>
-        <View style={[skeletonStyles.line, { backgroundColor: colors.border }]} />
-        <View style={[skeletonStyles.line, { width: "75%", backgroundColor: colors.border }]} />
+      <View style={skeletonStyles.image} />
+      <View style={{ padding: 16, gap: 9 }}>
+        <View style={skeletonStyles.line} />
+        <View style={[skeletonStyles.line, { width: "75%" }]} />
       </View>
     </Animated.View>
   );
 }
 
 const skeletonStyles = StyleSheet.create({
-  card: { borderRadius: 18, overflow: "hidden", borderWidth: 1 },
-  header: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
-  avatar: { width: 38, height: 38, borderRadius: 19 },
-  line: { height: 12, borderRadius: 6 },
-  image: { width: "100%", aspectRatio: 4 / 3 },
+  card:   { borderRadius: 24, overflow: "hidden", marginHorizontal: 16, marginBottom: 20, backgroundColor: C.surfaceHighest },
+  header: { flexDirection: "row", alignItems: "center", gap: 12, padding: 20 },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.outlineVariant },
+  line:   { height: 12, borderRadius: 6, backgroundColor: C.outlineVariant },
+  image:  { width: "100%", height: 200, backgroundColor: C.surfaceHigh },
 });
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
@@ -94,6 +120,10 @@ export default function SocialScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { liveRecipes, savedRecipes, followingList, followUser, isFollowing, toggleSavePost, isPostSaved } = useApp();
+
+  // Scroll-driven header shadow
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const headerShadow = scrollY.interpolate({ inputRange: [0, 40], outputRange: [0, 0.10], extrapolate: "clamp" });
 
   // Feed state
   const [posts, setPosts] = useState<SocialPost[]>(MOCK_SOCIAL_POSTS);
@@ -122,13 +152,13 @@ export default function SocialScreen() {
   const [composerLocation, setComposerLocation] = useState(false);
   const [showRecipeSheet, setShowRecipeSheet] = useState(false);
 
-  // Follow flash confirmations {handle: boolean}
+  // Follow flash confirmations
   const [followedHandles, setFollowedHandles] = useState<Record<string, boolean>>({});
 
   // Near Me
   const [locationPermission, setLocationPermission] = useState<"unknown" | "granted" | "denied">("unknown");
 
-  // Compose input ref (for programmatic focus after modal open on Android)
+  // Compose input ref
   const composeInputRef = useRef<TextInput>(null);
 
   // Double-tap like animation
@@ -137,7 +167,7 @@ export default function SocialScreen() {
   const [heartPostId, setHeartPostId] = useState<string | null>(null);
   const lastTapRef = useRef<Record<string, number>>({});
 
-  // Shimmer animation for skeleton
+  // Shimmer for skeleton
   const shimmerAnim = useRef(new Animated.Value(0.35)).current;
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -179,7 +209,6 @@ export default function SocialScreen() {
   // ── Filtered posts ─────────────────────────────────────────────────────────
   const filteredPosts = useMemo(() => {
     let result = [...posts];
-
     if (activeTab === "Following") {
       result = result.filter((p) => followingList.includes(p.username));
     } else if (activeTab === "Trending") {
@@ -187,15 +216,13 @@ export default function SocialScreen() {
     } else if (activeTab === "Near Me") {
       result = result.sort((a, b) => parseFloat(mockDistance(a.id)) - parseFloat(mockDistance(b.id)));
     }
-
     if (selectedCuisines.length > 0) {
       result = result.filter((p) => p.cuisine && selectedCuisines.includes(p.cuisine));
     }
-
     return result;
   }, [posts, activeTab, selectedCuisines, followingList]);
 
-  // ── Trending grouped by cuisine (top 1 per cuisine) ──────────────────────
+  // ── Trending grouped by cuisine ────────────────────────────────────────────
   const trendingByCuisine = useMemo(() => {
     if (activeTab !== "Trending") return [];
     const seen = new Set<string>();
@@ -364,65 +391,62 @@ export default function SocialScreen() {
     const isNearMe = activeTab === "Near Me" && locationPermission === "granted";
     const isHeartShowing = heartPostId === item.id;
 
+    // Initials avatar color per index
+    const avatarColors = [C.primary, "#8B6CF5", "#E84040", C.secondary, "#F59623"];
+    const avatarBg = avatarColors[index % avatarColors.length];
+
     return (
-      <View style={[styles.postCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        {/* Header */}
+      <View style={styles.postCard}>
+        {/* ── Post Header ── */}
         <View style={styles.postHeader}>
-          <View style={[styles.userAvatar, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.userAvatarText, { fontFamily: "Inter_700Bold" }]}>{item.userAvatar}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.username, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>@{item.username}</Text>
-            <Text style={[styles.timeAgo, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>{item.timeAgo}</Text>
-            {isNearMe && (
-              <Text style={[styles.distanceText, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
-                📍 {mockDistance(item.id)} km away
+          <View style={styles.postHeaderLeft}>
+            <View style={[styles.avatar, { backgroundColor: avatarBg }]}>
+              <Text style={styles.avatarText}>{item.userAvatar}</Text>
+            </View>
+            <View style={styles.authorInfo}>
+              <Text style={styles.authorName}>@{item.username}</Text>
+              <Text style={styles.authorMeta}>
+                {item.timeAgo}
+                {isNearMe ? `  •  📍 ${mockDistance(item.id)} km` : ""}
               </Text>
+            </View>
+          </View>
+
+          <View style={styles.postHeaderRight}>
+            {!isMe && !alreadyFollowing && !justFollowed && (
+              <TouchableOpacity
+                style={styles.followBtnActive}
+                onPress={() => handleFollow(item.username)}
+              >
+                <Text style={styles.followBtnActiveText}>+ Follow</Text>
+              </TouchableOpacity>
+            )}
+            {!isMe && justFollowed && (
+              <View style={styles.followBtnInactive}>
+                <Feather name="check" size={12} color={C.textMuted} />
+                <Text style={styles.followBtnInactiveText}>Following</Text>
+              </View>
             )}
           </View>
-          {!isMe && !alreadyFollowing && !justFollowed && (
-            <TouchableOpacity
-              style={[
-                styles.followBtn,
-                {
-                  backgroundColor: colors.primary,
-                  borderColor: colors.primary,
-                  shadowColor: colors.primary,
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.35,
-                  shadowRadius: 7,
-                  elevation: 3,
-                },
-              ]}
-              onPress={() => handleFollow(item.username)}
-            >
-              <Text style={[styles.followBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>+ Follow</Text>
-            </TouchableOpacity>
-          )}
-          {!isMe && justFollowed && (
-            <View style={[styles.followingFlash, { backgroundColor: "#4CAF7620", borderColor: "#4CAF76" }]}>
-              <Feather name="check" size={12} color="#4CAF76" />
-              <Text style={[styles.followBtnText, { color: "#4CAF76", fontFamily: "Inter_700Bold" }]}>Following</Text>
-            </View>
-          )}
         </View>
 
-        {/* Image with overlaid actions + double-tap */}
+        {/* ── Post Image ── */}
         <Pressable onPress={() => handleDoubleTap(item.id)}>
-          <View style={[styles.postImageContainer, { backgroundColor: colors.muted }]}>
+          <View style={styles.postImageContainer}>
             {imageSource ? (
               <Image source={imageSource} style={styles.postImage} resizeMode="cover" />
             ) : (
-              <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <View style={styles.postImagePlaceholder}>
                 <Text style={{ fontSize: 52 }}>{CUISINE_EMOJIS[item.cuisine ?? ""] ?? "🍽"}</Text>
-                <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: "Inter_500Medium" }}>{item.recipeName ?? "Food"}</Text>
+                <Text style={styles.postImagePlaceholderText}>{item.recipeName ?? "Food"}</Text>
               </View>
             )}
 
             {/* Trending badge */}
             {isTrending && (
               <View style={styles.trendingBadge}>
-                <Text style={styles.trendingBadgeText}>🔥 Trending</Text>
+                <Feather name="zap" size={11} color={C.primary} />
+                <Text style={styles.trendingBadgeText}>Trending</Text>
               </View>
             )}
 
@@ -432,107 +456,94 @@ export default function SocialScreen() {
                 <Text style={styles.heartOverlayEmoji}>❤️</Text>
               </Animated.View>
             )}
-
-            {/* Actions overlaid on bottom of image */}
-            <View style={styles.actionsOverlay}>
-              <View style={styles.actionsRow}>
-                <TouchableOpacity style={styles.actionItem} onPress={() => toggleLike(item.id)}>
-                  <View style={[styles.actionPill, { backgroundColor: item.liked ? "#E84040" : "rgba(0,0,0,0.50)" }]}>
-                    <Feather name="heart" size={17} color="#fff" />
-                    <Text style={[styles.actionCount, { fontFamily: "SpaceGrotesk_600SemiBold" }]}>{formatCount(item.likes)}</Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionItem} onPress={() => setCommentModalPost(item)}>
-                  <View style={[styles.actionPill, { backgroundColor: "rgba(0,0,0,0.50)" }]}>
-                    <Feather name="message-circle" size={17} color="#fff" />
-                    <Text style={[styles.actionCount, { fontFamily: "SpaceGrotesk_600SemiBold" }]}>
-                      {postComments.length || item.comments}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionItem} onPress={() => handleShare(item)}>
-                  <View style={[styles.actionPill, { backgroundColor: "rgba(0,0,0,0.50)" }]}>
-                    <Feather name="share-2" size={17} color="#fff" />
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionItem} onPress={() => handleSave(item.id)}>
-                  <View style={[styles.actionPill, { backgroundColor: savedPost ? "#5B8EF5" : "rgba(0,0,0,0.50)" }]}>
-                    <Feather name={savedPost ? "bookmark" : "bookmark"} size={17} color="#fff" />
-                  </View>
-                </TouchableOpacity>
-              </View>
-            </View>
           </View>
         </Pressable>
 
-        {/* Caption + chips */}
-        <View style={styles.captionContainer}>
-          <Text style={[styles.caption, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-            <Text style={[styles.captionUsername, { fontFamily: "Inter_700Bold" }]}>@{item.username} </Text>
+        {/* ── Actions Row (below image) ── */}
+        <View style={styles.actionsRow}>
+          <View style={styles.actionsLeft}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(item.id)}>
+              <Feather name="heart" size={22} color={item.liked ? C.danger : C.textMuted} />
+              <Text style={styles.actionCount}>{formatCount(item.likes)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => setCommentModalPost(item)}>
+              <Feather name="message-circle" size={22} color={C.textMuted} />
+              <Text style={styles.actionCount}>{postComments.length || item.comments}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.actionsRight}>
+            <TouchableOpacity style={styles.iconAction} onPress={() => handleShare(item)}>
+              <Feather name="share-2" size={22} color={C.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconAction} onPress={() => handleSave(item.id)}>
+              <Feather name="bookmark" size={22} color={savedPost ? C.primary : C.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ── Post Content ── */}
+        <View style={styles.postContent}>
+          {item.recipeName && (
+            <Text style={styles.postTitle} numberOfLines={2}>{item.recipeName}</Text>
+          )}
+          <Text style={styles.postCaption} numberOfLines={2}>
+            <Text style={styles.postCaptionUsername}>@{item.username} </Text>
             {item.caption}
           </Text>
-          {(item.recipeName || item.cuisine) && (
-            <View style={styles.chipRow}>
-              {item.recipeName && (
-                <TouchableOpacity
-                  style={[styles.recipeChip, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "35" }]}
-                  onPress={() => item.recipeId && router.push(`/recipe/${item.recipeId}`)}
-                >
-                  <Feather name="book-open" size={12} color={colors.primary} />
-                  <Text style={[styles.recipeChipText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>{item.recipeName}</Text>
-                </TouchableOpacity>
-              )}
-              {item.cuisine && (
-                <View style={[styles.cuisineChip, { backgroundColor: colors.accent + "18", borderColor: colors.accent + "40" }]}>
-                  <Text style={styles.cuisineChipEmoji}>{CUISINE_EMOJIS[item.cuisine] ?? "🍽️"}</Text>
-                  <Text style={[styles.cuisineChipText, { color: colors.accent, fontFamily: "Inter_600SemiBold" }]}>{item.cuisine}</Text>
-                </View>
-              )}
+
+          {/* Tags */}
+          {item.cuisine && (
+            <View style={styles.tagRow}>
+              <View style={styles.cuisineTag}>
+                <Text style={styles.cuisineTagText}>{CUISINE_EMOJIS[item.cuisine] ?? "🍽️"} {item.cuisine.toUpperCase()}</Text>
+              </View>
             </View>
+          )}
+
+          {/* View Recipe CTA */}
+          {item.recipeId && (
+            <TouchableOpacity
+              style={styles.viewRecipeBtn}
+              onPress={() => item.recipeId && router.push(`/recipe/${item.recipeId}`)}
+            >
+              <Text style={styles.viewRecipeBtnText}>View Recipe</Text>
+              <Feather name="arrow-right" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
           )}
         </View>
       </View>
     );
-  }, [posts, comments, followingList, followedHandles, heartPostId, activeTab, locationPermission, colors]);
+  }, [posts, comments, followingList, followedHandles, heartPostId, activeTab, locationPermission]);
 
-  // ── Empty state for Following tab ─────────────────────────────────────────
+  // ── Sub-components ─────────────────────────────────────────────────────────
   const FollowingEmpty = () => (
     <View style={styles.emptyState}>
-      <Feather name="user-plus" size={40} color={colors.textMuted} />
-      <Text style={[styles.emptyStateTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>No one yet</Text>
-      <Text style={[styles.emptyStateText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-        Follow chefs you love and their posts will appear here
-      </Text>
-      <TouchableOpacity
-        style={[styles.emptyStateCTA, { backgroundColor: colors.primary }]}
-        onPress={() => setActiveTab("For You")}
-      >
-        <Text style={[styles.emptyStateCTAText, { color: colors.primaryForeground, fontFamily: "Inter_700Bold" }]}>
-          Discover Chefs
-        </Text>
+      <View style={styles.emptyIconCircle}>
+        <Feather name="user-plus" size={32} color={C.primary} />
+      </View>
+      <Text style={styles.emptyTitle}>No one yet</Text>
+      <Text style={styles.emptyText}>Follow chefs you love and their posts will appear here</Text>
+      <TouchableOpacity style={styles.emptyCTA} onPress={() => setActiveTab("For You")}>
+        <Text style={styles.emptyCTAText}>Discover Chefs</Text>
       </TouchableOpacity>
     </View>
   );
 
-  // ── Near Me denied state ──────────────────────────────────────────────────
   const NearMeDenied = () => (
     <View style={styles.emptyState}>
-      <Feather name="map-pin" size={40} color={colors.textMuted} />
-      <Text style={[styles.emptyStateTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Location access needed</Text>
-      <Text style={[styles.emptyStateText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-        Enable location in your settings to see what people are cooking near you
-      </Text>
+      <View style={styles.emptyIconCircle}>
+        <Feather name="map-pin" size={32} color={C.primary} />
+      </View>
+      <Text style={styles.emptyTitle}>Location access needed</Text>
+      <Text style={styles.emptyText}>Enable location in your settings to see what people are cooking near you</Text>
     </View>
   );
 
-  // ── No results empty state ────────────────────────────────────────────────
   const NoResults = () => (
     <View style={styles.emptyState}>
-      <Text style={{ fontSize: 40 }}>👨‍🍳</Text>
-      <Text style={[styles.emptyStateTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-        No posts yet
-      </Text>
-      <Text style={[styles.emptyStateText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+      <Text style={{ fontSize: 44 }}>👨‍🍳</Text>
+      <Text style={styles.emptyTitle}>No posts yet</Text>
+      <Text style={styles.emptyText}>
         {selectedCuisines.length > 0
           ? `No ${selectedCuisines.join(" or ")} posts yet. Be the first to share!`
           : "Nothing here yet."}
@@ -540,78 +551,70 @@ export default function SocialScreen() {
     </View>
   );
 
-  // ── Trending header (top cuisines horizontal scroll) ─────────────────────
   const TrendingHeader = () => (
     <View style={{ marginBottom: 8 }}>
-      {/* Eyebrow label */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 }}>
-        <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: colors.primary }} />
-        <Text style={{ fontSize: 10, letterSpacing: 1.5, fontFamily: "Inter_600SemiBold", color: colors.primary, textTransform: "uppercase" }}>
-          Trending Cuisines
-        </Text>
+      {/* Section accent header */}
+      <View style={styles.sectionAccentRow}>
+        <View style={styles.sectionAccentBar} />
+        <Text style={styles.sectionAccentLabel}>TRENDING CUISINES</Text>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingCuisinesRow}>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 16, paddingBottom: 4 }}>
         {trendingByCuisine.map((p, i) => {
           const imgSrc = getSocialImageSource(p.image, i, undefined);
+          const cuisineColors = ["#F4E6D8", "#E8F4E8", "#E8E8F4", "#F4E8E8", "#F4F0E4"];
           return (
             <TouchableOpacity
               key={p.id}
-              style={[styles.trendingCuisineCard, { backgroundColor: colors.card, borderColor: colors.border, overflow: "hidden" }]}
+              style={styles.cuisineCard}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/cuisine/${encodeURIComponent(p.cuisine ?? "")}`); }}
-              activeOpacity={0.82}
+              activeOpacity={0.85}
             >
-              {imgSrc ? (
-                <Image source={imgSrc} style={styles.trendingCuisineImage} resizeMode="cover" />
-              ) : (
-                <View style={[styles.trendingCuisineImage, { backgroundColor: colors.primary + "12", alignItems: "center", justifyContent: "center" }]}>
-                  <View style={[styles.trendingEmojiBox, { backgroundColor: colors.primary + "20" }]}>
-                    <Text style={{ fontSize: 26 }}>{CUISINE_EMOJIS[p.cuisine ?? ""] ?? "🍽"}</Text>
+              <View style={styles.cuisineCardImage}>
+                {imgSrc ? (
+                  <Image source={imgSrc} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                ) : (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: cuisineColors[i % cuisineColors.length], alignItems: "center", justifyContent: "center" }]}>
+                    <Text style={{ fontSize: 40 }}>{CUISINE_EMOJIS[p.cuisine ?? ""] ?? "🍽"}</Text>
                   </View>
+                )}
+              </View>
+              <View style={styles.cuisineCardBody}>
+                <Text style={styles.cuisineCardName} numberOfLines={1}>{p.cuisine ?? "Mixed"}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Feather name="zap" size={12} color={C.primary} />
+                  <Text style={styles.cuisineCardCount}>{formatCount(p.likes)}</Text>
                 </View>
-              )}
-              {/* Bottom gradient label */}
-              <View style={[styles.trendingCuisineLabel, { backgroundColor: colors.card }]}>
-                <Text style={[{ fontSize: 11, fontFamily: "Inter_700Bold", color: colors.foreground }]} numberOfLines={1}>
-                  {p.cuisine ?? "Mixed"}
-                </Text>
-                <Text style={[{ fontSize: 9, color: colors.primary, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
-                  🔥 {formatCount(p.likes)}
-                </Text>
               </View>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
-      <View style={[{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 10 }]} />
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: colors.textMuted }} />
-        <Text style={{ fontSize: 10, letterSpacing: 1.5, fontFamily: "Inter_600SemiBold", color: colors.textMuted, textTransform: "uppercase" }}>
-          All Trending
-        </Text>
+
+      {/* Divider + "All Trending" label */}
+      <View style={styles.trendingDivider} />
+      <View style={[styles.sectionAccentRow, { marginBottom: 4 }]}>
+        <View style={[styles.sectionAccentBar, { backgroundColor: C.outlineVariant }]} />
+        <Text style={[styles.sectionAccentLabel, { color: C.textMuted }]}>ALL TRENDING</Text>
       </View>
     </View>
   );
 
-  // ── Near Me header ────────────────────────────────────────────────────────
   const NearMeHeader = () => (
-    <View style={[styles.nearMeHeader, { backgroundColor: "#4CAF760A", borderColor: "#4CAF7630", overflow: "hidden" }]}>
-      {/* Herb-green left accent bar */}
-      <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, backgroundColor: "#4CAF76" }} />
-      <View style={{ marginLeft: 8, flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-        <View style={[{ width: 30, height: 30, borderRadius: 8, backgroundColor: "#4CAF7620", alignItems: "center", justifyContent: "center" }]}>
-          <Feather name="map-pin" size={14} color="#4CAF76" />
+    <View style={styles.nearMeHeader}>
+      <View style={styles.nearMeAccentBar} />
+      <View style={styles.nearMeInner}>
+        <View style={styles.nearMeIconBox}>
+          <Feather name="map-pin" size={14} color={C.secondary} />
         </View>
-        <Text style={[{ fontSize: 13, color: "#1a1a1a", fontFamily: "Inter_500Medium", flex: 1 }]}>
-          Showing results near you
-        </Text>
-        <View style={[styles.suburbPill, { backgroundColor: "#4CAF7620", borderColor: "#4CAF7650" }]}>
-          <Text style={[{ fontSize: 11, color: "#4CAF76", fontFamily: "Inter_600SemiBold" }]}>{NEAR_ME_SUBURB}</Text>
+        <Text style={styles.nearMeText}>Showing results near you</Text>
+        <View style={styles.nearMeSuburbPill}>
+          <Text style={styles.nearMeSuburbText}>{NEAR_ME_SUBURB}</Text>
         </View>
       </View>
     </View>
   );
 
-  // ── Resolve empty state per tab ───────────────────────────────────────────
   const emptyComponent = useMemo(() => {
     if (activeTab === "Following" && filteredPosts.length === 0 && selectedCuisines.length === 0) {
       return <FollowingEmpty />;
@@ -622,104 +625,87 @@ export default function SocialScreen() {
     return <NoResults />;
   }, [activeTab, filteredPosts.length, selectedCuisines.length, locationPermission]);
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <View style={[styles.header, { paddingTop: topPadding + 6, borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          style={[
-            styles.iconBtn,
-            {
-              backgroundColor: colors.primary,
-              borderColor: colors.primary,
-              shadowColor: colors.primary,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.45,
-              shadowRadius: 10,
-              elevation: 5,
-            },
-          ]}
-          onPress={openCompose}
-        >
-          <Feather name="plus" size={20} color={colors.primaryForeground} />
+    <View style={[styles.container, { backgroundColor: C.background }]}>
+
+      {/* ── HEADER ── */}
+      <Animated.View style={[styles.header, { paddingTop: topPadding + 8, shadowOpacity: headerShadow }]}>
+        {/* Left: compose button */}
+        <TouchableOpacity style={styles.headerComposeBtn} onPress={openCompose}>
+          <Feather name="plus" size={22} color="#FFFFFF" />
         </TouchableOpacity>
 
-        <View style={{ alignItems: "center", gap: 1 }}>
-          <Text style={{ fontSize: 9, letterSpacing: 1.5, fontFamily: "Inter_600SemiBold", color: colors.textMuted, textTransform: "uppercase" }}>
-            Food Community
-          </Text>
-          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Social</Text>
+        {/* Center: title */}
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerEyebrow}>FOOD COMMUNITY</Text>
+          <Text style={styles.headerTitle}>Social</Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => { setShowNotifications(true); setNotifCount(0); }}
-        >
-          <Feather name="heart" size={18} color={colors.foreground} />
+        {/* Right: notifications */}
+        <View style={{ position: "relative" }}>
+          <TouchableOpacity
+            style={styles.headerNotifBtn}
+            onPress={() => { setShowNotifications(true); setNotifCount(0); }}
+          >
+            <Feather name="heart" size={20} color={C.textMuted} />
+          </TouchableOpacity>
           {notifCount > 0 && (
-            <View style={[styles.notifBadge, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.notifBadgeText, { fontFamily: "Inter_700Bold" }]}>{notifCount}</Text>
+            <View style={styles.notifBadge}>
+              <Text style={styles.notifBadgeText}>{notifCount}</Text>
             </View>
           )}
-        </TouchableOpacity>
-      </View>
+        </View>
+      </Animated.View>
 
-      {/* ── Filter panel ────────────────────────────────────────────────────── */}
-      <View style={[styles.filterPanel, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        {/* Discovery tabs */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.discoveryTabsRow} contentContainerStyle={styles.discoveryTabs}>
-          {DISCOVERY_TABS.map((tab) => (
-            <TouchableOpacity key={tab} style={styles.discoveryTab} onPress={() => setActiveTab(tab)}>
-              <Text style={[styles.discoveryTabText, {
-                color: activeTab === tab ? colors.foreground : colors.textSecondary,
-                fontFamily: activeTab === tab ? "Inter_700Bold" : "Inter_500Medium",
-              }]}>{tab}</Text>
-              {activeTab === tab && <View style={[styles.discoveryTabUnderline, { backgroundColor: colors.primary }]} />}
+      {/* ── TAB BAR ── */}
+      <View style={styles.tabBar}>
+        {DISCOVERY_TABS.map((tab) => {
+          const active = activeTab === tab;
+          return (
+            <TouchableOpacity
+              key={tab}
+              style={styles.tabItem}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabText, active ? styles.tabTextActive : styles.tabTextInactive]}>
+                {tab}
+              </Text>
+              {active && <View style={styles.tabUnderline} />}
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        <View style={[styles.filterDivider, { backgroundColor: colors.border }]} />
-
-        {/* Cuisine multi-select chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cuisineFiltersRow} contentContainerStyle={styles.cuisineFilters}>
-          {CUISINE_FILTERS.map((c) => {
-            const active = isCuisineActive(c);
-            return (
-              <TouchableOpacity
-                key={c}
-                style={[
-                  styles.cuisineFilter,
-                  active
-                    ? {
-                        backgroundColor: colors.primary,
-                        borderColor: colors.primary,
-                        shadowColor: colors.primary,
-                        shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.4,
-                        shadowRadius: 7,
-                        elevation: 3,
-                      }
-                    : { backgroundColor: colors.background, borderColor: colors.border },
-                ]}
-                onPress={() => toggleCuisine(c)}
-              >
-                <Text style={[styles.cuisineFilterText, {
-                  color: active ? colors.primaryForeground : colors.foreground,
-                  fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
-                }]}>{c}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+          );
+        })}
       </View>
 
-      {/* ── Content ─────────────────────────────────────────────────────────── */}
+      {/* ── CUISINE FILTER PILLS ── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.pillStrip}
+        style={styles.pillScrollView}
+      >
+        {CUISINE_FILTERS.map((c) => {
+          const active = isCuisineActive(c);
+          return (
+            <TouchableOpacity
+              key={c}
+              style={[styles.filterPill, active ? styles.filterPillActive : styles.filterPillInactive]}
+              onPress={() => toggleCuisine(c)}
+            >
+              <Text style={[styles.filterPillText, active ? styles.filterPillTextActive : styles.filterPillTextInactive]}>
+                {c}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* ── FEED ── */}
       {isLoading ? (
-        <ScrollView contentContainerStyle={[styles.feedContent, { gap: 16 }]} showsVerticalScrollIndicator={false}>
-          <SkeletonCard shimmer={shimmerAnim} colors={colors} />
-          <SkeletonCard shimmer={shimmerAnim} colors={colors} />
-          <SkeletonCard shimmer={shimmerAnim} colors={colors} />
+        <ScrollView contentContainerStyle={{ paddingTop: 8, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          <SkeletonCard shimmer={shimmerAnim} />
+          <SkeletonCard shimmer={shimmerAnim} />
+          <SkeletonCard shimmer={shimmerAnim} />
         </ScrollView>
       ) : activeTab === "Near Me" && locationPermission === "denied" ? (
         <NearMeDenied />
@@ -730,7 +716,9 @@ export default function SocialScreen() {
           renderItem={renderPost}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.feedContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+          scrollEventThrottle={16}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={C.primary} />}
           ListHeaderComponent={
             activeTab === "Trending" && filteredPosts.length > 0 ? <TrendingHeader /> :
             activeTab === "Near Me" && locationPermission === "granted" ? <NearMeHeader /> : null
@@ -739,15 +727,15 @@ export default function SocialScreen() {
         />
       )}
 
-      {/* ── Share toast ──────────────────────────────────────────────────────── */}
+      {/* ── SHARE TOAST ── */}
       {shareToast ? (
-        <View style={[styles.shareToast, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Feather name="check" size={16} color={colors.primary} />
-          <Text style={[styles.shareToastText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{shareToast}</Text>
+        <View style={styles.shareToast}>
+          <Feather name="check" size={16} color="#FFFFFF" />
+          <Text style={styles.shareToastText}>{shareToast}</Text>
         </View>
       ) : null}
 
-      {/* ── Create Post Modal ─────────────────────────────────────────────────── */}
+      {/* ── CREATE POST MODAL ── */}
       <Modal
         visible={showCreatePost}
         animationType="slide"
@@ -756,36 +744,32 @@ export default function SocialScreen() {
         onShow={() => { setTimeout(() => composeInputRef.current?.focus(), 150); }}
       >
         <KeyboardAvoidingView
-          style={[composeStyles.container, { backgroundColor: colors.background }]}
+          style={[composeStyles.container, { backgroundColor: C.background }]}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={0}
         >
-          {/* Header */}
-          <View style={[composeStyles.header, { borderBottomColor: colors.border }]}>
+          <View style={[composeStyles.header, { borderBottomColor: C.outlineVariant }]}>
             <TouchableOpacity onPress={() => setShowCreatePost(false)} style={composeStyles.headerSide}>
-              <Text style={[composeStyles.cancelText, { color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>Cancel</Text>
+              <Text style={[composeStyles.cancelText, { color: C.textMuted }]}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={[composeStyles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>New Post</Text>
+            <Text style={composeStyles.title}>New Post</Text>
             <TouchableOpacity onPress={handleSubmitPost} style={[composeStyles.headerSide, { alignItems: "flex-end" }]}>
-              <View style={[composeStyles.shareBtn, { backgroundColor: newCaption.trim() ? colors.primary : colors.muted }]}>
-                <Text style={[composeStyles.shareBtnText, { color: newCaption.trim() ? colors.primaryForeground : colors.textMuted, fontFamily: "Inter_700Bold" }]}>
-                  Share
-                </Text>
+              <View style={[composeStyles.shareBtn, { backgroundColor: newCaption.trim() ? C.primary : C.surfaceHighest }]}>
+                <Text style={[composeStyles.shareBtnText, { color: newCaption.trim() ? "#FFFFFF" : C.textMuted }]}>Share</Text>
               </View>
             </TouchableOpacity>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={composeStyles.body} keyboardShouldPersistTaps="handled">
-            {/* Avatar + Input row */}
             <View style={composeStyles.inputRow}>
-              <View style={[composeStyles.avatar, { backgroundColor: colors.primary }]}>
-                <Text style={[{ color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" }]}>Y</Text>
+              <View style={[composeStyles.avatar, { backgroundColor: C.primary }]}>
+                <Text style={[{ color: "#fff", fontSize: 16, fontFamily: "Epilogue_700Bold" }]}>Y</Text>
               </View>
               <View style={{ flex: 1 }}>
                 <TextInput
-                  style={[composeStyles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                  style={[composeStyles.input, { color: C.textPrimary }]}
                   placeholder="Share what you cooked…"
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={C.textMuted}
                   ref={composeInputRef}
                   value={newCaption}
                   onChangeText={setNewCaption}
@@ -793,21 +777,19 @@ export default function SocialScreen() {
                   maxLength={280}
                   textAlignVertical="top"
                 />
-                {/* AI + char counter row */}
                 <View style={composeStyles.inputFooter}>
-                  <TouchableOpacity onPress={handleAISuggest} style={[composeStyles.aiBtn, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <TouchableOpacity onPress={handleAISuggest} style={[composeStyles.aiBtn, { backgroundColor: C.surfaceLow, borderColor: C.outlineVariant }]}>
                     <Text style={{ fontSize: 13 }}>✨</Text>
-                    <Text style={[{ fontSize: 11, color: colors.textSecondary, fontFamily: "Inter_500Medium" }]}>AI caption</Text>
+                    <Text style={[{ fontSize: 11, color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>AI caption</Text>
                   </TouchableOpacity>
                   <Text style={[composeStyles.charCount, {
-                    color: newCaption.length >= 270 ? "#E84040" : newCaption.length >= 240 ? "#F5A623" : colors.textMuted,
-                    fontFamily: "Inter_400Regular",
+                    color: newCaption.length >= 270 ? C.danger : newCaption.length >= 240 ? C.primary : C.textMuted,
+                    fontFamily: "Epilogue_400Regular",
                   }]}>{newCaption.length}/280</Text>
                 </View>
               </View>
             </View>
 
-            {/* Photo thumbnails */}
             {composerPhotos.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeStyles.photosRow}>
                 {composerPhotos.map((uri, i) => (
@@ -824,34 +806,32 @@ export default function SocialScreen() {
               </ScrollView>
             )}
 
-            {/* Tags row — cuisine + recipe + location */}
             {(newCuisine || composerRecipe || composerLocation) && (
               <View style={composeStyles.tagsRow}>
                 {newCuisine && (
-                  <View style={[composeStyles.tag, { backgroundColor: colors.primary + "20", borderColor: colors.primary + "50" }]}>
+                  <View style={[composeStyles.tag, { backgroundColor: C.primary + "20", borderColor: C.primary + "50" }]}>
                     <Text style={{ fontSize: 13 }}>{CUISINE_EMOJIS[newCuisine] ?? "🍽️"}</Text>
-                    <Text style={[composeStyles.tagText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>{newCuisine}</Text>
+                    <Text style={[composeStyles.tagText, { color: C.primary, fontFamily: "Epilogue_700Bold" }]}>{newCuisine}</Text>
                     <TouchableOpacity onPress={() => setNewCuisine(undefined)}>
-                      <Feather name="x" size={13} color={colors.primary} />
+                      <Feather name="x" size={13} color={C.primary} />
                     </TouchableOpacity>
                   </View>
                 )}
                 {composerLocation && (
-                  <View style={[composeStyles.tag, { backgroundColor: "#4CAF7620", borderColor: "#4CAF7650" }]}>
-                    <Feather name="map-pin" size={12} color="#4CAF76" />
-                    <Text style={[composeStyles.tagText, { color: "#4CAF76", fontFamily: "Inter_600SemiBold" }]}>{NEAR_ME_SUBURB}</Text>
+                  <View style={[composeStyles.tag, { backgroundColor: C.secondary + "20", borderColor: C.secondary + "50" }]}>
+                    <Feather name="map-pin" size={12} color={C.secondary} />
+                    <Text style={[composeStyles.tagText, { color: C.secondary, fontFamily: "Epilogue_700Bold" }]}>{NEAR_ME_SUBURB}</Text>
                     <TouchableOpacity onPress={() => setComposerLocation(false)}>
-                      <Feather name="x" size={13} color="#4CAF76" />
+                      <Feather name="x" size={13} color={C.secondary} />
                     </TouchableOpacity>
                   </View>
                 )}
               </View>
             )}
 
-            {/* Linked recipe card */}
             {composerRecipe && (
-              <View style={[composeStyles.recipeCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={[composeStyles.recipeCardThumb, { backgroundColor: colors.primary + "20" }]}>
+              <View style={[composeStyles.recipeCard, { backgroundColor: C.surface, borderColor: C.outlineVariant }]}>
+                <View style={[composeStyles.recipeCardThumb, { backgroundColor: C.surfaceLow }]}>
                   {composerRecipe.image ? (
                     <Image source={getRecipeImageSource(composerRecipe.image, composerRecipe.id) as any} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
                   ) : (
@@ -859,180 +839,176 @@ export default function SocialScreen() {
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }]} numberOfLines={1}>{composerRecipe.title}</Text>
-                  <Text style={[{ fontSize: 11, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }]}>Linked recipe</Text>
+                  <Text style={[{ fontSize: 13, fontFamily: "Epilogue_700Bold", color: C.textPrimary }]} numberOfLines={1}>{composerRecipe.title}</Text>
+                  <Text style={[{ fontSize: 11, color: C.textMuted, fontFamily: "Epilogue_400Regular", marginTop: 2 }]}>Linked recipe</Text>
                 </View>
                 <TouchableOpacity onPress={() => setComposerRecipe(null)}>
-                  <Feather name="x" size={18} color={colors.textSecondary} />
+                  <Feather name="x" size={18} color={C.textMuted} />
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* Toolbar */}
-            <View style={[composeStyles.toolbar, { borderTopColor: colors.border }]}>
+            <View style={[composeStyles.toolbar, { borderTopColor: C.outlineVariant }]}>
               <TouchableOpacity
-                style={[composeStyles.toolBtn, { backgroundColor: composerPhotos.length >= 4 ? colors.muted : colors.card, borderColor: colors.border, opacity: composerPhotos.length >= 4 ? 0.5 : 1 }]}
+                style={[composeStyles.toolBtn, { backgroundColor: composerPhotos.length >= 4 ? C.surfaceHighest : C.surface, borderColor: C.outlineVariant, opacity: composerPhotos.length >= 4 ? 0.5 : 1 }]}
                 onPress={handlePickPhoto}
                 disabled={composerPhotos.length >= 4}
               >
-                <Feather name="camera" size={15} color={colors.foreground} />
-                <Text style={[composeStyles.toolBtnText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+                <Feather name="camera" size={15} color={C.textPrimary} />
+                <Text style={[composeStyles.toolBtnText, { color: C.textPrimary, fontFamily: "Epilogue_400Regular" }]}>
                   {composerPhotos.length >= 4 ? "Max photos" : "Photo"}
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[composeStyles.toolBtn, { backgroundColor: newCuisine ? colors.primary + "20" : colors.card, borderColor: newCuisine ? colors.primary + "50" : colors.border }]}
+                style={[composeStyles.toolBtn, { backgroundColor: newCuisine ? C.primary + "20" : C.surface, borderColor: newCuisine ? C.primary + "50" : C.outlineVariant }]}
                 onPress={() => setShowCuisineSheet(true)}
               >
                 <Text style={{ fontSize: 14 }}>🏷️</Text>
-                <Text style={[composeStyles.toolBtnText, { color: newCuisine ? colors.primary : colors.foreground, fontFamily: "Inter_500Medium" }]}>Cuisine</Text>
+                <Text style={[composeStyles.toolBtnText, { color: newCuisine ? C.primary : C.textPrimary, fontFamily: "Epilogue_400Regular" }]}>Cuisine</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[composeStyles.toolBtn, { backgroundColor: composerRecipe ? colors.saveBlue + "20" : colors.card, borderColor: composerRecipe ? colors.saveBlue + "50" : colors.border }]}
+                style={[composeStyles.toolBtn, { backgroundColor: composerRecipe ? C.saveBlue + "20" : C.surface, borderColor: composerRecipe ? C.saveBlue + "50" : C.outlineVariant }]}
                 onPress={() => setShowRecipeSheet(true)}
               >
-                <Feather name="book-open" size={15} color={composerRecipe ? colors.saveBlue : colors.foreground} />
-                <Text style={[composeStyles.toolBtnText, { color: composerRecipe ? colors.saveBlue : colors.foreground, fontFamily: "Inter_500Medium" }]}>Recipe</Text>
+                <Feather name="book-open" size={15} color={composerRecipe ? C.saveBlue : C.textPrimary} />
+                <Text style={[composeStyles.toolBtnText, { color: composerRecipe ? C.saveBlue : C.textPrimary, fontFamily: "Epilogue_400Regular" }]}>Recipe</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Location toggle row */}
             <TouchableOpacity
-              style={[composeStyles.locationRow, { borderTopColor: colors.border }]}
+              style={[composeStyles.locationRow, { borderTopColor: C.outlineVariant }]}
               onPress={() => setComposerLocation((v) => !v)}
             >
-              <Feather name="map-pin" size={15} color={composerLocation ? "#4CAF76" : colors.textSecondary} />
-              <Text style={[composeStyles.locationText, { color: composerLocation ? "#4CAF76" : colors.textSecondary, fontFamily: "Inter_500Medium" }]}>
+              <Feather name="map-pin" size={15} color={composerLocation ? C.secondary : C.textMuted} />
+              <Text style={[composeStyles.locationText, { color: composerLocation ? C.secondary : C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                 {composerLocation ? `📍 ${NEAR_ME_SUBURB}` : "Add location"}
               </Text>
-              {composerLocation && <Feather name="check-circle" size={15} color="#4CAF76" style={{ marginLeft: "auto" }} />}
+              {composerLocation && <Feather name="check-circle" size={15} color={C.secondary} style={{ marginLeft: "auto" }} />}
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ── Cuisine picker (sibling of compose modal, not nested) ─────────────── */}
+      {/* ── CUISINE PICKER MODAL ── */}
       <Modal visible={showCuisineSheet} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowCuisineSheet(false)}>
-        <View style={[styles.commentModal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-          <View style={[styles.createPostHeader, { marginBottom: 16 }]}>
+        <View style={[styles.sheetModal, { backgroundColor: C.background }]}>
+          <View style={styles.sheetHandle} />
+          <View style={[styles.sheetHeader, { marginBottom: 16 }]}>
             <TouchableOpacity onPress={() => setShowCuisineSheet(false)}>
-              <Text style={[{ color: colors.textSecondary, fontFamily: "Inter_500Medium", fontSize: 15 }]}>Cancel</Text>
+              <Text style={[styles.sheetCancelText, { color: C.textMuted }]}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={[styles.commentModalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 0 }]}>Tag Cuisine</Text>
+            <Text style={styles.sheetTitle}>Tag Cuisine</Text>
             <View style={{ width: 60 }} />
           </View>
           <ScrollView>
             <View style={styles.cuisineGrid}>
-              {COMPOSE_CUISINES.map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  style={[styles.cuisineGridItem, {
-                    backgroundColor: newCuisine === c ? colors.primary : colors.card,
-                    borderColor: newCuisine === c ? colors.primary : colors.border,
-                  }]}
-                  onPress={() => { setNewCuisine(c); setShowCuisineSheet(false); }}
-                >
-                  <Text style={{ fontSize: 20 }}>{CUISINE_EMOJIS[c] ?? "🍽️"}</Text>
-                  <Text style={[{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: newCuisine === c ? colors.primaryForeground : colors.foreground }]}>{c}</Text>
-                </TouchableOpacity>
-              ))}
+              {COMPOSE_CUISINES.map((c) => {
+                const selected = newCuisine === c;
+                return (
+                  <TouchableOpacity
+                    key={c}
+                    style={[styles.cuisineGridItem, {
+                      backgroundColor: selected ? C.primary + "20" : C.surface,
+                      borderColor: selected ? C.primary : C.outlineVariant,
+                    }]}
+                    onPress={() => { setNewCuisine(c); setShowCuisineSheet(false); }}
+                  >
+                    <Text style={{ fontSize: 26 }}>{CUISINE_EMOJIS[c] ?? "🍽️"}</Text>
+                    <Text style={[styles.cuisineGridItemText, { color: selected ? C.primary : C.textPrimary }]}>{c}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* ── Recipe picker (sibling of compose modal, not nested) ──────────────── */}
+      {/* ── RECIPE PICKER MODAL ── */}
       <Modal visible={showRecipeSheet} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowRecipeSheet(false)}>
-        <View style={[styles.commentModal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-          <View style={[styles.createPostHeader, { marginBottom: 8 }]}>
+        <View style={[styles.sheetModal, { backgroundColor: C.background }]}>
+          <View style={styles.sheetHandle} />
+          <View style={[styles.sheetHeader, { marginBottom: 12 }]}>
             <TouchableOpacity onPress={() => setShowRecipeSheet(false)}>
-              <Text style={[{ color: colors.textSecondary, fontFamily: "Inter_500Medium", fontSize: 15 }]}>Cancel</Text>
+              <Text style={[styles.sheetCancelText, { color: C.textMuted }]}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={[styles.commentModalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 0 }]}>Link a Recipe</Text>
+            <Text style={styles.sheetTitle}>Link a Recipe</Text>
             <View style={{ width: 60 }} />
           </View>
-          <Text style={[{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_400Regular", marginBottom: 14 }]}>
-            Linking a recipe is optional — you can always add it later.
-          </Text>
-          {savedRecipesList.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={{ fontSize: 32 }}>📖</Text>
-              <Text style={[styles.emptyStateTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 16 }]}>No saved recipes yet</Text>
-              <Text style={[styles.emptyStateText, { color: colors.textSecondary, fontSize: 13 }]}>Save recipes from the Discover tab to link them here</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={savedRecipesList}
-              keyExtractor={(r) => r.id}
-              contentContainerStyle={{ gap: 10 }}
-              renderItem={({ item }) => {
-                const imgSrc = getRecipeImageSource(item.image, item.id);
-                const isSelected = composerRecipe?.id === item.id;
-                return (
-                  <TouchableOpacity
-                    style={[composeStyles.recipePickerItem, {
-                      backgroundColor: isSelected ? colors.primary + "15" : colors.card,
-                      borderColor: isSelected ? colors.primary : colors.border,
-                    }]}
-                    onPress={() => { setComposerRecipe({ id: item.id, title: item.title, image: item.image }); setShowRecipeSheet(false); }}
-                  >
-                    <View style={[composeStyles.recipePickerThumb, { backgroundColor: colors.muted, overflow: "hidden" }]}>
-                      {imgSrc ? (
-                        <Image source={imgSrc as any} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                      ) : (
-                        <Text style={{ fontSize: 20 }}>🍽</Text>
-                      )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground }]} numberOfLines={2}>{item.title}</Text>
-                      <Text style={[{ fontSize: 12, color: colors.textSecondary, fontFamily: "Inter_400Regular", marginTop: 3 }]}>{item.cuisine} · {item.prepTime + item.cookTime}m</Text>
-                    </View>
-                    {isSelected && <Feather name="check-circle" size={20} color={colors.primary} />}
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          )}
+          <FlatList
+            data={savedRecipesList}
+            keyExtractor={(r) => r.id}
+            contentContainerStyle={{ gap: 10, padding: 16 }}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={{ fontSize: 36 }}>🍽</Text>
+                <Text style={styles.emptyTitle}>No saved recipes</Text>
+                <Text style={styles.emptyText}>Save recipes from Discover to link them to your posts</Text>
+              </View>
+            }
+            renderItem={({ item }) => {
+              const imgSrc = item.image ? { uri: item.image } : null;
+              return (
+                <TouchableOpacity
+                  style={[styles.recipePickerItem, { backgroundColor: C.surface, borderColor: C.outlineVariant }]}
+                  onPress={() => {
+                    setComposerRecipe({ id: item.id, title: item.title, image: item.image ?? null });
+                    setShowRecipeSheet(false);
+                  }}
+                >
+                  <View style={[styles.recipePickerThumb, { backgroundColor: C.surfaceLow }]}>
+                    {imgSrc ? (
+                      <Image source={imgSrc} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                    ) : (
+                      <Text style={{ fontSize: 24 }}>🍽</Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.recipePickerTitle]} numberOfLines={1}>{item.title}</Text>
+                    <Text style={styles.recipePickerMeta}>{item.cuisine} · {item.calories} kcal</Text>
+                  </View>
+                  <Feather name="plus-circle" size={20} color={C.primary} />
+                </TouchableOpacity>
+              );
+            }}
+          />
         </View>
       </Modal>
 
-      {/* ── Notifications Modal ──────────────────────────────────────────────── */}
+      {/* ── NOTIFICATIONS MODAL ── */}
       <Modal visible={showNotifications} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowNotifications(false)}>
-        <View style={[styles.commentModal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-          <Text style={[styles.commentModalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Notifications</Text>
+        <View style={[styles.sheetModal, { backgroundColor: C.background }]}>
+          <View style={styles.sheetHandle} />
+          <Text style={[styles.sheetTitle, { marginBottom: 16 }]}>Notifications</Text>
           {[
-            { icon: "heart", color: "#E84040", user: "kimchi_queen", action: "liked your post", time: "2m ago" },
-            { icon: "message-circle", color: "#5B8EF5", user: "pasta_lover", action: "commented: \"Looks incredible!\"", time: "15m ago" },
-            { icon: "user-plus", color: "#4CAF76", user: "ramen_master", action: "started following you", time: "1h ago" },
+            { icon: "heart", color: C.danger, user: "kimchi_queen", action: "liked your post", time: "2m ago" },
+            { icon: "message-circle", color: C.saveBlue, user: "pasta_lover", action: "commented: \"Looks incredible!\"", time: "15m ago" },
+            { icon: "user-plus", color: C.secondary, user: "ramen_master", action: "started following you", time: "1h ago" },
           ].map((n, i) => (
-            <View key={i} style={[styles.notifRow, { borderBottomColor: colors.border }]}>
-              <View style={[styles.notifIcon, { backgroundColor: n.color + "20" }]}>
+            <View key={i} style={[styles.notifRow, { borderBottomColor: C.outlineVariant }]}>
+              <View style={[styles.notifIconCircle, { backgroundColor: n.color + "20" }]}>
                 <Feather name={n.icon as "heart"} size={16} color={n.color} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[{ fontSize: 14, color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-                  <Text style={{ fontFamily: "Inter_700Bold" }}>@{n.user} </Text>{n.action}
+                <Text style={styles.notifText}>
+                  <Text style={styles.notifUser}>@{n.user} </Text>{n.action}
                 </Text>
-                <Text style={[{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }]}>{n.time}</Text>
+                <Text style={styles.notifTime}>{n.time}</Text>
               </View>
             </View>
           ))}
         </View>
       </Modal>
 
-      {/* ── Comment Modal ────────────────────────────────────────────────────── */}
+      {/* ── COMMENT MODAL ── */}
       <Modal visible={!!commentModalPost} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setCommentModalPost(null)}>
-        <View style={[styles.commentModal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+        <View style={[styles.sheetModal, { backgroundColor: C.background }]}>
+          <View style={styles.sheetHandle} />
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <Text style={[styles.commentModalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 0 }]}>Comments</Text>
+            <Text style={[styles.sheetTitle, { marginBottom: 0 }]}>Comments</Text>
             <TouchableOpacity onPress={() => setCommentModalPost(null)}>
-              <Feather name="x" size={20} color={colors.textSecondary} />
+              <Feather name="x" size={20} color={C.textMuted} />
             </TouchableOpacity>
           </View>
 
@@ -1043,38 +1019,38 @@ export default function SocialScreen() {
             ListEmptyComponent={
               <View style={styles.noComments}>
                 <Text style={{ fontSize: 32 }}>💬</Text>
-                <Text style={[styles.noCommentsText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>No comments yet. Be first!</Text>
+                <Text style={styles.noCommentsText}>No comments yet. Be first!</Text>
               </View>
             }
             renderItem={({ item }) => (
               <View style={styles.commentRow}>
-                <View style={[styles.commentAvatar, { backgroundColor: colors.primary }]}>
-                  <Text style={[styles.commentAvatarText, { fontFamily: "Inter_700Bold" }]}>{item.avatar}</Text>
+                <View style={[styles.commentAvatar, { backgroundColor: C.primary }]}>
+                  <Text style={styles.commentAvatarText}>{item.avatar}</Text>
                 </View>
-                <View style={[styles.commentBubble, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.commentUser, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>@{item.user}</Text>
-                  <Text style={[styles.commentText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>{item.text}</Text>
-                  <Text style={[styles.commentTime, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>{item.timeAgo}</Text>
+                <View style={[styles.commentBubble, { backgroundColor: C.surfaceLow, borderColor: C.outlineVariant }]}>
+                  <Text style={styles.commentUser}>@{item.user}</Text>
+                  <Text style={styles.commentText}>{item.text}</Text>
+                  <Text style={styles.commentTime}>{item.timeAgo}</Text>
                 </View>
               </View>
             )}
           />
 
-          <View style={[styles.commentInput, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.commentInput, { backgroundColor: C.surfaceLow, borderColor: C.outlineVariant }]}>
             <TextInput
-              style={[styles.commentInputText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+              style={styles.commentInputText}
               placeholder="Add a comment…"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={C.textMuted}
               value={newComment}
               onChangeText={setNewComment}
               multiline
             />
             <TouchableOpacity
-              style={[styles.commentSendBtn, { backgroundColor: newComment.trim() ? colors.primary : colors.muted }]}
+              style={[styles.commentSendBtn, { backgroundColor: newComment.trim() ? C.primary : C.surfaceHighest }]}
               onPress={handleAddComment}
               disabled={!newComment.trim()}
             >
-              <Feather name="send" size={16} color={newComment.trim() ? colors.primaryForeground : colors.textMuted} />
+              <Feather name="send" size={16} color={newComment.trim() ? "#FFFFFF" : C.textMuted} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1086,181 +1062,200 @@ export default function SocialScreen() {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
-  headerTitle: { fontSize: 20, letterSpacing: -0.3 },
-  iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  notifBadge: { position: "absolute", top: -3, right: -3, width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  notifBadgeText: { fontSize: 9, color: "#fff" },
 
-  filterPanel: { borderBottomWidth: 1 },
-  discoveryTabsRow: { height: 46, flexShrink: 0 },
-  discoveryTabs: { paddingHorizontal: 20, flexDirection: "row", alignItems: "center" },
-  discoveryTab: { paddingHorizontal: 16, height: 46, justifyContent: "center", alignItems: "center" },
-  discoveryTabText: { fontSize: 14 },
-  discoveryTabUnderline: { position: "absolute", bottom: 0, left: 12, right: 12, height: 2, borderRadius: 2 },
-  filterDivider: { height: StyleSheet.hairlineWidth },
-  cuisineFiltersRow: { height: 44, flexShrink: 0 },
-  cuisineFilters: { paddingHorizontal: 16, gap: 7, flexDirection: "row", alignItems: "center" },
-  cuisineFilter: { height: 28, paddingHorizontal: 13, borderRadius: 100, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  cuisineFilterText: { fontSize: 12 },
+  // Header
+  header: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 24, paddingBottom: 12, zIndex: 50,
+    backgroundColor: "rgba(250,250,248,0.97)",
+    shadowColor: "rgba(131,85,0,1)", shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 4,
+  },
+  headerComposeBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.primary, alignItems: "center", justifyContent: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 5 },
+  headerCenter:    { alignItems: "center", gap: 1 },
+  headerEyebrow:   { fontSize: 11, letterSpacing: 2, fontFamily: "Epilogue_700Bold", color: C.textMuted, textTransform: "uppercase" },
+  headerTitle:     { fontSize: 28, letterSpacing: -0.5, fontFamily: "Epilogue_700Bold", color: C.textPrimary },
+  headerNotifBtn:  { width: 44, height: 44, borderRadius: 22, backgroundColor: C.surfaceHighest, alignItems: "center", justifyContent: "center" },
+  notifBadge:      { position: "absolute", top: -2, right: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: C.primary, borderWidth: 2, borderColor: C.background, alignItems: "center", justifyContent: "center" },
+  notifBadgeText:  { fontSize: 10, fontFamily: "Epilogue_700Bold", color: C.onPrimaryContainer, textAlign: "center" },
 
-  feedContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100, gap: 16 },
+  // Tab bar
+  tabBar:       { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 24, paddingBottom: 0, borderBottomWidth: 0.5, borderBottomColor: C.outlineVariant },
+  tabItem:      { flex: 1, alignItems: "center", paddingVertical: 10, minHeight: 44 },
+  tabText:      { fontSize: 14 },
+  tabTextActive: { fontFamily: "Epilogue_700Bold", color: C.primary },
+  tabTextInactive: { fontFamily: "Epilogue_400Regular", color: C.textMuted },
+  tabUnderline:  { height: 3, width: "60%", borderRadius: 2, backgroundColor: C.primary, marginTop: 4, alignSelf: "center" },
+
+  // Cuisine filter pills
+  pillScrollView: { flexGrow: 0, flexShrink: 0 },
+  pillStrip:      { paddingHorizontal: 16, gap: 10, paddingVertical: 12, alignItems: "center" },
+  filterPill:     { borderRadius: 999, paddingHorizontal: 18, paddingVertical: 9, minHeight: 44, justifyContent: "center" },
+  filterPillActive:   { backgroundColor: C.primary },
+  filterPillInactive: { backgroundColor: C.surfaceHighest, borderWidth: 1, borderColor: C.outlineVariant },
+  filterPillText:     { fontSize: 13 },
+  filterPillTextActive:   { fontFamily: "Epilogue_700Bold", color: "#FFFFFF" },
+  filterPillTextInactive: { fontFamily: "Epilogue_400Regular", color: C.textMuted },
+
+  // Feed
+  feedContent: { paddingTop: 8, paddingBottom: 100 },
 
   // Post card
-  postCard: { borderRadius: 18, overflow: "hidden", borderWidth: 1 },
-  postHeader: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
-  userAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
-  userAvatarText: { color: "#fff", fontSize: 15 },
-  username: { fontSize: 14 },
-  timeAgo: { fontSize: 12 },
-  distanceText: { fontSize: 11, marginTop: 1 },
-  followBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 100, borderWidth: 1.5 },
-  followBtnText: { fontSize: 13 },
-  followingFlash: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, borderWidth: 1.5 },
+  postCard:      { backgroundColor: C.surface, borderRadius: 24, overflow: "hidden", marginHorizontal: 16, marginBottom: 20, ...cardShadow },
+  postHeader:    { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingVertical: 16 },
+  postHeaderLeft: { flexDirection: "row", gap: 14, alignItems: "center", flex: 1 },
+  postHeaderRight: { alignItems: "flex-end" },
+  avatar:        { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  avatarText:    { color: "#fff", fontSize: 16, fontFamily: "Epilogue_700Bold" },
+  authorInfo:    { flex: 1 },
+  authorName:    { fontSize: 14, fontFamily: "Epilogue_700Bold", color: C.textPrimary },
+  authorMeta:    { fontSize: 12, fontFamily: "Epilogue_400Regular", color: C.textMuted, marginTop: 1 },
 
-  postImageContainer: { width: "100%", aspectRatio: 4 / 3, alignItems: "center", justifyContent: "center" },
-  postImage: { width: "100%", height: "100%", position: "absolute" },
+  // Follow buttons
+  followBtnActive:     { backgroundColor: C.primary, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8, minHeight: 44, justifyContent: "center" },
+  followBtnActiveText: { fontFamily: "Epilogue_700Bold", fontSize: 13, color: "#FFFFFF" },
+  followBtnInactive:   { backgroundColor: C.surfaceHighest, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44, justifyContent: "center" },
+  followBtnInactiveText: { fontFamily: "Epilogue_700Bold", fontSize: 13, color: C.textMuted },
+
+  // Post image
+  postImageContainer:     { width: "100%", height: 300, backgroundColor: C.surfaceHigh },
+  postImage:              { width: "100%", height: "100%", position: "absolute" },
+  postImagePlaceholder:   { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
+  postImagePlaceholderText: { color: C.textMuted, fontSize: 13, fontFamily: "Epilogue_400Regular" },
 
   // Trending badge
-  trendingBadge: { position: "absolute", top: 10, left: 10, backgroundColor: "rgba(0,0,0,0.65)", borderRadius: 100, paddingHorizontal: 10, paddingVertical: 5 },
-  trendingBadgeText: { fontSize: 12, color: "#fff", fontFamily: "Inter_700Bold" } as const,
+  trendingBadge:     { position: "absolute", top: 12, left: 12, backgroundColor: C.surfaceLow, borderRadius: 100, paddingHorizontal: 12, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 },
+  trendingBadgeText: { fontSize: 12, fontFamily: "Epilogue_700Bold", color: C.primary },
 
-  // Double-tap heart overlay
-  heartOverlay: { position: "absolute", alignItems: "center", justifyContent: "center", top: 0, left: 0, right: 0, bottom: 0 },
+  // Heart overlay
+  heartOverlay:      { position: "absolute", alignItems: "center", justifyContent: "center", top: 0, left: 0, right: 0, bottom: 0 },
   heartOverlayEmoji: { fontSize: 80 },
 
-  actionsOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 14, paddingBottom: 12, paddingTop: 40 },
-  actionsRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  actionItem: { flexDirection: "row", alignItems: "center" },
-  actionPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 100 },
-  actionCount: { fontSize: 13, color: "#fff" },
+  // Actions row (below image)
+  actionsRow:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 16 },
+  actionsLeft:  { flexDirection: "row", gap: 20 },
+  actionsRight: { flexDirection: "row", gap: 16 },
+  actionBtn:    { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
+  actionCount:  { fontFamily: "Epilogue_700Bold", fontSize: 14, color: C.textPrimary },
+  iconAction:   { minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center" },
 
-  captionContainer: { paddingHorizontal: 16, paddingBottom: 14, gap: 8 },
-  caption: { fontSize: 14, lineHeight: 20 },
-  captionUsername: { fontSize: 14 },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  recipeChip: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, borderWidth: 1 },
-  cuisineChip: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, borderWidth: 1 },
-  cuisineChipEmoji: { fontSize: 13 },
-  cuisineChipText: { fontSize: 12 },
-  recipeChipText: { fontSize: 12 },
+  // Post content
+  postContent:   { paddingHorizontal: 20, paddingBottom: 20, paddingTop: 12 },
+  postTitle:     { fontFamily: "Epilogue_700Bold", fontSize: 20, color: C.textPrimary, marginBottom: 8, letterSpacing: -0.3 },
+  postCaption:   { fontFamily: "Epilogue_400Regular", fontSize: 15, color: C.textMuted, lineHeight: 22, marginBottom: 12 },
+  postCaptionUsername: { fontFamily: "Epilogue_700Bold", color: C.textPrimary },
+  tagRow:        { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
+  cuisineTag:    { paddingHorizontal: 10, paddingVertical: 5, backgroundColor: C.surfaceHigh, borderRadius: 8 },
+  cuisineTagText: { fontSize: 11, fontFamily: "Epilogue_700Bold", color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.8 },
+  viewRecipeBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 999, alignSelf: "flex-start", shadowColor: C.primary, shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4, minHeight: 44 },
+  viewRecipeBtnText: { fontFamily: "Epilogue_700Bold", fontSize: 13, color: "#FFFFFF" },
 
-  // Trending section
-  sectionLabel: { fontSize: 12, letterSpacing: 0.5, textTransform: "uppercase", paddingHorizontal: 0, marginBottom: 10 },
-  trendingCuisinesRow: { gap: 10, paddingBottom: 4 },
-  trendingCuisineCard: { width: 108, borderRadius: 14, overflow: "hidden", borderWidth: 1 },
-  trendingCuisineImage: { width: "100%", height: 76 },
-  trendingEmojiBox: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  trendingCuisineLabel: { paddingHorizontal: 8, paddingVertical: 7, gap: 2 },
+  // Trending cuisine cards
+  sectionAccentRow:  { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16, paddingHorizontal: 16 },
+  sectionAccentBar:  { width: 4, height: 24, borderRadius: 2, backgroundColor: C.primary },
+  sectionAccentLabel: { fontFamily: "Epilogue_700Bold", fontSize: 12, letterSpacing: 1.8, color: C.textMuted, textTransform: "uppercase" },
+  cuisineCard:       { width: 176, borderRadius: 16, overflow: "hidden", backgroundColor: C.surfaceHigh, ...cardShadow },
+  cuisineCardImage:  { width: 176, height: 128, backgroundColor: C.surfaceHigh },
+  cuisineCardBody:   { padding: 10 },
+  cuisineCardName:   { fontFamily: "Epilogue_700Bold", fontSize: 16, color: C.textPrimary, marginBottom: 4 },
+  cuisineCardCount:  { fontFamily: "Epilogue_700Bold", fontSize: 12, color: C.primary },
+  trendingDivider:   { height: StyleSheet.hairlineWidth, backgroundColor: C.outlineVariant, marginVertical: 10, marginHorizontal: 16 },
 
   // Near Me header
-  nearMeHeader: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 12 },
-  suburbPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100, borderWidth: 1, marginLeft: "auto" },
+  nearMeHeader:    { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(76,175,118,0.06)", borderColor: "rgba(76,175,118,0.25)", borderWidth: 1, borderRadius: 14, marginBottom: 12, overflow: "hidden" },
+  nearMeAccentBar: { width: 4, alignSelf: "stretch", backgroundColor: C.secondary },
+  nearMeInner:     { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
+  nearMeIconBox:   { width: 30, height: 30, borderRadius: 8, backgroundColor: "rgba(76,175,118,0.15)", alignItems: "center", justifyContent: "center" },
+  nearMeText:      { flex: 1, fontSize: 13, color: C.textPrimary, fontFamily: "Epilogue_400Regular" },
+  nearMeSuburbPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100, borderWidth: 1, backgroundColor: "rgba(76,175,118,0.15)", borderColor: "rgba(76,175,118,0.35)" },
+  nearMeSuburbText: { fontSize: 11, color: C.secondary, fontFamily: "Epilogue_700Bold" },
 
   // Empty states
-  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, paddingHorizontal: 40, gap: 14 },
-  emptyStateTitle: { fontSize: 20, textAlign: "center" },
-  emptyStateText: { fontSize: 14, textAlign: "center", lineHeight: 21 },
-  emptyStateCTA: { paddingHorizontal: 28, paddingVertical: 13, borderRadius: 100, marginTop: 8 },
-  emptyStateCTAText: { fontSize: 15 },
+  emptyState:     { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, paddingHorizontal: 40, gap: 14 },
+  emptyIconCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: C.surfaceLow, alignItems: "center", justifyContent: "center" },
+  emptyTitle:     { fontSize: 20, textAlign: "center", fontFamily: "Epilogue_700Bold", color: C.textPrimary },
+  emptyText:      { fontSize: 14, textAlign: "center", lineHeight: 21, fontFamily: "Epilogue_400Regular", color: C.textMuted },
+  emptyCTA:       { paddingHorizontal: 28, paddingVertical: 13, borderRadius: 100, marginTop: 8, backgroundColor: C.primary, minHeight: 44 },
+  emptyCTAText:   { fontSize: 15, fontFamily: "Epilogue_700Bold", color: "#FFFFFF" },
 
-  // Toast
-  shareToast: { position: "absolute", bottom: 100, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 100, borderWidth: 1 },
-  shareToastText: { fontSize: 14 },
+  // Share toast
+  shareToast:     { position: "absolute", bottom: 100, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 100, backgroundColor: C.primary },
+  shareToastText: { fontSize: 14, fontFamily: "Epilogue_700Bold", color: "#FFFFFF" },
 
-  // Modals
-  commentModal: { flex: 1, padding: 20 },
-  modalHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 16 },
-  commentModalTitle: { fontSize: 20, marginBottom: 16 },
-  createPostHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 16 },
-  createPostCancel: { fontSize: 15 },
-  createPostShare: { fontSize: 15 },
-  createPostBody: { flexDirection: "row", gap: 12, paddingVertical: 16, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
-  createPostAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
-  createPostInput: { flex: 1, fontSize: 16, lineHeight: 22, minHeight: 80 },
-  createPostFooter: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
-  createPostChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, borderWidth: 1 },
-  selectedCuisineRow: { paddingVertical: 10, paddingHorizontal: 2 },
-  selectedCuisineTag: { flexDirection: "row", alignItems: "center", gap: 7, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 100, borderWidth: 1 },
-  cuisineGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingHorizontal: 4 },
-  cuisineGridItem: { width: "30%", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14, borderRadius: 14, borderWidth: 1 },
+  // Sheet modals (cuisine/recipe/notifications/comments)
+  sheetModal:    { flex: 1, padding: 20 },
+  sheetHandle:   { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 16, backgroundColor: C.outlineVariant },
+  sheetHeader:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sheetTitle:    { fontSize: 20, fontFamily: "Epilogue_700Bold", color: C.textPrimary, textAlign: "center", flex: 1 },
+  sheetCancelText: { fontSize: 15, fontFamily: "Epilogue_400Regular" },
 
-  notifRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  notifIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  // Cuisine picker grid
+  cuisineGrid:       { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingHorizontal: 4 },
+  cuisineGridItem:   { width: "30%", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14, borderRadius: 14, borderWidth: 1 },
+  cuisineGridItemText: { fontSize: 12, fontFamily: "Epilogue_700Bold", textAlign: "center" },
 
-  commentRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-  commentAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  commentAvatarText: { color: "#fff", fontSize: 13 },
-  commentBubble: { flex: 1, padding: 12, borderRadius: 14, borderWidth: 1, gap: 4 },
-  commentUser: { fontSize: 13 },
-  commentText: { fontSize: 14, lineHeight: 19 },
-  commentTime: { fontSize: 11 },
-  noComments: { alignItems: "center", paddingVertical: 40, gap: 10 },
-  noCommentsText: { fontSize: 15 },
-  commentInput: { flexDirection: "row", alignItems: "flex-end", gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, marginTop: 8 },
-  commentInputText: { flex: 1, fontSize: 15, maxHeight: 80 },
-  commentSendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  // Recipe picker
+  recipePickerItem:  { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, borderWidth: 1 },
+  recipePickerThumb: { width: 56, height: 56, borderRadius: 10, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  recipePickerTitle: { fontSize: 14, fontFamily: "Epilogue_700Bold", color: C.textPrimary },
+  recipePickerMeta:  { fontSize: 12, fontFamily: "Epilogue_400Regular", color: C.textMuted, marginTop: 2 },
+
+  // Notifications
+  notifRow:       { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  notifIconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  notifText:      { fontSize: 14, fontFamily: "Epilogue_400Regular", color: C.textPrimary },
+  notifUser:      { fontFamily: "Epilogue_700Bold" },
+  notifTime:      { fontSize: 12, fontFamily: "Epilogue_400Regular", color: C.textMuted, marginTop: 2 },
+
+  // Comments
+  noComments:      { alignItems: "center", paddingVertical: 40, gap: 10 },
+  noCommentsText:  { fontSize: 15, fontFamily: "Epilogue_400Regular", color: C.textMuted },
+  commentRow:      { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  commentAvatar:   { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  commentAvatarText: { color: "#fff", fontSize: 13, fontFamily: "Epilogue_700Bold" },
+  commentBubble:   { flex: 1, padding: 12, borderRadius: 14, borderWidth: 1, gap: 4 },
+  commentUser:     { fontSize: 13, fontFamily: "Epilogue_700Bold", color: C.primary },
+  commentText:     { fontSize: 14, lineHeight: 19, fontFamily: "Epilogue_400Regular", color: C.textPrimary },
+  commentTime:     { fontSize: 11, fontFamily: "Epilogue_400Regular", color: C.textMuted },
+  commentInput:    { flexDirection: "row", alignItems: "flex-end", gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, marginTop: 8 },
+  commentInputText: { flex: 1, fontSize: 15, maxHeight: 80, fontFamily: "Epilogue_400Regular", color: C.textPrimary },
+  commentSendBtn:  { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
 });
 
 // ─── Compose screen styles ────────────────────────────────────────────────────
 const composeStyles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+  container:  { flex: 1 },
+  header:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   headerSide: { minWidth: 70 },
-  title: { fontSize: 17, letterSpacing: -0.2 },
-  cancelText: { fontSize: 16 },
-  shareBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 100, alignSelf: "flex-end" },
-  shareBtnText: { fontSize: 15 },
+  title:      { fontSize: 17, fontFamily: "Epilogue_700Bold", color: C.textPrimary, letterSpacing: -0.2, textAlign: "center", flex: 1 },
+  cancelText: { fontSize: 16, fontFamily: "Epilogue_400Regular" },
+  shareBtn:   { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 100, alignSelf: "flex-end" },
+  shareBtnText: { fontSize: 15, fontFamily: "Epilogue_700Bold" },
 
-  body: { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 6 },
+  body:       { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 6 },
 
-  inputRow: { flexDirection: "row", gap: 13, paddingVertical: 16, alignItems: "flex-start" },
-  avatar: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", marginTop: 2 },
-  input: { fontSize: 17, lineHeight: 24, minHeight: 100 },
+  inputRow:   { flexDirection: "row", gap: 13, paddingVertical: 16, alignItems: "flex-start" },
+  avatar:     { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", marginTop: 2 },
+  input:      { fontSize: 17, lineHeight: 24, minHeight: 100, fontFamily: "Epilogue_400Regular" },
   inputFooter: { flexDirection: "row", alignItems: "center", marginTop: 10, gap: 8 },
-  aiBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, borderWidth: 1 },
-  charCount: { fontSize: 13, marginLeft: "auto" },
+  aiBtn:      { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, borderWidth: 1 },
+  charCount:  { fontSize: 13, marginLeft: "auto" },
 
-  photosRow: { gap: 10, paddingVertical: 8, paddingBottom: 12 },
-  photoThumb: { width: 90, height: 90, borderRadius: 12, overflow: "hidden", position: "relative" },
+  photosRow:    { gap: 10, paddingVertical: 8, paddingBottom: 12 },
+  photoThumb:   { width: 90, height: 90, borderRadius: 12, overflow: "hidden", position: "relative" },
   photoThumbImg: { width: "100%", height: "100%" },
-  photoRemove: {
-    position: "absolute", top: 5, right: 5, width: 22, height: 22, borderRadius: 11,
-    backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center",
-  },
+  photoRemove:  { position: "absolute", top: 5, right: 5, width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
 
-  tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingVertical: 6 },
-  tag: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 100, borderWidth: 1 },
-  tagText: { fontSize: 13 },
+  tagsRow:    { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingVertical: 6 },
+  tag:        { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 100, borderWidth: 1 },
+  tagText:    { fontSize: 13 },
 
-  recipeCard: {
-    flexDirection: "row", alignItems: "center", gap: 12, padding: 12,
-    borderRadius: 14, borderWidth: 1, marginVertical: 8,
-  },
+  recipeCard:      { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, borderWidth: 1, marginVertical: 8 },
   recipeCardThumb: { width: 50, height: 50, borderRadius: 10, alignItems: "center", justifyContent: "center", overflow: "hidden" },
 
-  toolbar: {
-    flexDirection: "row", gap: 8, paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8,
-  },
-  toolBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 100, borderWidth: 1,
-  },
+  toolbar:     { flexDirection: "row", gap: 8, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8 },
+  toolBtn:     { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 100, borderWidth: 1 },
   toolBtnText: { fontSize: 14 },
 
-  locationRow: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth,
-  },
+  locationRow:  { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth },
   locationText: { fontSize: 14 },
-
-  recipePickerItem: {
-    flexDirection: "row", alignItems: "center", gap: 12, padding: 12,
-    borderRadius: 14, borderWidth: 1,
-  },
-  recipePickerThumb: { width: 56, height: 56, borderRadius: 10, alignItems: "center", justifyContent: "center" },
 });
