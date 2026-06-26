@@ -11,17 +11,40 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
 import { getRecipeImageSource } from "@/constants/recipeImages";
 
 const API_BASE = Platform.OS !== "web"
   ? `https://${process.env.EXPO_PUBLIC_API_DOMAIN ?? "zip-repl-cactusussy24.replit.app"}/api`
   : "/api";
+
+// ── Brand palette ─────────────────────────────────────────────────────────────
+const C = {
+  primary:            "#F5A623",
+  secondary:          "#4CAF76",
+  textPrimary:        "#141210",
+  textMuted:          "#7A7570",
+  surface:            "#FFFFFF",
+  background:         "#FAFAF8",
+  surfaceLow:         "#FFF1E4",
+  surfaceHigh:        "#F4E6D8",
+  surfaceHighest:     "#EEE0D2",
+  onPrimaryContainer: "#644000",
+  outlineVariant:     "#D7C3AE",
+  saveBlue:           "#5B8EF5",
+  danger:             "#E84040",
+} as const;
+
+const cardShadow = Platform.select({
+  ios:     { shadowColor: "rgba(131,85,0,1)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16 },
+  android: { elevation: 4 },
+  web:     { boxShadow: "0 4px 16px rgba(131,85,0,0.08)" },
+}) as object;
 
 const AI_VARIATIONS = [
   { label: "High Protein",      icon: "trending-up" as const,  color: "#5B8EF5" },
@@ -67,7 +90,6 @@ function detectMeat(name: string): string | null {
   return null;
 }
 
-// Replace ingredient terms inside step instruction text (case-insensitive, word-boundary aware)
 function substituteInSteps(
   steps: Array<{ step: number; instruction: string; timerMinutes?: number }>,
   subsMap: Record<string, string>
@@ -99,7 +121,6 @@ function applyLocalVariation(
   const changed: string[] = [];
 
   if (variation === "Make Vegetarian") {
-    // Build substitution map for steps
     const stepSubsMap: Record<string, string> = {};
     ingredients = ingredients.map((ing) => {
       const meatKey = detectMeat(ing.name);
@@ -117,9 +138,7 @@ function applyLocalVariation(
     if (changed.length === 0) {
       ingredients = [...ingredients, { name: "Roasted cherry tomatoes", amount: "100g", inPantry: false }, { name: "Baby spinach", amount: "40g", inPantry: false }];
     }
-    // Apply substitution names into step text
     steps = substituteInSteps(steps, stepSubsMap);
-    // Append a plant-based cooking tip to the final step
     if (steps.length > 0) {
       const last = steps[steps.length - 1];
       steps[steps.length - 1] = {
@@ -153,7 +172,6 @@ function applyLocalVariation(
     ];
     ingredients = [...ingredients, ...additions];
     notes = "Added egg whites and Greek yogurt to boost protein by ~65%. Stir yogurt in off-heat at the very end for creaminess without curdling.";
-    // Append a new final step for the protein additions
     const newStepNum = steps.length + 1;
     steps = [
       ...steps,
@@ -171,7 +189,6 @@ function applyLocalVariation(
     ];
     ingredients = [...ingredients, ...spiceAdd];
     notes = "Added chilli flakes and fresh chilli. For maximum heat, add the sliced chilli when you first heat the oil. For medium heat, add with the other aromatics.";
-    // Inject heat instruction into the first step
     if (steps.length > 0) {
       steps[0] = {
         ...steps[0],
@@ -206,7 +223,6 @@ function applyLocalVariation(
     });
     ingredients = fastIngredients;
     notes = "Speed tips applied: use pre-minced garlic, canned pulses, and a hotter pan. Total time cut by ~35%. Skip resting times and use the microwave where noted.";
-    // Shorten timing references and add speed tips to steps
     steps = steps.map((step) => {
       let instruction = step.instruction
         .replace(/\b(\d+)\s*-\s*(\d+)\s*minutes?\b/gi, (_, a, b) => `${Math.round(parseInt(a) * 0.65)}–${Math.round(parseInt(b) * 0.65)} minutes`)
@@ -245,7 +261,6 @@ function getMealTypeFromTime(): MealType {
 export default function RecipeDetailScreen() {
   const { id, servings: servingsParam, mealType: mealTypeParam } =
     useLocalSearchParams<{ id: string; servings?: string; mealType?: string }>();
-  const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const {
@@ -328,7 +343,6 @@ export default function RecipeDetailScreen() {
   const [varNotes, setVarNotes] = useState<string | null>(null);
   const [varAdditions, setVarAdditions] = useState<Array<{ name: string; amount: string; inPantry: boolean }>>([]);
   const [selectedAdditions, setSelectedAdditions] = useState<Set<string>>(new Set());
-  // committed = user pressed "Apply" — the You Have/You Need columns switch to varIngredients
   const [varCommitted, setVarCommitted] = useState(false);
 
   // ── Timer state ──────────────────────────────────────────────────────────────
@@ -422,13 +436,11 @@ export default function RecipeDetailScreen() {
     if (!recipe || variationLoading) return;
     if (appliedVariation === variationType) { clearVariation(); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Always reset committed state when switching to a new variation
     setVarCommitted(false);
     setVariationLoading(variationType);
 
     let applied = false;
 
-    // Try API first (short timeout so fallback kicks in quickly)
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
@@ -458,9 +470,6 @@ export default function RecipeDetailScreen() {
       // fall through to local engine
     }
 
-    // Local fallback — always applies a meaningful result.
-    // Pass enrichedIngredients (which carry the correct inPantry flag from the actual
-    // pantry) so that non-substituted items keep their pantry status after Apply.
     if (!applied) {
       const enrichedRecipe = { ...recipe, ingredients: enrichedIngredients };
       const local = applyLocalVariation(enrichedRecipe, variationType);
@@ -480,10 +489,10 @@ export default function RecipeDetailScreen() {
 
   if (!recipe) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }]}>
-        <Text style={{ color: colors.foreground }}>Recipe not found</Text>
+      <View style={[styles.container, { backgroundColor: C.background, justifyContent: "center", alignItems: "center" }]}>
+        <Text style={{ color: C.textPrimary, fontFamily: "Epilogue_700Bold", fontSize: 16 }}>Recipe not found</Text>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={{ color: colors.saffron, marginTop: 16 }}>Go Back</Text>
+          <Text style={{ color: C.primary, marginTop: 16, fontFamily: "Epilogue_400Regular" }}>Go Back</Text>
         </TouchableOpacity>
       </View>
     );
@@ -499,9 +508,6 @@ export default function RecipeDetailScreen() {
   const displaySteps = varSteps ?? recipe.steps;
 
   // ── Pantry match with active additions ───────────────────────────────────────
-  // When user has committed a variation (pressed Apply), use varIngredients directly
-  // (which already has inPantry=false for substituted items, true for unchanged pantry items).
-  // Otherwise fall back to original pantry/missing lists + any additions.
   const activeAdditions = varAdditions.filter((a) => selectedAdditions.has(a.name));
   const displayPantryIngredients: Array<{ name: string; amount: string; inPantry: boolean }> =
     varCommitted && varIngredients
@@ -553,7 +559,6 @@ export default function RecipeDetailScreen() {
   const splitToPoints = (text: string): string[] => {
     const byNewline = text.split("\n").map((l) => l.trim()).filter(Boolean);
     if (byNewline.length > 1) return byNewline;
-    // For single-paragraph AI-generated steps: split at ". " before uppercase
     const bySentence = text.split(/\.\s+(?=[A-Z])/).filter(Boolean);
     if (bySentence.length > 1) {
       return bySentence.map((s, i) => (i < bySentence.length - 1 ? s + "." : s));
@@ -604,7 +609,7 @@ export default function RecipeDetailScreen() {
 
     const stepProgress = (cookModeStep + 1) / displaySteps.length;
     const variationColor = varCommitted && appliedVariation
-      ? (AI_VARIATIONS.find((v) => v.label === appliedVariation)?.color ?? colors.saffron)
+      ? (AI_VARIATIONS.find((v) => v.label === appliedVariation)?.color ?? C.primary)
       : null;
 
     return (
@@ -640,9 +645,9 @@ export default function RecipeDetailScreen() {
                     {
                       width: i === cookModeStep ? 20 : 6,
                       backgroundColor: i === cookModeStep
-                        ? colors.saffron
+                        ? C.primary
                         : i < cookModeStep
-                          ? "#4CAF76"
+                          ? C.secondary
                           : "#2E2B26",
                     },
                   ]} />
@@ -657,9 +662,9 @@ export default function RecipeDetailScreen() {
         {/* ── Timer pill (floating, only when active) ── */}
         {timerSeconds !== null && (
           <Animated.View style={[styles.cmTimerPill, { opacity: timerPillAnim, transform: [{ scale: timerPillAnim }] }]}>
-            <Feather name="clock" size={14} color={timerSeconds === 0 ? "#00BFA5" : colors.saffron} />
-            <Text style={[styles.cmTimerPillLabel, { color: timerSeconds === 0 ? "#00BFA5" : "#F0EDE8" }]} numberOfLines={1}>{timerLabel}</Text>
-            <Text style={[styles.cmTimerPillTime, { color: timerSeconds === 0 ? "#00BFA5" : colors.saffron }]}>
+            <Feather name="clock" size={14} color={timerSeconds === 0 ? C.secondary : C.primary} />
+            <Text style={[styles.cmTimerPillLabel, { color: timerSeconds === 0 ? C.secondary : "#F0EDE8" }]} numberOfLines={1}>{timerLabel}</Text>
+            <Text style={[styles.cmTimerPillTime, { color: timerSeconds === 0 ? C.secondary : C.primary }]}>
               {timerSeconds === 0 ? "Done! 🎉" : formatTime(timerSeconds)}
             </Text>
             <TouchableOpacity onPress={() => setTimerRunning((r) => !r)} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
@@ -683,7 +688,7 @@ export default function RecipeDetailScreen() {
           >
             {/* Step badge row */}
             <View style={styles.cmBadgeRow}>
-              <View style={[styles.cmStepBadge, { backgroundColor: variationColor ?? colors.saffron }]}>
+              <View style={[styles.cmStepBadge, { backgroundColor: variationColor ?? C.primary }]}>
                 <Text style={styles.cmStepBadgeText}>{currentStep.step}</Text>
               </View>
               <Text style={styles.cmStepOf}>of {displaySteps.length}</Text>
@@ -700,7 +705,7 @@ export default function RecipeDetailScreen() {
             <View style={{ gap: 18 }}>
               {splitToPoints(currentStep.instruction).map((line, idx) => (
                 <View key={idx} style={styles.cmInstructionRow}>
-                  <View style={[styles.cmBulletBar, { backgroundColor: variationColor ?? colors.saffron }]} />
+                  <View style={[styles.cmBulletBar, { backgroundColor: variationColor ?? C.primary }]} />
                   <Text style={styles.cmInstructionText}>
                     {line.startsWith("•") ? line.slice(1).trim() : line}
                   </Text>
@@ -713,12 +718,12 @@ export default function RecipeDetailScreen() {
               <TouchableOpacity
                 style={[styles.cmInlineTimer, {
                   backgroundColor: isTimerActiveForStep ? "#1E1B18" : "#1A1713",
-                  borderColor: isTimerActiveForStep ? colors.saffron : "#2E2B26",
+                  borderColor: isTimerActiveForStep ? C.primary : "#2E2B26",
                 }]}
                 onPress={() => startTimer(currentStep.timerMinutes!, `Step ${currentStep.step}`)}
                 activeOpacity={0.8}
               >
-                <Feather name="clock" size={17} color={colors.saffron} />
+                <Feather name="clock" size={17} color={C.primary} />
                 <Text style={styles.cmInlineTimerText}>
                   {isTimerActiveForStep
                     ? `Running — ${formatTime(timerSeconds ?? 0)} left`
@@ -758,7 +763,7 @@ export default function RecipeDetailScreen() {
           {/* Primary CTA */}
           {isLast ? (
             <TouchableOpacity
-              style={[styles.cmNavMain, { backgroundColor: "#4CAF76" }]}
+              style={[styles.cmNavMain, { backgroundColor: C.secondary }]}
               onPress={handleFinishCooking}
               activeOpacity={0.85}
             >
@@ -767,7 +772,7 @@ export default function RecipeDetailScreen() {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[styles.cmNavMain, { backgroundColor: variationColor ?? colors.saffron }]}
+              style={[styles.cmNavMain, { backgroundColor: variationColor ?? C.primary }]}
               onPress={() => {
                 setCookModeStep((s) => s + 1);
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -783,87 +788,95 @@ export default function RecipeDetailScreen() {
     );
   }
 
+  // ── Main recipe detail screen ─────────────────────────────────────────────────
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: C.background }]}>
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-        {/* Hero image */}
+
+        {/* ── Hero image ── */}
         <View style={styles.heroContainer}>
           {imageSource ? (
             <Image source={imageSource} style={styles.heroImage} resizeMode="cover" />
           ) : (
-            <View style={[styles.heroPlaceholder, { backgroundColor: colors.muted }]}>
+            <View style={[styles.heroPlaceholder, { backgroundColor: C.surfaceHighest }]}>
               <Text style={styles.heroEmoji}>
                 {recipe.cuisine === "Italian" ? "🍝" : recipe.cuisine === "Japanese" ? "🍜" : "🍽"}
               </Text>
             </View>
           )}
-          <View style={styles.heroOverlay} />
+          <LinearGradient
+            colors={["transparent", "rgba(20,18,16,0.72)"]}
+            style={styles.heroGradient}
+          />
+          {/* Nav buttons */}
           <View style={[styles.heroNav, { top: topPadding + 12 }]}>
-            <TouchableOpacity style={[styles.heroNavBtn, { backgroundColor: "rgba(0,0,0,0.5)" }]} onPress={() => router.back()}>
-              <Feather name="arrow-left" size={20} color="#fff" />
+            <TouchableOpacity style={styles.heroNavBtn} onPress={() => router.back()}>
+              <Feather name="arrow-left" size={20} color={C.textPrimary} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.heroNavBtn, { backgroundColor: "rgba(0,0,0,0.5)" }]}>
-              <Feather name="share-2" size={20} color="#fff" />
+            <TouchableOpacity style={styles.heroNavBtn}>
+              <Feather name="share-2" size={20} color={C.textPrimary} />
             </TouchableOpacity>
           </View>
-          <View style={[styles.heroInfoPill, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
-            <Feather name="clock" size={14} color="#fff" />
+          {/* Info pill */}
+          <View style={styles.heroInfoPill}>
+            <Feather name="clock" size={13} color="#fff" />
             <Text style={styles.heroPillText}>{recipe.prepTime + recipe.cookTime} min</Text>
             <View style={styles.pillDot} />
-            <Feather name="zap" size={14} color="#fff" />
+            <Feather name="zap" size={13} color="#fff" />
             <Text style={styles.heroPillText}>{recipe.calories} kcal</Text>
             <View style={styles.pillDot} />
-            <Feather name="users" size={14} color="#fff" />
+            <Feather name="users" size={13} color="#fff" />
             <Text style={styles.heroPillText}>Serves {recipe.servings}</Text>
           </View>
         </View>
 
         <View style={styles.content}>
-          {/* Title & Creator */}
-          <Text style={[styles.recipeTitle, { color: colors.foreground }]}>{recipe.title}</Text>
+
+          {/* ── Title & Creator ── */}
+          <Text style={styles.recipeTitle}>{recipe.title}</Text>
           <View style={styles.creatorRow}>
-            <View style={[styles.creatorAvatar, { backgroundColor: colors.saffron }]}>
+            <View style={[styles.creatorAvatar, { backgroundColor: C.primary }]}>
               <Text style={styles.creatorAvatarText}>{recipe.creatorAvatar}</Text>
             </View>
-            <Text style={[styles.creatorName, { color: colors.mutedForeground }]}>@{recipe.creator}</Text>
+            <Text style={styles.creatorName}>@{recipe.creator}</Text>
             <TouchableOpacity
-              style={[styles.servingsPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
+              style={styles.servingsPill}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowServingsModal(true); }}
             >
-              <Feather name="users" size={13} color={colors.mutedForeground} />
-              <Text style={[styles.servingsPillText, { color: colors.foreground }]}>{selectedServings}</Text>
+              <Feather name="users" size={13} color={C.textMuted} />
+              <Text style={styles.servingsPillText}>{selectedServings}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.followSmall, { borderColor: colors.saffron }]}>
-              <Text style={[styles.followSmallText, { color: colors.saffron }]}>Follow</Text>
+            <TouchableOpacity style={styles.followSmall}>
+              <Text style={styles.followSmallText}>Follow</Text>
             </TouchableOpacity>
             <View style={styles.ratingRow}>
-              <Feather name="star" size={14} color={colors.saffron} />
-              <Text style={[styles.ratingText, { color: colors.foreground }]}>
+              <Feather name="star" size={13} color={C.primary} />
+              <Text style={styles.ratingText}>
                 {recipe.rating} ({recipe.reviewCount.toLocaleString()})
               </Text>
             </View>
           </View>
 
-          {/* Tags */}
+          {/* ── Tags ── */}
           <View style={styles.tagsRow}>
             {recipe.dietTags.map((tag) => (
-              <View key={tag} style={[styles.tag, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.tagText, { color: colors.mutedForeground }]}>{tag}</Text>
+              <View key={tag} style={styles.tag}>
+                <Text style={styles.tagText}>{tag}</Text>
               </View>
             ))}
-            <View style={[styles.tag, { backgroundColor: colors.muted }]}>
-              <Text style={[styles.tagText, { color: colors.mutedForeground }]}>{recipe.cuisine}</Text>
+            <View style={styles.tag}>
+              <Text style={styles.tagText}>{recipe.cuisine}</Text>
             </View>
-            <View style={[styles.tag, { backgroundColor: colors.muted }]}>
-              <Text style={[styles.tagText, { color: colors.mutedForeground }]}>{recipe.difficulty}</Text>
+            <View style={[styles.tag, { backgroundColor: C.surfaceLow, borderColor: C.primary + "40" }]}>
+              <Text style={[styles.tagText, { color: C.onPrimaryContainer }]}>{recipe.difficulty}</Text>
             </View>
           </View>
 
-          {/* Pantry Match Panel */}
-          <View style={[styles.matchPanel, { backgroundColor: colors.secondary + "10", borderColor: colors.secondary + "30" }]}>
+          {/* ── Pantry Match Panel ── */}
+          <View style={[styles.matchPanel, { backgroundColor: C.secondary + "10", borderColor: C.secondary + "30" }]}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 0 }]}>Your Pantry Match</Text>
-              <View style={[styles.matchScore, { backgroundColor: appliedVariation ? colors.saffron : colors.secondary }]}>
+              <Text style={styles.sectionTitle}>Your Pantry Match</Text>
+              <View style={[styles.matchScore, { backgroundColor: appliedVariation ? C.primary : C.secondary }]}>
                 <Text style={styles.matchScoreText}>{displayMatchScore}% match</Text>
               </View>
             </View>
@@ -871,19 +884,19 @@ export default function RecipeDetailScreen() {
             <View style={styles.matchColumns}>
               {displayPantryIngredients.length > 0 && (
                 <View style={styles.matchColumn}>
-                  <Text style={[styles.matchColumnHeader, { color: colors.secondary }]}>
+                  <Text style={[styles.matchColumnHeader, { color: C.secondary }]}>
                     You Have ({displayPantryIngredients.length})
                   </Text>
                   {(pantryExpanded ? displayPantryIngredients : displayPantryIngredients.slice(0, PANTRY_PREVIEW_COUNT)).map((ing) => (
                     <View key={ing.name} style={styles.ingredientRow}>
-                      <Feather name="check" size={14} color={colors.secondary} />
-                      <Text style={[styles.ingredientText, { color: colors.foreground }]}>
+                      <Feather name="check" size={13} color={C.secondary} />
+                      <Text style={styles.ingredientText}>
                         {ing.name} · {scaleAmount(ing.amount, servingRatio)}
                       </Text>
                     </View>
                   ))}
                   {!pantryExpanded && displayPantryIngredients.length > PANTRY_PREVIEW_COUNT && (
-                    <Text style={[styles.ingredientText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }]}>
+                    <Text style={[styles.ingredientText, { color: C.textMuted, marginTop: 2 }]}>
                       +{displayPantryIngredients.length - PANTRY_PREVIEW_COUNT} more…
                     </Text>
                   )}
@@ -891,19 +904,19 @@ export default function RecipeDetailScreen() {
               )}
               {displayMissingIngredients.length > 0 && (
                 <View style={styles.matchColumn}>
-                  <Text style={[styles.matchColumnHeader, { color: colors.saffron }]}>
+                  <Text style={[styles.matchColumnHeader, { color: C.primary }]}>
                     You Need ({displayMissingIngredients.length})
                   </Text>
                   {(pantryExpanded ? displayMissingIngredients : displayMissingIngredients.slice(0, PANTRY_PREVIEW_COUNT)).map((ing) => (
                     <View key={ing.name} style={styles.ingredientRow}>
-                      <Feather name="shopping-cart" size={14} color={colors.saffron} />
-                      <Text style={[styles.ingredientText, { color: colors.foreground }]}>
+                      <Feather name="shopping-cart" size={13} color={C.primary} />
+                      <Text style={styles.ingredientText}>
                         {ing.name} · {scaleAmount(ing.amount, servingRatio)}
                       </Text>
                     </View>
                   ))}
                   {!pantryExpanded && displayMissingIngredients.length > PANTRY_PREVIEW_COUNT && (
-                    <Text style={[styles.ingredientText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }]}>
+                    <Text style={[styles.ingredientText, { color: C.textMuted, marginTop: 2 }]}>
                       +{displayMissingIngredients.length - PANTRY_PREVIEW_COUNT} more…
                     </Text>
                   )}
@@ -913,10 +926,10 @@ export default function RecipeDetailScreen() {
 
             {/* Shopping list button */}
             <TouchableOpacity
-              style={[styles.shoppingListBtn, { backgroundColor: displayMissingIngredients.length === 0 ? colors.secondary : colors.saffron }]}
+              style={[styles.shoppingListBtn, { backgroundColor: displayMissingIngredients.length === 0 ? C.secondary : C.primary }]}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowShoppingList(true); }}
             >
-              <Feather name="shopping-cart" size={16} color="#fff" />
+              <Feather name="shopping-cart" size={15} color="#fff" />
               <Text style={styles.shoppingListBtnText}>
                 {displayMissingIngredients.length === 0
                   ? "You have everything! 🎉"
@@ -931,32 +944,32 @@ export default function RecipeDetailScreen() {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setPantryExpanded((e) => !e); }}
                 activeOpacity={0.7}
               >
-                <Feather name={pantryExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
-                <Text style={[styles.pantryExpandText, { color: colors.mutedForeground }]}>
+                <Feather name={pantryExpanded ? "chevron-up" : "chevron-down"} size={17} color={C.textMuted} />
+                <Text style={styles.pantryExpandText}>
                   {pantryExpanded ? "Show less" : `Show all ${totalDisplayIngredients} ingredients`}
                 </Text>
               </TouchableOpacity>
             )}
           </View>
 
-          {/* ── Make It Your Way ─────────────────────────────────────────────── */}
+          {/* ── Make It Your Way ── */}
           <View style={styles.section}>
-            {/* Section header */}
             <View style={styles.sectionHeaderRow}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 2 }]}>Make It Your Way</Text>
-                <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+                <Text style={styles.sectionEyebrow}>AI CHEF</Text>
+                <Text style={styles.sectionTitle}>Make It Your Way</Text>
+                <Text style={styles.sectionSubtitle}>
                   Tap a style to adapt ingredients &amp; nutrition
                 </Text>
               </View>
               {appliedVariation && (
                 <TouchableOpacity
-                  style={[styles.clearVariationBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                  style={styles.clearVariationBtn}
                   onPress={clearVariation}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Feather name="x" size={12} color={colors.mutedForeground} />
-                  <Text style={[styles.clearVariationText, { color: colors.mutedForeground }]}>Reset</Text>
+                  <Feather name="x" size={12} color={C.textMuted} />
+                  <Text style={styles.clearVariationText}>Reset</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -992,7 +1005,7 @@ export default function RecipeDetailScreen() {
                     ) : (
                       <Feather name={isApplied ? "check" : v.icon} size={13} color={isApplied ? "#fff" : v.color} />
                     )}
-                    <Text style={[styles.variationText, { color: isApplied ? "#fff" : v.color, fontFamily: isApplied ? "Inter_700Bold" : "Inter_600SemiBold" }]}>
+                    <Text style={[styles.variationText, { color: isApplied ? "#fff" : v.color, fontFamily: isApplied ? "Epilogue_700Bold" : "Epilogue_400Regular" }]}>
                       {isLoading ? "Applying…" : v.label}
                     </Text>
                   </TouchableOpacity>
@@ -1002,36 +1015,34 @@ export default function RecipeDetailScreen() {
 
             {/* Applied variation result card */}
             {varNotes && appliedVariation && (
-              <View style={[styles.varNoteBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                {/* What changed header */}
+              <View style={[styles.varNoteBox, cardShadow]}>
                 <View style={styles.varNoteHeader}>
-                  <View style={[styles.varNoteDot, { backgroundColor: "#4CAF76" }]} />
-                  <Text style={[styles.varNoteTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                  <View style={[styles.varNoteDot, { backgroundColor: C.secondary }]} />
+                  <Text style={styles.varNoteTitle}>
                     {appliedVariation} applied
                   </Text>
                 </View>
-                <Text style={[styles.varNoteText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text style={styles.varNoteText}>
                   {varNotes}
                 </Text>
 
-                {/* New/swapped ingredients to include/exclude */}
                 {varAdditions.length > 0 && (
                   <View style={styles.varAdditionsBlock}>
-                    <Text style={[styles.varAdditionsLabel, { color: colors.mutedForeground }]}>
+                    <Text style={styles.varAdditionsLabel}>
                       New ingredients — tap to add or remove:
                     </Text>
                     <View style={styles.varAdditionsRow}>
                       {varAdditions.map((add) => {
                         const isSelected = selectedAdditions.has(add.name);
-                        const chipColor = add.inPantry ? "#4CAF76" : colors.saffron;
+                        const chipColor = add.inPantry ? C.secondary : C.primary;
                         return (
                           <TouchableOpacity
                             key={add.name}
                             style={[
                               styles.varAddChip,
                               {
-                                backgroundColor: isSelected ? chipColor + "18" : colors.muted,
-                                borderColor: isSelected ? chipColor : colors.border,
+                                backgroundColor: isSelected ? chipColor + "18" : C.surfaceHigh,
+                                borderColor: isSelected ? chipColor : C.outlineVariant,
                               },
                             ]}
                             onPress={() => toggleAddition(add.name)}
@@ -1040,23 +1051,23 @@ export default function RecipeDetailScreen() {
                             <Feather
                               name={isSelected ? (add.inPantry ? "check" : "shopping-cart") : "plus"}
                               size={11}
-                              color={isSelected ? chipColor : colors.mutedForeground}
+                              color={isSelected ? chipColor : C.textMuted}
                             />
-                            <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: isSelected ? colors.foreground : colors.mutedForeground }}>
+                            <Text style={{ fontSize: 12, fontFamily: "Epilogue_400Regular", color: isSelected ? C.textPrimary : C.textMuted }}>
                               {add.name}
                             </Text>
                             {isSelected && add.amount ? (
-                              <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: chipColor }}>{add.amount}</Text>
+                              <Text style={{ fontSize: 10, fontFamily: "Epilogue_400Regular", color: chipColor }}>{add.amount}</Text>
                             ) : null}
                           </TouchableOpacity>
                         );
                       })}
                     </View>
                     <View style={styles.varLegendRow}>
-                      <View style={[styles.varLegendDot, { backgroundColor: "#4CAF76" }]} />
-                      <Text style={[styles.varLegendText, { color: colors.mutedForeground }]}>In your pantry</Text>
-                      <View style={[styles.varLegendDot, { backgroundColor: colors.saffron, marginLeft: 10 }]} />
-                      <Text style={[styles.varLegendText, { color: colors.mutedForeground }]}>Need to buy</Text>
+                      <View style={[styles.varLegendDot, { backgroundColor: C.secondary }]} />
+                      <Text style={styles.varLegendText}>In your pantry</Text>
+                      <View style={[styles.varLegendDot, { backgroundColor: C.primary, marginLeft: 10 }]} />
+                      <Text style={styles.varLegendText}>Need to buy</Text>
                     </View>
                   </View>
                 )}
@@ -1066,15 +1077,15 @@ export default function RecipeDetailScreen() {
                   const adj = VARIATION_MACRO_ADJUST[appliedVariation];
                   if (!adj) return null;
                   const changes = [
-                    { label: "Protein", mult: adj.protein, color: "#5B8EF5" },
-                    { label: "Carbs",   mult: adj.carbs,   color: colors.saffron },
-                    { label: "Fat",     mult: adj.fat,     color: "#E84040" },
+                    { label: "Protein", mult: adj.protein, color: C.saveBlue },
+                    { label: "Carbs",   mult: adj.carbs,   color: C.primary },
+                    { label: "Fat",     mult: adj.fat,     color: C.danger },
                     { label: "Cal",     mult: adj.calories, color: "#9B6DFF" },
                   ].filter((c) => Math.abs(c.mult - 1) > 0.01);
                   if (changes.length === 0) return null;
                   return (
-                    <View style={[styles.varNutRow, { borderTopColor: colors.border }]}>
-                      <Text style={[styles.varNutLabel, { color: colors.mutedForeground }]}>Nutrition shift:</Text>
+                    <View style={[styles.varNutRow, { borderTopColor: C.outlineVariant }]}>
+                      <Text style={styles.varNutLabel}>Nutrition shift:</Text>
                       {changes.map((c) => (
                         <View key={c.label} style={[styles.varNutChip, { backgroundColor: c.color + "14", borderColor: c.color + "35" }]}>
                           <Text style={[styles.varNutChipText, { color: c.color }]}>
@@ -1089,15 +1100,15 @@ export default function RecipeDetailScreen() {
                 {/* Apply / Applied button */}
                 {varIngredients && (
                   varCommitted ? (
-                    <View style={[styles.varApplyBtn, { backgroundColor: colors.secondary + "18", borderColor: colors.secondary + "40" }]}>
-                      <Feather name="check-circle" size={15} color={colors.secondary} />
-                      <Text style={[styles.varApplyBtnText, { color: colors.secondary, fontFamily: "Inter_600SemiBold" }]}>
+                    <View style={[styles.varApplyBtn, { backgroundColor: C.secondary + "18", borderColor: C.secondary + "40" }]}>
+                      <Feather name="check-circle" size={15} color={C.secondary} />
+                      <Text style={[styles.varApplyBtnText, { color: C.secondary }]}>
                         Applied — You Have / You Need updated
                       </Text>
                     </View>
                   ) : (
                     <TouchableOpacity
-                      style={[styles.varApplyBtn, { backgroundColor: colors.saffron, borderColor: colors.saffron }]}
+                      style={[styles.varApplyBtn, { backgroundColor: C.primary, borderColor: C.primary }]}
                       onPress={() => {
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                         setVarCommitted(true);
@@ -1106,7 +1117,7 @@ export default function RecipeDetailScreen() {
                       activeOpacity={0.8}
                     >
                       <Feather name="check" size={15} color="#fff" />
-                      <Text style={[styles.varApplyBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                      <Text style={[styles.varApplyBtnText, { color: "#fff" }]}>
                         Apply Changes to Recipe
                       </Text>
                     </TouchableOpacity>
@@ -1116,15 +1127,14 @@ export default function RecipeDetailScreen() {
             )}
           </View>
 
-          {/* Cooking Instructions */}
+          {/* ── Cooking Instructions ── */}
           <View style={styles.section}>
-            {/* Section header with eyebrow + optional "Adapted" badge */}
             <View style={{ marginBottom: 14 }}>
-              <Text style={[styles.sectionEyebrow, { color: colors.mutedForeground }]}>STEP BY STEP</Text>
+              <Text style={styles.sectionEyebrow}>STEP BY STEP</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 0 }]}>Cooking Instructions</Text>
+                <Text style={styles.sectionTitle}>Cooking Instructions</Text>
                 {varCommitted && appliedVariation && (() => {
-                  const chipColor = AI_VARIATIONS.find((v) => v.label === appliedVariation)?.color ?? colors.saffron;
+                  const chipColor = AI_VARIATIONS.find((v) => v.label === appliedVariation)?.color ?? C.primary;
                   return (
                     <View style={[styles.adaptedBadge, { backgroundColor: chipColor + "18", borderColor: chipColor + "45" }]}>
                       <View style={[styles.adaptedDot, { backgroundColor: chipColor }]} />
@@ -1138,47 +1148,47 @@ export default function RecipeDetailScreen() {
             {displaySteps.map((step) => {
               const done = completedSteps.includes(step.step);
               const chipColor = varCommitted && appliedVariation
-                ? (AI_VARIATIONS.find((v) => v.label === appliedVariation)?.color ?? colors.saffron)
+                ? (AI_VARIATIONS.find((v) => v.label === appliedVariation)?.color ?? C.primary)
                 : null;
               return (
                 <TouchableOpacity
                   key={step.step}
                   style={[
                     styles.stepCard,
+                    cardShadow,
                     {
-                      backgroundColor: done ? colors.secondary + "10" : colors.card,
-                      borderColor: done ? colors.secondary + "30" : colors.border,
+                      backgroundColor: done ? C.secondary + "10" : C.surface,
+                      borderColor: done ? C.secondary + "30" : C.outlineVariant,
                     },
                   ]}
                   onPress={() => toggleStep(step.step)}
                 >
-                  {/* Thin left accent when variation is committed */}
                   {chipColor && !done && (
                     <View style={[styles.stepAccentBar, { backgroundColor: chipColor }]} />
                   )}
-                  <View style={[styles.stepNum, { backgroundColor: done ? colors.secondary : chipColor ? chipColor + "22" : colors.muted }]}>
+                  <View style={[styles.stepNum, { backgroundColor: done ? C.secondary : chipColor ? chipColor + "22" : C.surfaceHigh }]}>
                     {done ? (
-                      <Feather name="check" size={14} color="#fff" />
+                      <Feather name="check" size={13} color="#fff" />
                     ) : (
-                      <Text style={[styles.stepNumText, { color: chipColor ?? colors.foreground }]}>{step.step}</Text>
+                      <Text style={[styles.stepNumText, { color: chipColor ?? C.textPrimary }]}>{step.step}</Text>
                     )}
                   </View>
                   <View style={{ flex: 1, gap: 5 }}>
                     {splitToPoints(step.instruction).map((line, idx) => (
                       <View key={idx} style={{ flexDirection: "row", gap: 7, alignItems: "flex-start" }}>
-                        <Text style={[styles.stepInstruction, { color: done ? colors.mutedForeground : (chipColor ?? colors.saffron), textDecorationLine: "none", marginTop: 1 }]}>•</Text>
-                        <Text style={[styles.stepInstruction, { flex: 1, fontSize: 14, lineHeight: 21, color: done ? colors.mutedForeground : colors.foreground, textDecorationLine: done ? "line-through" : "none" }]}>
+                        <Text style={[styles.stepInstruction, { color: done ? C.textMuted : (chipColor ?? C.primary), textDecorationLine: "none", marginTop: 1 }]}>•</Text>
+                        <Text style={[styles.stepInstruction, { flex: 1, fontSize: 14, lineHeight: 22, color: done ? C.textMuted : C.textPrimary, textDecorationLine: done ? "line-through" : "none" }]}>
                           {line.startsWith("•") ? line.slice(1).trim() : line}
                         </Text>
                       </View>
                     ))}
                     {step.timerMinutes && !done && (
                       <TouchableOpacity
-                        style={[styles.timerBtn, { backgroundColor: (chipColor ?? colors.saffron) + "15" }]}
+                        style={[styles.timerBtn, { backgroundColor: (chipColor ?? C.primary) + "15" }]}
                         onPress={() => startTimer(step.timerMinutes!, `Step ${step.step}`)}
                       >
-                        <Feather name="clock" size={12} color={chipColor ?? colors.saffron} />
-                        <Text style={[styles.timerBtnText, { color: chipColor ?? colors.saffron }]}>▶ {step.timerMinutes} min timer</Text>
+                        <Feather name="clock" size={12} color={chipColor ?? C.primary} />
+                        <Text style={[styles.timerBtnText, { color: chipColor ?? C.primary }]}>▶ {step.timerMinutes} min timer</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1187,31 +1197,36 @@ export default function RecipeDetailScreen() {
             })}
           </View>
 
-          {/* Nutrition — always per serving */}
-          <View style={[styles.nutritionPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {/* ── Nutrition ── */}
+          <View style={[styles.nutritionPanel, cardShadow]}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 0 }]}>Nutrition</Text>
-              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>
-                per serving{appliedVariation ? ` · ${appliedVariation}` : ""}
-              </Text>
+              <View>
+                <Text style={styles.sectionEyebrow}>PER SERVING</Text>
+                <Text style={styles.sectionTitle}>Nutrition</Text>
+              </View>
+              {appliedVariation && (
+                <Text style={{ fontSize: 11, fontFamily: "Epilogue_400Regular", color: C.textMuted }}>
+                  · {appliedVariation}
+                </Text>
+              )}
             </View>
             <View style={styles.macroRow}>
               {[
-                { label: "Protein", value: displayProtein, unit: "g",  color: "#5B8EF5" },
-                { label: "Carbs",   value: displayCarbs,   unit: "g",  color: colors.saffron },
-                { label: "Fat",     value: displayFat,     unit: "g",  color: "#E84040" },
-                { label: "Fiber",   value: displayFiber,   unit: "g",  color: colors.secondary },
+                { label: "Protein", value: displayProtein, unit: "g",  color: C.saveBlue },
+                { label: "Carbs",   value: displayCarbs,   unit: "g",  color: C.primary },
+                { label: "Fat",     value: displayFat,     unit: "g",  color: C.danger },
+                { label: "Fiber",   value: displayFiber,   unit: "g",  color: C.secondary },
               ].map((m) => (
                 <View key={m.label} style={styles.macroItem}>
                   <Text style={[styles.macroValue, { color: m.color }]}>{m.value}{m.unit}</Text>
-                  <Text style={[styles.macroLabel, { color: colors.mutedForeground }]}>{m.label}</Text>
+                  <Text style={styles.macroLabel}>{m.label}</Text>
                 </View>
               ))}
             </View>
-            <View style={[styles.calorieRow, { backgroundColor: colors.muted }]}>
-              <Feather name="zap" size={16} color={colors.saffron} />
-              <Text style={[styles.calorieText, { color: colors.foreground }]}>
-                <Text style={{ fontWeight: "700", color: colors.saffron }}>{displayCalories} kcal</Text>
+            <View style={styles.calorieRow}>
+              <Feather name="zap" size={15} color={C.primary} />
+              <Text style={styles.calorieText}>
+                <Text style={{ fontFamily: "Epilogue_700Bold", color: C.primary }}>{displayCalories} kcal</Text>
                 {" per serving"}
                 {selectedServings > 1
                   ? ` · ${displayCalories * selectedServings} kcal total for ${selectedServings}`
@@ -1224,48 +1239,49 @@ export default function RecipeDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Floating timer pill */}
+      {/* ── Floating timer pill ── */}
       {timerSeconds !== null && (
         <Animated.View style={[styles.floatingTimerPill, { top: topPadding + 8, opacity: timerPillAnim, transform: [{ scale: timerPillAnim }] }]}>
-          <Feather name="clock" size={14} color={timerSeconds === 0 ? "#00BFA5" : colors.saffron} />
+          <Feather name="clock" size={14} color={timerSeconds === 0 ? C.secondary : C.primary} />
           <Text style={styles.floatingTimerLabel} numberOfLines={1}>{timerLabel}</Text>
-          <Text style={[styles.floatingTimerTime, { color: timerSeconds === 0 ? "#00BFA5" : colors.saffron }]}>
+          <Text style={[styles.floatingTimerTime, { color: timerSeconds === 0 ? C.secondary : C.primary }]}>
             {timerSeconds === 0 ? "Done! 🎉" : formatTime(timerSeconds)}
           </Text>
           <TouchableOpacity onPress={() => setTimerRunning((r) => !r)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Feather name={timerRunning ? "pause" : "play"} size={14} color="#9E9E9E" />
+            <Feather name={timerRunning ? "pause" : "play"} size={14} color={C.textMuted} />
           </TouchableOpacity>
           <TouchableOpacity onPress={cancelTimer} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Feather name="x" size={14} color="#9E9E9E" />
+            <Feather name="x" size={14} color={C.textMuted} />
           </TouchableOpacity>
         </Animated.View>
       )}
 
-      {/* Sticky bottom bar */}
-      <View style={[styles.stickyBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: bottomPadding + 8 }]}>
+      {/* ── Sticky bottom bar ── */}
+      <View style={[styles.stickyBar, { paddingBottom: bottomPadding + 8 }]}>
         <TouchableOpacity
-          style={[styles.stickyBarBtn, { backgroundColor: isSaved ? colors.saveBlue + "20" : colors.muted }]}
+          style={[styles.stickyBarBtn, { backgroundColor: isSaved ? C.saveBlue + "20" : C.surfaceHigh, borderColor: isSaved ? C.saveBlue + "40" : C.outlineVariant }]}
           onPress={handleToggleSave}
         >
-          <Feather name="bookmark" size={20} color={isSaved ? colors.saveBlue : colors.mutedForeground} />
+          <Feather name="bookmark" size={20} color={isSaved ? C.saveBlue : C.textMuted} />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.stickyBarCookBtn, { backgroundColor: colors.saffron }]} onPress={handleCookNow}>
+        <TouchableOpacity style={styles.stickyBarCookBtn} onPress={handleCookNow}>
+          <Feather name="play-circle" size={18} color="#fff" />
           <Text style={styles.stickyBarCookText}>Cook This Now</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.stickyBarBtn, { backgroundColor: colors.muted }]}>
-          <Feather name="share-2" size={20} color={colors.mutedForeground} />
+        <TouchableOpacity style={[styles.stickyBarBtn, { backgroundColor: C.surfaceHigh, borderColor: C.outlineVariant }]}>
+          <Feather name="share-2" size={20} color={C.textMuted} />
         </TouchableOpacity>
       </View>
 
       {/* ── SERVINGS MODAL ── */}
       <Modal visible={showServingsModal} transparent animationType="slide" onRequestClose={() => setShowServingsModal(false)}>
         <View style={styles.servingsOverlay}>
-          <View style={[styles.servingsSheet, { backgroundColor: colors.background }]}>
-            <View style={[styles.servingsHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.servingsTitleText, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+          <View style={[styles.servingsSheet, { backgroundColor: C.background }]}>
+            <View style={[styles.servingsHandle, { backgroundColor: C.outlineVariant }]} />
+            <Text style={styles.servingsTitleText}>
               How many people? 🧑‍🍳
             </Text>
-            <Text style={[styles.servingsSubText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
+            <Text style={styles.servingsSubText} numberOfLines={1}>
               {recipe?.title} · Ingredients scale automatically
             </Text>
             <View style={styles.servingsBtnRow}>
@@ -1275,12 +1291,12 @@ export default function RecipeDetailScreen() {
                   <TouchableOpacity
                     key={n}
                     style={[styles.servingsNumBtn, {
-                      backgroundColor: active ? colors.saffron : colors.card,
-                      borderColor: active ? colors.saffron : colors.border,
+                      backgroundColor: active ? C.primary : C.surface,
+                      borderColor: active ? C.primary : C.outlineVariant,
                     }]}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedServings(n); setCustomServingsMode(false); }}
                   >
-                    <Text style={[styles.servingsNumText, { color: active ? "#fff" : colors.foreground, fontFamily: active ? "Inter_700Bold" : "Inter_500Medium" }]}>
+                    <Text style={[styles.servingsNumText, { color: active ? "#fff" : C.textPrimary, fontFamily: active ? "Epilogue_700Bold" : "Epilogue_400Regular" }]}>
                       {n}
                     </Text>
                   </TouchableOpacity>
@@ -1288,26 +1304,26 @@ export default function RecipeDetailScreen() {
               })}
               <TouchableOpacity
                 style={[styles.servingsNumBtn, {
-                  backgroundColor: customServingsMode ? colors.saffron : colors.card,
-                  borderColor: customServingsMode ? colors.saffron : colors.border,
+                  backgroundColor: customServingsMode ? C.primary : C.surface,
+                  borderColor: customServingsMode ? C.primary : C.outlineVariant,
                   flexDirection: "row", width: "auto" as any, paddingHorizontal: 14, gap: 5,
                 }]}
                 onPress={() => { setCustomServingsMode(true); setCustomServingsInput(""); }}
               >
-                <Feather name="edit-2" size={14} color={customServingsMode ? "#fff" : colors.mutedForeground} />
-                <Text style={[styles.servingsNumText, { color: customServingsMode ? "#fff" : colors.mutedForeground }]}>
+                <Feather name="edit-2" size={14} color={customServingsMode ? "#fff" : C.textMuted} />
+                <Text style={[styles.servingsNumText, { color: customServingsMode ? "#fff" : C.textMuted }]}>
                   {customServingsMode && customServingsInput ? customServingsInput : "Custom"}
                 </Text>
               </TouchableOpacity>
             </View>
             {customServingsMode && (
               <TextInput
-                style={[styles.servingsCustomInput, { backgroundColor: colors.muted, borderColor: colors.saffron, color: colors.foreground }]}
+                style={[styles.servingsCustomInput, { backgroundColor: C.surfaceHigh, borderColor: C.primary, color: C.textPrimary }]}
                 value={customServingsInput}
                 onChangeText={setCustomServingsInput}
                 keyboardType="number-pad"
                 placeholder="Enter number of servings…"
-                placeholderTextColor={colors.mutedForeground}
+                placeholderTextColor={C.textMuted}
                 autoFocus
                 returnKeyType="done"
                 onSubmitEditing={() => { const n = parseInt(customServingsInput, 10); if (!isNaN(n) && n > 0) setSelectedServings(Math.min(n, 99)); }}
@@ -1315,15 +1331,15 @@ export default function RecipeDetailScreen() {
               />
             )}
             <TouchableOpacity
-              style={[styles.servingsCookBtn, { backgroundColor: colors.saffron }]}
+              style={[styles.servingsCookBtn, { backgroundColor: C.primary }]}
               onPress={() => setShowServingsModal(false)}
             >
-              <Text style={[styles.servingsCookBtnText, { fontFamily: "Inter_700Bold" }]}>
+              <Text style={styles.servingsCookBtnText}>
                 Apply · {selectedServings} serving{selectedServings !== 1 ? "s" : ""} ✓
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={{ paddingVertical: 12, alignItems: "center" }} onPress={() => setShowServingsModal(false)}>
-              <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>
+              <Text style={{ fontSize: 14, fontFamily: "Epilogue_400Regular", color: C.textMuted }}>
                 Skip for now
               </Text>
             </TouchableOpacity>
@@ -1334,15 +1350,15 @@ export default function RecipeDetailScreen() {
       {/* ── SHOPPING LIST MODAL ── */}
       <Modal visible={showShoppingList} transparent animationType="slide" onRequestClose={() => setShowShoppingList(false)}>
         <View style={styles.sheetOverlay}>
-          <View style={[styles.sheetContainer, { backgroundColor: colors.background }]}>
-            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+          <View style={[styles.sheetContainer, { backgroundColor: C.background }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: C.outlineVariant }]} />
             {/* Header */}
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                <Text style={styles.sheetTitle}>
                   Shopping List
                 </Text>
-                <Text style={[styles.sheetSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text style={styles.sheetSubtitle}>
                   {recipe.title}
                   {appliedVariation ? ` · ${appliedVariation}` : ""}
                   {" · "}
@@ -1350,7 +1366,7 @@ export default function RecipeDetailScreen() {
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setShowShoppingList(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Feather name="x" size={22} color={colors.mutedForeground} />
+                <Feather name="x" size={22} color={C.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -1358,17 +1374,17 @@ export default function RecipeDetailScreen() {
               {displayMissingIngredients.length === 0 ? (
                 <View style={styles.sheetEmptyState}>
                   <Text style={{ fontSize: 48 }}>🎉</Text>
-                  <Text style={[styles.sheetEmptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                  <Text style={styles.sheetEmptyTitle}>
                     You have everything!
                   </Text>
-                  <Text style={[styles.sheetEmptyBody, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  <Text style={styles.sheetEmptyBody}>
                     All ingredients for this recipe are already in your pantry.
                   </Text>
                 </View>
               ) : (
                 <View style={{ gap: 8 }}>
                   {/* Items to buy */}
-                  <Text style={[styles.sheetSectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                  <Text style={styles.sheetSectionLabel}>
                     TO BUY · {displayMissingIngredients.length} {displayMissingIngredients.length === 1 ? "item" : "items"}
                   </Text>
                   {displayMissingIngredients.map((ing, idx) => {
@@ -1378,28 +1394,29 @@ export default function RecipeDetailScreen() {
                         key={`${ing.name}-${idx}`}
                         style={[
                           styles.sheetIngRow,
+                          cardShadow,
                           {
-                            backgroundColor: isChecked ? colors.muted : colors.card,
-                            borderColor: isChecked ? colors.border : colors.border,
+                            backgroundColor: isChecked ? C.surfaceHigh : C.surface,
+                            borderColor: isChecked ? C.outlineVariant : C.outlineVariant,
                             opacity: isChecked ? 0.65 : 1,
                           },
                         ]}
                         onPress={() => toggleShoppingItem(ing.name)}
                         activeOpacity={0.7}
                       >
-                        <View style={[styles.sheetIngIcon, { backgroundColor: isChecked ? "#4CAF7618" : colors.saffron + "18" }]}>
-                          <Feather name={isChecked ? "check" : "shopping-cart"} size={14} color={isChecked ? "#4CAF76" : colors.saffron} />
+                        <View style={[styles.sheetIngIcon, { backgroundColor: isChecked ? C.secondary + "18" : C.primary + "18" }]}>
+                          <Feather name={isChecked ? "check" : "shopping-cart"} size={14} color={isChecked ? C.secondary : C.primary} />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={[styles.sheetIngName, { color: colors.foreground, fontFamily: "Inter_600SemiBold", textDecorationLine: isChecked ? "line-through" : "none" }]}>
+                          <Text style={[styles.sheetIngName, { color: C.textPrimary, textDecorationLine: isChecked ? "line-through" : "none" }]}>
                             {ing.name}
                           </Text>
-                          <Text style={[styles.sheetIngAmount, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", textDecorationLine: isChecked ? "line-through" : "none" }]}>
+                          <Text style={[styles.sheetIngAmount, { color: C.textMuted, textDecorationLine: isChecked ? "line-through" : "none" }]}>
                             {scaleAmount(ing.amount, servingRatio)}
                           </Text>
                         </View>
                         {isChecked && (
-                          <Text style={{ fontSize: 11, color: "#4CAF76", fontFamily: "Inter_500Medium" }}>Got it</Text>
+                          <Text style={{ fontSize: 11, color: C.secondary, fontFamily: "Epilogue_400Regular" }}>Got it</Text>
                         )}
                       </TouchableOpacity>
                     );
@@ -1410,22 +1427,22 @@ export default function RecipeDetailScreen() {
               {/* What you already have */}
               {displayPantryIngredients.length > 0 && (
                 <View style={{ gap: 8, marginTop: 20 }}>
-                  <Text style={[styles.sheetSectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                  <Text style={styles.sheetSectionLabel}>
                     IN YOUR PANTRY · {displayPantryIngredients.length} {displayPantryIngredients.length === 1 ? "item" : "items"}
                   </Text>
                   {displayPantryIngredients.map((ing, idx) => (
                     <View
                       key={`${ing.name}-${idx}`}
-                      style={[styles.sheetIngRow, { backgroundColor: colors.muted, borderColor: colors.border, opacity: 0.7 }]}
+                      style={[styles.sheetIngRow, { backgroundColor: C.surfaceHigh, borderColor: C.outlineVariant, opacity: 0.7 }]}
                     >
-                      <View style={[styles.sheetIngIcon, { backgroundColor: "#4CAF7618" }]}>
-                        <Feather name="check" size={14} color="#4CAF76" />
+                      <View style={[styles.sheetIngIcon, { backgroundColor: C.secondary + "18" }]}>
+                        <Feather name="check" size={14} color={C.secondary} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.sheetIngName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                        <Text style={[styles.sheetIngName, { color: C.textPrimary }]}>
                           {ing.name}
                         </Text>
-                        <Text style={[styles.sheetIngAmount, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                        <Text style={[styles.sheetIngAmount, { color: C.textMuted }]}>
                           {scaleAmount(ing.amount, servingRatio)}
                         </Text>
                       </View>
@@ -1436,10 +1453,10 @@ export default function RecipeDetailScreen() {
             </ScrollView>
 
             <TouchableOpacity
-              style={[styles.sheetDoneBtn, { backgroundColor: colors.saffron }]}
+              style={[styles.sheetDoneBtn, { backgroundColor: C.primary }]}
               onPress={() => setShowShoppingList(false)}
             >
-              <Text style={[styles.sheetDoneBtnText, { fontFamily: "Inter_700Bold" }]}>Done</Text>
+              <Text style={styles.sheetDoneBtnText}>Done</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1450,33 +1467,33 @@ export default function RecipeDetailScreen() {
         <Animated.View
           style={[
             styles.celebrationOverlay,
-            { backgroundColor: colors.background, opacity: celebrationOpacity },
+            { backgroundColor: C.background, opacity: celebrationOpacity },
           ]}
         >
           <Animated.View style={[styles.celebrationCard, { transform: [{ scale: celebrationScale }] }]}>
             <Text style={styles.celebrationEmoji}>🎉</Text>
-            <Text style={[styles.celebrationTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            <Text style={styles.celebrationTitle}>
               You nailed it!
             </Text>
-            <Text style={[styles.celebrationRecipe, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            <Text style={styles.celebrationRecipe}>
               {recipe.title}
             </Text>
             <View style={styles.celebrationStats}>
-              <View style={[styles.celebrationStat, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.celebrationStat, cardShadow, { backgroundColor: C.surface, borderColor: C.outlineVariant }]}>
                 <Text style={styles.celebrationStatEmoji}>🥘</Text>
-                <Text style={[styles.celebrationStatVal, { color: colors.foreground, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
+                <Text style={[styles.celebrationStatVal, { color: C.textPrimary }]}>
                   {celebrationData.deducted}
                 </Text>
-                <Text style={[styles.celebrationStatLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text style={[styles.celebrationStatLabel, { color: C.textMuted }]}>
                   pantry items used
                 </Text>
               </View>
-              <View style={[styles.celebrationStat, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.celebrationStat, cardShadow, { backgroundColor: C.surface, borderColor: C.outlineVariant }]}>
                 <Text style={styles.celebrationStatEmoji}>⭐</Text>
-                <Text style={[styles.celebrationStatVal, { color: colors.saffron, fontFamily: "SpaceGrotesk_600SemiBold" }]}>
+                <Text style={[styles.celebrationStatVal, { color: C.primary }]}>
                   +50 XP
                 </Text>
-                <Text style={[styles.celebrationStatLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text style={[styles.celebrationStatLabel, { color: C.textMuted }]}>
                   earned
                 </Text>
               </View>
@@ -1485,24 +1502,24 @@ export default function RecipeDetailScreen() {
             {(celebrationData.used.length > 0 || celebrationData.needStock.length > 0) && (
               <View style={{ width: "100%", gap: 10, marginBottom: 4 }}>
                 {celebrationData.used.length > 0 && (
-                  <View style={[styles.celebIngBlock, { backgroundColor: "#4CAF7615", borderColor: "#4CAF7630" }]}>
-                    <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#4CAF76", marginBottom: 6 }}>
+                  <View style={[styles.celebIngBlock, { backgroundColor: C.secondary + "15", borderColor: C.secondary + "30" }]}>
+                    <Text style={{ fontSize: 12, fontFamily: "Epilogue_700Bold", color: C.secondary, marginBottom: 6 }}>
                       ✅ Used from your pantry
                     </Text>
                     {celebrationData.used.map((ing, i) => (
-                      <Text key={i} style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.foreground, lineHeight: 18 }}>
+                      <Text key={i} style={{ fontSize: 12, fontFamily: "Epilogue_400Regular", color: C.textPrimary, lineHeight: 18 }}>
                         · {ing.name}{ing.amount ? ` (${ing.amount})` : ""}
                       </Text>
                     ))}
                   </View>
                 )}
                 {celebrationData.needStock.length > 0 && (
-                  <View style={[styles.celebIngBlock, { backgroundColor: "#F5A62315", borderColor: "#F5A62330" }]}>
-                    <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.saffron, marginBottom: 6 }}>
+                  <View style={[styles.celebIngBlock, { backgroundColor: C.primary + "15", borderColor: C.primary + "30" }]}>
+                    <Text style={{ fontSize: 12, fontFamily: "Epilogue_700Bold", color: C.primary, marginBottom: 6 }}>
                       🛒 Stock up on these
                     </Text>
                     {celebrationData.needStock.map((ing, i) => (
-                      <Text key={i} style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.foreground, lineHeight: 18 }}>
+                      <Text key={i} style={{ fontSize: 12, fontFamily: "Epilogue_400Regular", color: C.textPrimary, lineHeight: 18 }}>
                         · {ing.name}{ing.amount ? ` (${ing.amount})` : ""}
                       </Text>
                     ))}
@@ -1513,18 +1530,18 @@ export default function RecipeDetailScreen() {
 
             <View style={styles.celebrationBtns}>
               <TouchableOpacity
-                style={[styles.celebrationBtn, { backgroundColor: colors.muted }]}
+                style={[styles.celebrationBtn, { backgroundColor: C.surfaceHigh }]}
                 onPress={() => { setShowCelebration(false); router.replace("/(tabs)/pantry"); }}
               >
-                <Text style={[styles.celebrationBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                <Text style={[styles.celebrationBtnText, { color: C.textPrimary }]}>
                   View Pantry 🏪
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.celebrationBtn, { backgroundColor: colors.saffron }]}
+                style={[styles.celebrationBtn, { backgroundColor: C.primary }]}
                 onPress={() => { setShowCelebration(false); router.replace("/(tabs)"); }}
               >
-                <Text style={[styles.celebrationBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                <Text style={[styles.celebrationBtnText, { color: "#fff" }]}>
                   Keep Discovering ✨
                 </Text>
               </TouchableOpacity>
@@ -1538,46 +1555,162 @@ export default function RecipeDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  heroContainer: { height: 280, position: "relative" },
+
+  // ── Hero ──────────────────────────────────────────────────────────────────────
+  heroContainer: { height: 300, position: "relative" },
   heroImage: { width: "100%", height: "100%" },
   heroPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
   heroEmoji: { fontSize: 80 },
-  heroOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, height: 120, backgroundColor: "rgba(0,0,0,0.3)" },
+  heroGradient: { position: "absolute", bottom: 0, left: 0, right: 0, height: 140 },
   heroNav: { position: "absolute", left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" },
-  heroNavBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  heroNavBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    alignItems: "center", justifyContent: "center",
+  },
   heroInfoPill: {
     position: "absolute", bottom: 16, alignSelf: "center",
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 100,
+    paddingHorizontal: 16, paddingVertical: 9, borderRadius: 100,
+    backgroundColor: "rgba(20,18,16,0.70)",
   },
-  heroPillText: { color: "#fff", fontSize: 13, fontFamily: "Inter_500Medium" },
-  pillDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: "rgba(255,255,255,0.5)" },
+  heroPillText: { color: "#fff", fontSize: 12, fontFamily: "Epilogue_400Regular" },
+  pillDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: "rgba(255,255,255,0.45)" },
 
+  // ── Content ───────────────────────────────────────────────────────────────────
   content: { paddingHorizontal: 20, paddingTop: 20 },
-  recipeTitle: { fontSize: 28, letterSpacing: -0.7, marginBottom: 12, fontFamily: "Inter_700Bold" },
+  recipeTitle: { fontSize: 26, letterSpacing: -0.6, marginBottom: 12, fontFamily: "Epilogue_700Bold", color: "#141210" },
   creatorRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 },
   creatorAvatar: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   creatorAvatarText: { fontSize: 16 },
-  creatorName: { fontSize: 13, flex: 1 },
-  followSmall: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100, borderWidth: 1 },
-  followSmallText: { fontSize: 12 },
+  creatorName: { fontSize: 13, flex: 1, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+  followSmall: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100, borderWidth: 1, borderColor: "#F5A623" },
+  followSmallText: { fontSize: 12, fontFamily: "Epilogue_700Bold", color: "#F5A623" },
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  ratingText: { fontSize: 13 },
-  tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  tag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100 },
-  tagText: { fontSize: 12 },
+  ratingText: { fontSize: 12, fontFamily: "Epilogue_400Regular", color: "#141210" },
 
   servingsPill: {
     flexDirection: "row" as const, alignItems: "center" as const, gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, borderWidth: 1,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100,
+    borderWidth: 1, borderColor: "#D7C3AE", backgroundColor: "#F4E6D8",
   },
-  servingsPillText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  servingsPillText: { fontSize: 13, fontFamily: "Epilogue_700Bold", color: "#141210" },
 
-  servingsOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" },
+  tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 },
+  tag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: "#F4E6D8", borderWidth: 1, borderColor: "#D7C3AE" },
+  tagText: { fontSize: 12, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+
+  // ── Section headers ───────────────────────────────────────────────────────────
+  sectionEyebrow: { fontSize: 10, fontFamily: "Epilogue_700Bold", letterSpacing: 1.4, textTransform: "uppercase" as const, color: "#7A7570", marginBottom: 4 },
+  sectionTitle: { fontSize: 17, fontFamily: "Epilogue_700Bold", marginBottom: 4, letterSpacing: -0.3, color: "#141210" },
+  sectionSubtitle: { fontSize: 13, lineHeight: 18, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+  sectionHeaderRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 10, marginBottom: 14 },
+
+  // ── Pantry match ──────────────────────────────────────────────────────────────
+  matchPanel: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 20 },
+  matchScore: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100 },
+  matchScoreText: { color: "#fff", fontSize: 13, fontFamily: "Epilogue_700Bold" },
+  matchColumns: { flexDirection: "row", gap: 16, marginBottom: 14 },
+  matchColumn: { flex: 1, gap: 8 },
+  matchColumnHeader: { fontSize: 13, fontFamily: "Epilogue_700Bold", marginBottom: 4 },
+  ingredientRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  ingredientText: { fontSize: 13, flex: 1, fontFamily: "Epilogue_400Regular", color: "#141210" },
+  shoppingListBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 12 },
+  shoppingListBtnText: { color: "#fff", fontSize: 14, fontFamily: "Epilogue_700Bold" },
+  pantryExpandBtn: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6, paddingVertical: 10, marginTop: 4 },
+  pantryExpandText: { fontSize: 13, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+
+  // ── Variations ────────────────────────────────────────────────────────────────
+  variationChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 100, borderWidth: 1,
+  },
+  variationText: { fontSize: 13 },
+  clearVariationBtn: { flexDirection: "row" as const, alignItems: "center" as const, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 100, borderWidth: 1, borderColor: "#D7C3AE", backgroundColor: "#F4E6D8" },
+  clearVariationText: { fontSize: 12, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+
+  varNoteBox: {
+    padding: 14, borderRadius: 16, borderWidth: 1,
+    borderColor: "#D7C3AE", backgroundColor: "#FFFFFF", marginTop: 12, marginBottom: 4,
+  },
+  varNoteHeader: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8, marginBottom: 8 },
+  varNoteDot: { width: 8, height: 8, borderRadius: 4 },
+  varNoteTitle: { fontSize: 14, fontFamily: "Epilogue_700Bold", color: "#141210" },
+  varNoteText: { fontSize: 13, lineHeight: 18, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+  varAdditionsBlock: { gap: 8, marginTop: 10 },
+  varAdditionsLabel: { fontSize: 11, fontFamily: "Epilogue_700Bold", letterSpacing: 0.3, textTransform: "uppercase" as const, color: "#7A7570" },
+  varAdditionsRow: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 7 },
+  varAddChip: { flexDirection: "row" as const, alignItems: "center" as const, gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 100, borderWidth: 1 },
+  varLegendRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 5, marginTop: 4 },
+  varLegendDot: { width: 7, height: 7, borderRadius: 3.5 },
+  varLegendText: { fontSize: 11, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+  varNutRow: { flexDirection: "row" as const, alignItems: "center" as const, flexWrap: "wrap" as const, gap: 6, paddingTop: 10, marginTop: 4, borderTopWidth: 1 },
+  varNutLabel: { fontSize: 11, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+  varNutChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100, borderWidth: 1 },
+  varNutChipText: { fontSize: 11, fontFamily: "Epilogue_700Bold" },
+  varApplyBtn: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8, paddingVertical: 13, borderRadius: 12, borderWidth: 1, marginTop: 10 },
+  varApplyBtnText: { fontSize: 14, fontFamily: "Epilogue_700Bold" },
+
+  // ── Steps ─────────────────────────────────────────────────────────────────────
+  section: { marginBottom: 24 },
+  adaptedBadge: { flexDirection: "row" as const, alignItems: "center" as const, gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 100, borderWidth: 1 },
+  adaptedDot: { width: 6, height: 6, borderRadius: 3 },
+  adaptedBadgeText: { fontSize: 11, fontFamily: "Epilogue_700Bold" },
+  stepCard: { flexDirection: "row", gap: 12, padding: 14, borderRadius: 16, borderWidth: 1, marginBottom: 10 },
+  stepAccentBar: { position: "absolute" as const, left: 0, top: 0, bottom: 0, width: 3, borderRadius: 2 },
+  stepNum: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 },
+  stepNumText: { fontSize: 13, fontFamily: "Epilogue_700Bold" },
+  stepInstruction: { fontSize: 14, lineHeight: 22, fontFamily: "Epilogue_400Regular" },
+  timerBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, alignSelf: "flex-start" },
+  timerBtnText: { fontSize: 12, fontFamily: "Epilogue_400Regular" },
+
+  // ── Nutrition ─────────────────────────────────────────────────────────────────
+  nutritionPanel: { borderRadius: 16, borderWidth: 1, borderColor: "#D7C3AE", padding: 16, marginBottom: 20, backgroundColor: "#FFFFFF" },
+  macroRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
+  macroItem: { flex: 1, alignItems: "center", gap: 4 },
+  macroValue: { fontSize: 20, fontFamily: "Epilogue_700Bold" },
+  macroLabel: { fontSize: 11, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+  calorieRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, backgroundColor: "#FFF1E4" },
+  calorieText: { fontSize: 14, flex: 1, fontFamily: "Epilogue_400Regular", color: "#141210" },
+
+  // ── Floating timer ────────────────────────────────────────────────────────────
+  floatingTimerPill: {
+    position: "absolute", alignSelf: "center",
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 100,
+    backgroundColor: "rgba(250,250,248,0.95)",
+    borderWidth: 1, borderColor: "#D7C3AE",
+  },
+  floatingTimerLabel: { color: "#141210", fontSize: 13, maxWidth: 120, fontFamily: "Epilogue_400Regular" },
+  floatingTimerTime: { fontSize: 14, fontFamily: "Epilogue_700Bold" },
+
+  // ── Sticky bar ────────────────────────────────────────────────────────────────
+  stickyBar: {
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 20, paddingTop: 12,
+    backgroundColor: "rgba(250,250,248,0.97)",
+    borderTopWidth: 1, borderTopColor: "#D7C3AE",
+    ...Platform.select({
+      ios:     { shadowColor: "rgba(131,85,0,1)", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.07, shadowRadius: 12 },
+      android: { elevation: 8 },
+      web:     { boxShadow: "0 -4px 12px rgba(131,85,0,0.07)" },
+    }),
+  },
+  stickyBarBtn: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  stickyBarCookBtn: {
+    flex: 1, height: 48, borderRadius: 14,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: "#F5A623",
+  },
+  stickyBarCookText: { color: "#fff", fontSize: 16, fontFamily: "Epilogue_700Bold" },
+
+  // ── Servings modal ────────────────────────────────────────────────────────────
+  servingsOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.50)" },
   servingsSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 44 },
   servingsHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center" as const, marginBottom: 22 },
-  servingsTitleText: { fontSize: 28, letterSpacing: -0.5, marginBottom: 6 },
-  servingsSubText: { fontSize: 14, marginBottom: 22 },
+  servingsTitleText: { fontSize: 26, letterSpacing: -0.5, marginBottom: 6, fontFamily: "Epilogue_700Bold", color: "#141210" },
+  servingsSubText: { fontSize: 14, marginBottom: 22, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
   servingsBtnRow: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 10, marginBottom: 16 },
   servingsNumBtn: {
     width: 58, height: 58, borderRadius: 16, borderWidth: 1.5,
@@ -1585,121 +1718,95 @@ const styles = StyleSheet.create({
   },
   servingsNumText: { fontSize: 18 },
   servingsCookBtn: { paddingVertical: 17, borderRadius: 16, alignItems: "center" as const, marginTop: 8 },
-  servingsCookBtnText: { color: "#fff", fontSize: 17 },
+  servingsCookBtnText: { color: "#fff", fontSize: 17, fontFamily: "Epilogue_700Bold" },
   servingsCustomInput: {
     height: 50, borderRadius: 14, borderWidth: 1.5,
-    paddingHorizontal: 16, fontSize: 17, fontFamily: "Inter_500Medium", marginBottom: 12,
+    paddingHorizontal: 16, fontSize: 17, fontFamily: "Epilogue_400Regular", marginBottom: 12,
   },
 
-  section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 17, fontFamily: "Inter_700Bold", marginBottom: 14, letterSpacing: -0.3 },
+  // ── Shopping list sheet ────────────────────────────────────────────────────────
+  sheetOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.50)" },
+  sheetContainer: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "85%" as any },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center" as const, marginBottom: 18 },
+  sheetHeader: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 12, marginBottom: 20 },
+  sheetTitle: { fontSize: 22, letterSpacing: -0.4, fontFamily: "Epilogue_700Bold", color: "#141210" },
+  sheetSubtitle: { fontSize: 13, marginTop: 3, lineHeight: 18, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+  sheetSectionLabel: { fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase" as const, marginBottom: 4, fontFamily: "Epilogue_700Bold", color: "#7A7570" },
+  sheetIngRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
+  sheetIngIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center" as const, justifyContent: "center" as const },
+  sheetIngName: { fontSize: 15, marginBottom: 2, fontFamily: "Epilogue_700Bold" },
+  sheetIngAmount: { fontSize: 13, fontFamily: "Epilogue_400Regular" },
+  sheetEmptyState: { alignItems: "center" as const, paddingVertical: 40, gap: 10 },
+  sheetEmptyTitle: { fontSize: 20, letterSpacing: -0.3, fontFamily: "Epilogue_700Bold", color: "#141210" },
+  sheetEmptyBody: { fontSize: 14, textAlign: "center" as const, lineHeight: 20, maxWidth: 260, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+  sheetDoneBtn: { paddingVertical: 16, borderRadius: 14, alignItems: "center" as const, marginTop: 16 },
+  sheetDoneBtnText: { color: "#fff", fontSize: 16, fontFamily: "Epilogue_700Bold" },
 
-  matchPanel: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 20 },
-  matchScore: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100 },
-  matchScoreText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  matchColumns: { flexDirection: "row", gap: 16, marginBottom: 14 },
-  matchColumn: { flex: 1, gap: 8 },
-  matchColumnHeader: { fontSize: 13, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
-  ingredientRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  ingredientText: { fontSize: 13, flex: 1 },
-  shoppingListBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 12 },
-  shoppingListBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
-
-  varNoteBox: {
-    padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 12,
+  // ── Celebration overlay ────────────────────────────────────────────────────────
+  celebrationOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    zIndex: 999,
   },
-  varNoteTitle: { fontSize: 14 },
-  varNoteText: { fontSize: 13, lineHeight: 18 },
-
-  variationChip: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 100, borderWidth: 1,
+  celebrationCard: { width: "100%", alignItems: "center", gap: 12 },
+  celebrationEmoji: { fontSize: 72 },
+  celebrationTitle: { fontSize: 34, letterSpacing: -0.5, fontFamily: "Epilogue_700Bold", color: "#141210" },
+  celebrationRecipe: { fontSize: 15, textAlign: "center", fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+  celebrationStats: { flexDirection: "row", gap: 12, marginTop: 8 },
+  celebrationStat: {
+    flex: 1, alignItems: "center", gap: 6, paddingVertical: 16,
+    borderRadius: 16, borderWidth: 1,
   },
-  variationText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  celebrationStatEmoji: { fontSize: 24 },
+  celebrationStatVal: { fontSize: 22, fontFamily: "Epilogue_700Bold" },
+  celebrationStatLabel: { fontSize: 12, textAlign: "center", fontFamily: "Epilogue_400Regular" },
+  celebrationBtns: { flexDirection: "row", gap: 12, marginTop: 8, width: "100%" },
+  celebrationBtn: { flex: 1, paddingVertical: 16, borderRadius: 14, alignItems: "center" },
+  celebIngBlock: { borderRadius: 12, borderWidth: 1, padding: 12, width: "100%" },
+  celebrationBtnText: { fontSize: 15, fontFamily: "Epilogue_700Bold" },
 
-  stepCard: { flexDirection: "row", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 10 },
-  stepNum: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 },
-  stepNumText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  stepInstruction: { fontSize: 14, lineHeight: 21 },
-  timerBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, alignSelf: "flex-start" },
-  timerBtnText: { fontSize: 12, fontFamily: "Inter_500Medium" },
-
-  nutritionPanel: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 20 },
-  macroRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
-  macroItem: { flex: 1, alignItems: "center", gap: 4 },
-  macroValue: { fontSize: 18, fontFamily: "SpaceGrotesk_600SemiBold" },
-  macroLabel: { fontSize: 11 },
-  calorieRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10 },
-  calorieText: { fontSize: 14, flex: 1 },
-
-  floatingTimerPill: {
-    position: "absolute", alignSelf: "center",
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 100,
-    backgroundColor: "rgba(0,0,0,0.8)",
-  },
-  floatingTimerLabel: { color: "#fff", fontSize: 13, maxWidth: 120 },
-  floatingTimerTime: { fontSize: 14, fontFamily: "SpaceGrotesk_600SemiBold" },
-
-  stickyBar: {
-    position: "absolute", bottom: 0, left: 0, right: 0,
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1,
-  },
-  stickyBarBtn: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  stickyBarCookBtn: { flex: 1, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  stickyBarCookText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
-
+  // ── Cook Mode ─────────────────────────────────────────────────────────────────
   cookMode: { flex: 1 },
-
-  // ── Redesigned Cook Mode (cm* prefix) ──────────────────────────────────────
   cmProgressRail: { height: 3, backgroundColor: "#1E1B18", width: "100%" },
   cmProgressFill: { height: 3, backgroundColor: "#F5A623", borderRadius: 2 },
-
   cmHeader: {
     flexDirection: "row" as const, alignItems: "center" as const,
     paddingHorizontal: 16, paddingBottom: 14, gap: 8,
   },
   cmCloseBtn: { width: 36, height: 36, alignItems: "center" as const, justifyContent: "center" as const },
-  cmRecipeTitle: { color: "#F0EDE8", fontSize: 13, fontFamily: "Inter_600SemiBold", letterSpacing: -0.1 },
+  cmRecipeTitle: { color: "#F0EDE8", fontSize: 13, fontFamily: "Epilogue_700Bold", letterSpacing: -0.1 },
   cmStepDot: { height: 6, borderRadius: 3 },
-
   cmTimerPill: {
     flexDirection: "row" as const, alignItems: "center" as const, gap: 7,
     marginHorizontal: 20, marginBottom: 10,
     paddingHorizontal: 14, paddingVertical: 9, borderRadius: 100,
     backgroundColor: "#1A1713", borderWidth: 1, borderColor: "#2A2720",
   },
-  cmTimerPillLabel: { flex: 1, fontSize: 12, fontFamily: "Inter_500Medium" },
-  cmTimerPillTime: { fontSize: 14, fontFamily: "SpaceGrotesk_600SemiBold" },
-
+  cmTimerPillLabel: { flex: 1, fontSize: 12, fontFamily: "Epilogue_400Regular" },
+  cmTimerPillTime: { fontSize: 14, fontFamily: "Epilogue_700Bold" },
   cmContent: { flex: 1, paddingHorizontal: 24, paddingTop: 4 },
-
-  // Ghost step number — design signature
   cmGhostNum: {
     position: "absolute" as const, right: -8, top: -16,
-    fontSize: 200, fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 200, fontFamily: "Epilogue_700Bold",
     color: "#F0EDE8", opacity: 0.03, lineHeight: 220,
     pointerEvents: "none" as any,
   },
-
   cmBadgeRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 10, marginBottom: 26 },
   cmStepBadge: { width: 42, height: 42, borderRadius: 21, alignItems: "center" as const, justifyContent: "center" as const },
-  cmStepBadgeText: { color: "#fff", fontSize: 19, fontFamily: "SpaceGrotesk_700Bold" },
-  cmStepOf: { color: "#4A4540", fontSize: 14, fontFamily: "Inter_400Regular" },
+  cmStepBadgeText: { color: "#fff", fontSize: 19, fontFamily: "Epilogue_700Bold" },
+  cmStepOf: { color: "#4A4540", fontSize: 14, fontFamily: "Epilogue_400Regular" },
   cmVariationTag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100 },
-  cmVariationTagText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-
+  cmVariationTagText: { fontSize: 11, fontFamily: "Epilogue_700Bold" },
   cmInstructionRow: { flexDirection: "row" as const, gap: 14, alignItems: "flex-start" as const },
   cmBulletBar: { width: 3, borderRadius: 2, minHeight: 22, marginTop: 4, alignSelf: "stretch" as const },
-  cmInstructionText: { color: "#F0EDE8", fontSize: 20, lineHeight: 30, fontFamily: "Inter_600SemiBold", letterSpacing: -0.2, flex: 1 },
-
+  cmInstructionText: { color: "#F0EDE8", fontSize: 20, lineHeight: 30, fontFamily: "Epilogue_700Bold", letterSpacing: -0.2, flex: 1 },
   cmInlineTimer: {
     flexDirection: "row" as const, alignItems: "center" as const, gap: 10,
     marginTop: 28, padding: 16, borderRadius: 16, borderWidth: 1,
   },
-  cmInlineTimerText: { flex: 1, color: "#F5A623", fontSize: 15, fontFamily: "Inter_600SemiBold" },
-
+  cmInlineTimerText: { flex: 1, color: "#F5A623", fontSize: 15, fontFamily: "Epilogue_700Bold" },
   cmNavFooter: {
     flexDirection: "row" as const, gap: 12,
     paddingHorizontal: 20, paddingTop: 14,
@@ -1714,81 +1821,5 @@ const styles = StyleSheet.create({
     flexDirection: "row" as const, alignItems: "center" as const,
     justifyContent: "center" as const, gap: 10,
   },
-  cmNavMainText: { color: "#fff", fontSize: 17, fontFamily: "Inter_700Bold" },
-
-  celebrationOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    zIndex: 999,
-  },
-  celebrationCard: { width: "100%", alignItems: "center", gap: 12 },
-  celebrationEmoji: { fontSize: 72 },
-  celebrationTitle: { fontSize: 36, letterSpacing: -0.5 },
-  celebrationRecipe: { fontSize: 16, textAlign: "center" },
-  celebrationStats: { flexDirection: "row", gap: 12, marginTop: 8 },
-  celebrationStat: {
-    flex: 1, alignItems: "center", gap: 6, paddingVertical: 16,
-    borderRadius: 16, borderWidth: 1,
-  },
-  celebrationStatEmoji: { fontSize: 24 },
-  celebrationStatVal: { fontSize: 22 },
-  celebrationStatLabel: { fontSize: 12, textAlign: "center" },
-  celebrationBtns: { flexDirection: "row", gap: 12, marginTop: 8, width: "100%" },
-  celebrationBtn: { flex: 1, paddingVertical: 16, borderRadius: 14, alignItems: "center" },
-  celebIngBlock: { borderRadius: 12, borderWidth: 1, padding: 12, width: "100%" },
-  celebrationBtnText: { fontSize: 15 },
-
-  // ── Cooking Instructions polish ────────────────────────────────────────────
-  sectionEyebrow: { fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2, textTransform: "uppercase" as const, marginBottom: 4 },
-  adaptedBadge: { flexDirection: "row" as const, alignItems: "center" as const, gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 100, borderWidth: 1 },
-  adaptedDot: { width: 6, height: 6, borderRadius: 3 },
-  adaptedBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  stepAccentBar: { position: "absolute" as const, left: 0, top: 0, bottom: 0, width: 3, borderRadius: 2 },
-
-  // ── Pantry expand/collapse ─────────────────────────────────────────────────
-  pantryExpandBtn: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6, paddingVertical: 10, marginTop: 4 },
-  pantryExpandText: { fontSize: 13, fontFamily: "Inter_500Medium" },
-
-  // ── Variation apply button ─────────────────────────────────────────────────
-  varApplyBtn: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8, paddingVertical: 13, borderRadius: 12, borderWidth: 1, marginTop: 4 },
-  varApplyBtnText: { fontSize: 14 },
-
-  // ── Shopping list sheet ────────────────────────────────────────────────────
-  sheetOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" },
-  sheetContainer: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "85%" as any },
-  sheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center" as const, marginBottom: 18 },
-  sheetHeader: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 12, marginBottom: 20 },
-  sheetTitle: { fontSize: 22, letterSpacing: -0.4 },
-  sheetSubtitle: { fontSize: 13, marginTop: 3, lineHeight: 18 },
-  sheetSectionLabel: { fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase" as const, marginBottom: 4 },
-  sheetIngRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
-  sheetIngIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center" as const, justifyContent: "center" as const },
-  sheetIngName: { fontSize: 15, marginBottom: 2 },
-  sheetIngAmount: { fontSize: 13 },
-  sheetEmptyState: { alignItems: "center" as const, paddingVertical: 40, gap: 10 },
-  sheetEmptyTitle: { fontSize: 20, letterSpacing: -0.3 },
-  sheetEmptyBody: { fontSize: 14, textAlign: "center" as const, lineHeight: 20, maxWidth: 260 },
-  sheetDoneBtn: { paddingVertical: 16, borderRadius: 14, alignItems: "center" as const, marginTop: 16 },
-  sheetDoneBtnText: { color: "#fff", fontSize: 16 },
-
-  // ── Make It Your Way section ───────────────────────────────────────────────
-  sectionHeaderRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 10, marginBottom: 14 },
-  sectionSubtitle: { fontSize: 13, lineHeight: 18 },
-  clearVariationBtn: { flexDirection: "row" as const, alignItems: "center" as const, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 100, borderWidth: 1 },
-  clearVariationText: { fontSize: 12, fontFamily: "Inter_500Medium" },
-  varNoteHeader: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8 },
-  varNoteDot: { width: 8, height: 8, borderRadius: 4 },
-  varAdditionsBlock: { gap: 8, marginTop: 4 },
-  varAdditionsLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.3, textTransform: "uppercase" as const },
-  varAdditionsRow: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 7 },
-  varAddChip: { flexDirection: "row" as const, alignItems: "center" as const, gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 100, borderWidth: 1 },
-  varLegendRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 5, marginTop: 4 },
-  varLegendDot: { width: 7, height: 7, borderRadius: 3.5 },
-  varLegendText: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  varNutRow: { flexDirection: "row" as const, alignItems: "center" as const, flexWrap: "wrap" as const, gap: 6, paddingTop: 10, marginTop: 4, borderTopWidth: 1 },
-  varNutLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
-  varNutChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100, borderWidth: 1 },
-  varNutChipText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  cmNavMainText: { color: "#fff", fontSize: 17, fontFamily: "Epilogue_700Bold" },
 });
