@@ -1,0 +1,436 @@
+You are redesigning ONLY the visual styling of the AI Chef chat screen
+in the PantrySwipe Expo app. Stack: Expo SDK 54, expo-router v6, React
+Native 0.81, TypeScript, pnpm workspaces, @expo/vector-icons (Feather),
+react-native-reanimated, expo-haptics, expo-blur.
+
+THIS IS A STACK SCREEN — not a tab. It lives at:
+  artifacts/pantryswipe/app/ai-chef.tsx
+This screen is DARK MODE ONLY (backgroundColor #141210).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — READ BEFORE TOUCHING ANYTHING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Read these files completely. Do not guess their contents:
+  - artifacts/pantryswipe/app/ai-chef.tsx       ← TARGET FILE
+  - artifacts/pantryswipe/context/AppContext.tsx
+  - artifacts/pantryswipe/data/mockData.ts
+  - artifacts/pantryswipe/constants/colors.ts
+  - artifacts/pantryswipe/package.json
+
+From TARGET FILE, note the EXACT names of:
+  - The messages state variable and its type (array of message objects)
+  - The input text state variable and its setter
+  - The send message handler function name and what it does
+  - The mock AI response logic (pattern matching function)
+  - The typing indicator state variable
+  - Quick suggestion chip onPress handlers (if wired)
+  - The back navigation call (router.back() or navigation.goBack())
+  - The more options button onPress (top-right)
+  - Whether a bottom nav bar exists on this screen
+  - How recipe thumbnails in messages are stored (require or URI)
+  - Whether markdown bold (**text**) is currently parsed
+
+From AppContext.tsx, note:
+  - pantryItems field name (used for pantry-aware AI context)
+  - user.name field
+
+From colors.ts, note existing dark color tokens.
+  Add these if missing (add to colors.ts first, then import):
+    darkBackground:    '#141210'   ← app's existing dark bg
+    darkSurface:       '#1E1E1E'   ← AI message bubble bg
+    darkInput:         '#2A2A2A'   ← input bar bg
+    darkBorder:        'rgba(255,255,255,0.08)'
+    darkText:          '#E6D8CA'   ← primary text on dark
+    darkTextMuted:     'rgba(230,216,202,0.55)'
+    darkOverlay:       'rgba(0,0,0,0.40)'
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ABSOLUTE DO NOT TOUCH LIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Never modify:
+  - The mock AI pattern-matching response logic
+  - The send message handler — onPress, logic, and state updates
+  - The messages state variable and its type definition
+  - The input text state variable and all its update calls
+  - The typing indicator state logic
+  - The back navigation call
+  - AppContext.tsx, mockData.ts
+  - Any component imported by more than one screen
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL TRANSLATION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RULE 1 — BANNED WEB-ONLY APIS:
+  window.*, document.*, querySelector(), classList,
+  addEventListener(), wheel event, focus/blur DOM events,
+  chatInput.parentElement, inputWrapper.classList,
+  CSS @keyframes, animation-delay CSS, backdrop-filter CSS,
+  ::after pseudo-elements, pb-[180px] CSS padding for keyboard,
+  no-scrollbar CSS class (use showsHorizontalScrollIndicator={false})
+
+RULE 2 — TextInput NOT HTML input
+  Use TextInput from react-native. Never use HTML <input>.
+  Focus highlight: useState isFocused — no classList toggling.
+  onFocus={() => setIsFocused(true)}
+  onBlur={() => setIsFocused(false)}
+  Input wrapper border: isFocused ? 'rgba(245,166,35,0.5)' : darkBorder
+
+RULE 3 — KeyboardAvoidingView IS MANDATORY
+  Wrap the ENTIRE screen in KeyboardAvoidingView:
+    import { KeyboardAvoidingView, Platform } from 'react-native';
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    style={{ flex: 1 }}
+  This is non-negotiable. Without it the keyboard covers the input
+  bar on device and the chat becomes unusable.
+
+RULE 4 — SEND HANDLER PRESERVED VERBATIM
+  Read the exact send handler from TARGET FILE.
+  The send button onPress must call it exactly as it exists.
+  Do not add fetch(), do not add async/await, do not change
+  what happens when the user taps send.
+
+RULE 5 — FlatList AUTO-SCROLL TO BOTTOM
+  The chat message list must use FlatList with:
+    const flatListRef = useRef<FlatList>(null);
+    After messages update:
+      useEffect(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, [messages]);
+  This ensures new messages are always visible.
+  If TARGET FILE already has this, do not add a second one.
+
+RULE 6 — NO EXTERNAL IMAGE URLs
+  Recipe thumbnails in AI messages must come from mockData
+  using require() format.
+  If a matching recipe image doesn't exist in mockData,
+  show a placeholder View:
+    width 128, height 80, borderRadius 12,
+    backgroundColor 'rgba(255,255,255,0.06)',
+    centered Feather "image" size 24, color darkTextMuted
+
+RULE 7 — MARKDOWN BOLD PARSING
+  Read TARGET FILE to see if bold parsing exists already.
+  If it does: preserve it exactly, just restyle.
+  If it does NOT exist: implement simple bold parsing:
+    Split message text on ** markers.
+    Odd-indexed segments: fontWeight '700', color darkText
+    Even-indexed segments: fontWeight '400', color darkText
+    Render as inline Text children inside a parent Text.
+  Never render ** asterisks as literal characters.
+
+RULE 8 — NO MATERIAL SYMBOLS ICONS
+  Use Feather from @expo/vector-icons only:
+    arrow_back      → Feather "arrow-left"
+    more_vert       → Feather "more-vertical"
+    restaurant      → Feather "coffee"
+    smart_toy       → Feather "cpu"
+    add_circle      → Feather "plus-circle"
+    send            → Feather "send"
+
+RULE 9 — BOTTOM NAV BAR
+  Read TARGET FILE. This is a STACK screen (not a tab).
+  If the existing file has NO bottom nav bar: do not add one.
+  If it DOES have one: preserve its navigation calls, restyle only.
+  The Stitch shows a nav bar but it is likely wrong for a stack screen.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ANIMATIONS — ALL MUST USE REANIMATED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TYPING INDICATOR (3 bouncing dots):
+  import { useSharedValue, useAnimatedStyle,
+    withRepeat, withSequence, withTiming,
+    withDelay } from 'react-native-reanimated';
+
+  For each dot (index 0, 1, 2):
+    const translateY = useSharedValue(0);
+    useEffect(() => {
+      translateY.value = withDelay(
+        index * 150,
+        withRepeat(
+          withSequence(
+            withTiming(-6, { duration: 300 }),
+            withTiming(0, { duration: 300 })
+          ),
+          -1, false
+        )
+      );
+    }, []);
+    const dotStyle = useAnimatedStyle(() => ({
+      transform: [{ translateY: translateY.value }]
+    }));
+
+  Each dot: Animated.View with dotStyle applied
+    width 6, height 6, borderRadius 3,
+    backgroundColor 'rgba(230,216,202,0.6)', margin 2
+
+  Show typing indicator only when isTyping state is true.
+
+PULSE ANIMATION (green status dot):
+  const pulseScale = useSharedValue(1);
+  const pulseOpacity = useSharedValue(1);
+  useEffect(() => {
+    pulseScale.value = withRepeat(
+      withSequence(
+        withTiming(1.3, { duration: 1000 }),
+        withTiming(1.0, { duration: 1000 })
+      ), -1, false
+    );
+    pulseOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.4, { duration: 1000 }),
+        withTiming(1.0, { duration: 1000 })
+      ), -1, false
+    );
+  }, []);
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+    opacity: pulseOpacity.value
+  }));
+  Green dot: Animated.View with pulseStyle
+    width 8, height 8, borderRadius 4,
+    backgroundColor Colors.secondary
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCREEN STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Overall layout (outermost to innermost):
+  SafeAreaView flex:1 backgroundColor darkBackground edges=['top']
+  └── KeyboardAvoidingView flex:1 behavior='padding'/'height'
+      ├── HEADER (absolute positioned, zIndex 50)
+      ├── FlatList (message list, fills remaining space)
+      └── BOTTOM INPUT AREA (not fixed position — inside
+          KeyboardAvoidingView so it moves with keyboard)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION-BY-SECTION VISUAL SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. HEADER BAR
+   position: 'absolute', top: insets.top, left: 0, right: 0,
+   zIndex: 50, paddingHorizontal: 20, paddingVertical: 14
+   backgroundColor: 'rgba(20,18,16,0.85)'
+   On iOS: wrap in BlurView tint="dark" intensity=60 as
+     absoluteFill background (content scrolls behind it)
+   On Android: plain View with backgroundColor above
+
+   Layout: flexDirection row, justifyContent space-between,
+     alignItems center
+
+   LEFT GROUP: flexDirection row, gap 14, alignItems center
+     Back button: TouchableOpacity minH:44 minW:44
+       Feather "arrow-left" size 22, color '#FFFFFF'
+       → call existing back navigation from TARGET FILE
+
+     Title column:
+       "PantrySwipe" — fontFamily Epilogue_700Bold, fontSize 20,
+         color '#FFFFFF', letterSpacing -0.3
+       Status row: flexDirection row, alignItems center, gap 6
+         Animated green pulse dot (see ANIMATIONS above)
+         "Powered by your pantry" — fontSize 11, fontWeight '600',
+           letterSpacing 1.5, textTransform 'uppercase',
+           color Colors.secondary
+
+   RIGHT: TouchableOpacity minH:44 minW:44
+     Feather "more-vertical" size 22, color '#FFFFFF'
+     → preserve existing more-options onPress
+
+2. MESSAGE LIST (FlatList)
+   ref={flatListRef}
+   data={messages from existing state}
+   keyExtractor={item => item.id}
+   contentContainerStyle:
+     paddingTop: headerHeight + insets.top + 20
+     paddingHorizontal: 20
+     paddingBottom: 20
+   showsVerticalScrollIndicator: false
+   inverted: false (NOT inverted — scroll to end on new messages)
+
+   DATE STAMP (render as list header):
+     alignSelf: 'center', marginVertical: 16
+     Container: backgroundColor 'rgba(255,255,255,0.05)',
+       paddingHorizontal: 14, paddingVertical: 6, borderRadius: 99
+     Text: fontSize 12, color 'rgba(230,216,202,0.5)',
+       fontFamily Epilogue_400Regular
+
+3. MESSAGE BUBBLES
+
+   AI MESSAGE (role === 'assistant' or isAI === true):
+     flexDirection: 'row', gap: 12, maxWidth: '88%',
+     marginBottom: 20
+
+     Avatar circle: width 40, height 40, borderRadius 20,
+       backgroundColor '#2A2A2A',
+       borderWidth 1, borderColor darkBorder,
+       alignItems: 'center', justifyContent: 'center'
+       Feather "coffee" size 20, color Colors.primary
+
+     Bubble: backgroundColor '#1E1E1E',
+       borderWidth 1, borderColor darkBorder,
+       borderRadius: 20, borderTopLeftRadius: 4,
+       padding: 16
+
+       Message text: parsed for **bold** (see RULE 7)
+         fontSize 15, lineHeight 22, color '#E6D8CA',
+         fontFamily Epilogue_400Regular
+
+       Recipe thumbnails (if message.recipes exists in data):
+         ScrollView horizontal, showsHorizontalScrollIndicator={false}
+         marginTop: 12
+         Each thumbnail: width 128, height 80, borderRadius 12,
+           overflow 'hidden', marginRight 10
+           Image: source from mockData require() if exists,
+             else placeholder View (see RULE 6)
+           Overlay: position absolute, bottom 0, left 0, right 0,
+             backgroundColor 'rgba(0,0,0,0.55)', padding 6
+           Recipe name: fontSize 10, fontWeight '700',
+             color '#FFFFFF', numberOfLines={1}
+
+   USER MESSAGE (role === 'user' or isAI === false):
+     alignSelf: 'flex-end', maxWidth: '80%', marginBottom: 20
+     Bubble: backgroundColor Colors.primary,
+       borderRadius: 20, borderTopRightRadius: 4,
+       paddingHorizontal: 18, paddingVertical: 14
+     Text: fontSize 15, lineHeight 22,
+       color '#644000', fontFamily Epilogue_400Regular
+
+   TYPING INDICATOR (shown when isTyping === true):
+     Same layout as AI message bubble
+     Avatar: same style, Feather "cpu" size 20,
+       color 'rgba(230,216,202,0.35)'
+     Bubble: backgroundColor 'rgba(255,255,255,0.05)',
+       paddingHorizontal: 16, paddingVertical: 12,
+       borderRadius: 99, alignSelf: 'flex-start'
+       3 bouncing dots (see ANIMATIONS above)
+
+4. BOTTOM INPUT AREA
+   (This sits INSIDE KeyboardAvoidingView, NOT fixed positioned)
+   backgroundColor: darkBackground
+   paddingBottom: insets.bottom + 8
+
+   SUGGESTION CHIPS ROW:
+     ScrollView horizontal showsHorizontalScrollIndicator={false}
+     contentContainerStyle: paddingHorizontal 16, gap 10,
+       paddingVertical 10
+
+     Each chip: TouchableOpacity
+       paddingHorizontal: 16, paddingVertical: 10,
+       backgroundColor: 'rgba(255,255,255,0.08)',
+       borderWidth: 1, borderColor: darkBorder,
+       borderRadius: 999
+       Text: fontSize 13, fontWeight '600', color '#FFFFFF',
+         fontFamily Epilogue_400Regular
+
+       onPress: read from TARGET FILE. If chip already has a handler,
+         preserve it exactly. If not, wire to:
+           setInputText(chipText);
+           // then call send handler if it auto-sends on chip tap
+           // or just populate the input for user to send manually
+
+     Chip labels from existing TARGET FILE suggestions or:
+       ["Substitute for eggs?", "What can I make tonight?",
+        "Low carb options", "Add to grocery list"]
+
+   INPUT BAR ROW:
+     flexDirection: 'row', alignItems: 'center',
+     marginHorizontal: 16, marginBottom: 8,
+     backgroundColor: '#2A2A2A',
+     borderWidth: 1.5,
+     borderColor: isFocused ?
+       'rgba(245,166,35,0.5)' : darkBorder,
+     borderRadius: 999, paddingHorizontal: 6,
+     paddingVertical: 6
+
+     Left add button: TouchableOpacity minH:44 minW:44 centered
+       Feather "plus-circle" size 22,
+       color 'rgba(230,216,202,0.45)'
+       → preserve existing onPress from TARGET FILE
+
+     TextInput: flex 1, paddingHorizontal: 12,
+       backgroundColor: 'transparent',
+       color: '#FFFFFF',
+       placeholderTextColor: 'rgba(230,216,202,0.4)',
+       placeholder: "Ask your chef anything...",
+       fontFamily Epilogue_400Regular, fontSize 15,
+       value: {inputText from existing state}
+       onChangeText: {existing setter}
+       onFocus: () => setIsFocused(true)
+       onBlur: () => setIsFocused(false)
+       multiline: false
+       returnKeyType: 'send'
+       onSubmitEditing: → existing send handler
+
+     Send button: TouchableOpacity
+       width 40, height 40, borderRadius 20,
+       backgroundColor Colors.primary,
+       alignItems: 'center', justifyContent: 'center'
+       shadowColor Colors.primary, shadowOpacity 0.35,
+       shadowRadius 8, shadowOffset {width:0,height:2},
+       elevation 4
+       Feather "send" size 18, color '#FFFFFF'
+       → onPress: existing send handler — DO NOT CHANGE
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STYLING RULES — MANDATORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ALL styles in StyleSheet.create() at bottom of file.
+   Zero inline style objects in render except:
+   - Dynamic: [styles.inputBar, isFocused && styles.inputFocused]
+   - Animated: style={[styles.dot, dotStyle]}
+   - Platform.select spreads
+
+2. Every touchable: minHeight 44, minWidth 44.
+
+3. No remote image URLs anywhere.
+
+4. KeyboardAvoidingView wraps entire screen — non-negotiable.
+
+5. FlatList ref with scrollToEnd on messages change.
+
+6. No HTML input element — TextInput only.
+
+7. No DOM event listeners of any kind.
+
+8. All dark colors imported from colors.ts tokens.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY FINAL STEPS — DO NOT SKIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Grep checks — fix any found:
+   grep -n "window\." artifacts/pantryswipe/app/ai-chef.tsx
+   grep -n "addEventListener" artifacts/pantryswipe/app/ai-chef.tsx
+   grep -n "classList" artifacts/pantryswipe/app/ai-chef.tsx
+   grep -n "googleusercontent" artifacts/pantryswipe/app/ai-chef.tsx
+   grep -n "<input" artifacts/pantryswipe/app/ai-chef.tsx
+   grep -n "wheel" artifacts/pantryswipe/app/ai-chef.tsx
+
+2. TypeScript check:
+   cd artifacts/pantryswipe && pnpm run typecheck
+
+3. Logic integrity check — read and verify:
+   - KeyboardAvoidingView wraps entire screen
+   - Send button calls original handler — no new fetch()
+   - TextInput used (not HTML input)
+   - FlatList ref scrollToEnd on messages change
+   - Typing indicator uses Reanimated (no CSS keyframes)
+   - Pulse dot uses Reanimated (no CSS animation)
+   - No ** asterisks visible in rendered text
+   - No remote image URLs in any Image source
+   - All dark colors imported from colors.ts
+
+4. Report back with:
+   - Confirmed file path of AI chef screen
+   - Every file modified
+   - Whether bottom nav bar exists on this screen
+   - How mock AI handler works (what it reads from AppContext)
+   - Whether markdown bold was already handled or you added it
+   - Grep check results (clean / found + fixed)
+   - TypeScript result (pass / errors + fixed)
+   - Confirm: KeyboardAvoidingView is present
+   - Confirm: zero remote URLs in final code

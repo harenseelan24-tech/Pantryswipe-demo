@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -10,17 +10,41 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  withDelay,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
 import { PremiumBottomSheet } from "@/components/PremiumBottomSheet";
 import { useAIChefUsage, FREE_DAILY_LIMIT } from "@/hooks/useAIChefUsage";
 import { useSubscription } from "@/lib/revenuecat";
 import { PantryItem } from "@/data/mockData";
 import { callAIChef } from "@/services/aiChef";
+
+// ── Dark palette (AI Chef is dark-mode only) ───────────────────────────────
+const D = {
+  background:   "#141210",
+  surface:      "#1E1E1E",
+  input:        "#2A2A2A",
+  border:       "rgba(255,255,255,0.08)",
+  text:         "#E6D8CA",
+  textMuted:    "rgba(230,216,202,0.55)",
+  overlay:      "rgba(0,0,0,0.40)",
+  primary:      "#F5A623",
+  secondary:    "#4CAF76",
+  danger:       "#E84040",
+} as const;
+
+// ── Header height constant ─────────────────────────────────────────────────
+const HEADER_H = 72;
 
 interface Message {
   id: string;
@@ -77,7 +101,6 @@ function buildPremiumResponse(
 
   const q = query.toLowerCase();
 
-  // Expiry-focused queries
   if (q.includes("expir") || q.includes("use up") || q.includes("going off") || q.includes("leftover")) {
     if (expiring.length === 0 && useSoon.length === 0) {
       return `✨ Good news — your pantry is in great shape! Nothing is expiring in the next 7 days.\n\nYour freshest items right now:\n${pantryItems.slice(0, 5).map((i) => `• ${i.emoji} ${i.name} (${i.quantity} ${i.unit})`).join("\n")}\n\nWant me to suggest a recipe using what you have?`;
@@ -99,7 +122,6 @@ function buildPremiumResponse(
     ].filter(Boolean).join("\n");
   }
 
-  // Speed-focused queries
   if (q.includes("10 minute") || q.includes("quick") || q.includes("fast") || q.includes("no time")) {
     const items = pantryItems.slice(0, 6);
     const r = QUICK_RECIPES[profile.dietType[0]?.toLowerCase()] ?? QUICK_RECIPES.default;
@@ -118,7 +140,6 @@ function buildPremiumResponse(
     ].join("\n");
   }
 
-  // Protein-focused queries
   if (q.includes("protein") || q.includes("muscle") || q.includes("gym") || q.includes("macro")) {
     const proteinItems = pantryItems.filter((i) =>
       ["chicken", "egg", "tuna", "beef", "tofu", "salmon", "shrimp", "lentil", "greek yogurt", "cheese"]
@@ -147,7 +168,6 @@ function buildPremiumResponse(
     ].join("\n");
   }
 
-  // "What can I make" / general
   const topItems = pantryItems.slice(0, 8);
   const expiringNote = expiring.length > 0
     ? `\n⚠️ Prioritising your expiring items: ${expiring.map((i) => i.emoji + " " + i.name).join(", ")}`
@@ -259,10 +279,84 @@ const QUICK_RECIPES: Record<string, {
     tip: "Slice the chicken breast while slightly frozen — it cuts much thinner and cooks faster.",
   },
 };
-// ──────────────────────────────────────────────────────────────────────────
 
+// ── Reanimated: single bouncing dot ─────────────────────────────────────────
+function BounceDot({ index }: { index: number }) {
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    translateY.value = withDelay(
+      index * 150,
+      withRepeat(
+        withSequence(
+          withTiming(-6, { duration: 300 }),
+          withTiming(0, { duration: 300 })
+        ),
+        -1,
+        false
+      )
+    );
+  }, []);
+
+  const dotStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return <Reanimated.View style={[styles.typingDot, dotStyle]} />;
+}
+
+// ── Reanimated: pulsing status dot ──────────────────────────────────────────
+function PulseDot() {
+  const pulseScale = useSharedValue(1);
+  const pulseOpacity = useSharedValue(1);
+
+  useEffect(() => {
+    pulseScale.value = withRepeat(
+      withSequence(
+        withTiming(1.3, { duration: 1000 }),
+        withTiming(1.0, { duration: 1000 })
+      ),
+      -1,
+      false
+    );
+    pulseOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.4, { duration: 1000 }),
+        withTiming(1.0, { duration: 1000 })
+      ),
+      -1,
+      false
+    );
+  }, []);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+    opacity: pulseOpacity.value,
+  }));
+
+  return <Reanimated.View style={[styles.pulseDot, pulseStyle]} />;
+}
+
+// ── Inline bold parser: **text** → bold segments ────────────────────────────
+function BoldText({ text, style }: { text: string; style: object }) {
+  const parts = text.split("**");
+  return (
+    <Text style={style}>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <Text key={i} style={{ fontFamily: "Epilogue_700Bold" }}>
+            {part}
+          </Text>
+        ) : (
+          <Text key={i}>{part}</Text>
+        )
+      )}
+    </Text>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 export default function AIChefScreen() {
-  const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { userProfile, pantryItems } = useApp();
@@ -275,20 +369,28 @@ export default function AIChefScreen() {
   const API_BASE = Platform.OS !== "web"
     ? `https://${process.env.EXPO_PUBLIC_API_DOMAIN ?? "zip-repl-cactusussy24.replit.app"}/api`
     : "/api";
+
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const listRef = useRef<FlatList>(null);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom;
-
   const remaining = Math.max(0, FREE_DAILY_LIMIT - usageCount);
+
+  // Scroll to end whenever messages or typing state changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      listRef.current?.scrollToEnd({ animated: true });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [messages, isTyping]);
 
   const sendMessage = async (text: string = input.trim()) => {
     if (!text || isTyping || isSendingRef.current) return;
 
-    // Gate check for free users
     if (!isSubscribed && isAtLimit) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       setShowGate(true);
@@ -306,7 +408,7 @@ export default function AIChefScreen() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [userMsg, ...prev]);
+    setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsTyping(true);
 
@@ -315,9 +417,6 @@ export default function AIChefScreen() {
     try {
       let aiText = "";
 
-      // ── Try real AI via inference.sh (callAIChef) first ──────────────────
-      // Falls back to existing premium/free mock if EXPO_PUBLIC_INFSH_API_KEY
-      // is not set or the request fails — the app never crashes.
       let realAiSucceeded = false;
       try {
         aiText = await callAIChef({
@@ -336,11 +435,9 @@ export default function AIChefScreen() {
 
       if (!realAiSucceeded) {
         if (isSubscribed) {
-          // Premium: generate rich pantry-aware response
           await new Promise((r) => setTimeout(r, 900 + Math.random() * 600));
           aiText = buildPremiumResponse(text, pantryItems, userProfile as UserProfileShape);
         } else {
-          // Free: use the backend API
           const res = await fetch(`${API_BASE}/recipes/ai-chef`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -370,14 +467,13 @@ export default function AIChefScreen() {
         timestamp: new Date(),
         isPremium: isSubscribed,
       };
-      setMessages((prev) => [aiMsg, ...prev]);
+      setMessages((prev) => [...prev, aiMsg]);
       conversationRef.current = [
         ...history,
         { role: "user" as const, content: text },
         { role: "assistant" as const, content: aiMsg.content },
       ].slice(-10);
 
-      // Show gate preemptively when 1 remaining (after this one is used)
       if (!isSubscribed && remaining === 1) {
         // nothing — let them see the response first
       }
@@ -388,7 +484,7 @@ export default function AIChefScreen() {
         content: "Looks like I lost my connection. Check your network and try again!",
         timestamp: new Date(),
       };
-      setMessages((prev) => [errMsg, ...prev]);
+      setMessages((prev) => [...prev, errMsg]);
     } finally {
       setIsTyping(false);
       if (!isSubscribed) await increment();
@@ -400,7 +496,7 @@ export default function AIChefScreen() {
     date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   return (
-    <View style={[styles.container, { backgroundColor: "#141210" }]}>
+    <View style={styles.container}>
       <PremiumBottomSheet
         visible={showGate}
         usedCount={usageCount}
@@ -408,139 +504,214 @@ export default function AIChefScreen() {
         onDismiss={() => setShowGate(false)}
       />
 
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: topPadding + 8 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="x" size={22} color="#F0EDE8" />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <View style={[styles.chefAvatar, { backgroundColor: isSubscribed ? "#4CAF76" : "#F5A623" }]}>
-            <Text style={styles.chefAvatarEmoji}>{isSubscribed ? "⭐" : "👨‍🍳"}</Text>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        {/* ── Header ── */}
+        <View style={[styles.header, { paddingTop: topPadding + 10 }]}>
+          {/* Left group: back + title */}
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              style={styles.headerIconBtn}
+              onPress={() => router.back()}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather name="arrow-left" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <View style={styles.headerTitleCol}>
+              <Text style={styles.headerTitle}>PantrySwipe</Text>
+              <View style={styles.headerStatusRow}>
+                <PulseDot />
+                <Text style={styles.headerStatusText}>POWERED BY YOUR PANTRY</Text>
+              </View>
+            </View>
           </View>
-          <View>
-            <Text style={styles.headerTitle}>
-              AI Chef{isSubscribed ? " ✨" : ""}
-            </Text>
-            <Text style={styles.headerSub}>
-              {isSubscribed ? "Premium · Unlimited recipes" : "Knows your pantry · Always ready"}
-            </Text>
-          </View>
+
+          {/* Right: more options */}
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Feather name="more-vertical" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
-        <View style={{ width: 40 }} />
-      </View>
 
-      {/* Context banner */}
-      <View style={[styles.contextBanner, { backgroundColor: isSubscribed ? "#4CAF76" + "15" : "#F5A623" + "15" }]}>
-        <Feather name="box" size={14} color={isSubscribed ? "#4CAF76" : "#F5A623"} />
-        <Text style={[styles.contextText, { color: isSubscribed ? "#4CAF76" : "#F5A623" }]}>
-          {pantryItems.length} pantry items loaded · {userProfile.dietType[0]} diet
-        </Text>
-        {!isSubscribed && loaded && (
-          <View style={styles.usageChip}>
-            <Text style={styles.usageChipText}>
-              {remaining}/{FREE_DAILY_LIMIT} left today
+        {/* ── Context banner ── */}
+        <View style={[styles.contextBanner, { backgroundColor: isSubscribed ? D.secondary + "18" : D.primary + "18" }]}>
+          <Feather name="box" size={13} color={isSubscribed ? D.secondary : D.primary} />
+          <Text style={[styles.contextText, { color: isSubscribed ? D.secondary : D.primary }]}>
+            {pantryItems.length} pantry items loaded · {userProfile.dietType[0]} diet
+          </Text>
+          {!isSubscribed && loaded && (
+            <View style={styles.usageChip}>
+              <Text style={styles.usageChipText}>
+                {remaining}/{FREE_DAILY_LIMIT} left today
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── Warn when 1 left ── */}
+        {!isSubscribed && loaded && remaining === 1 && (
+          <TouchableOpacity
+            style={styles.warningBanner}
+            onPress={() => setShowGate(true)}
+            activeOpacity={0.85}
+          >
+            <Feather name="alert-circle" size={13} color={D.danger} />
+            <Text style={styles.warningText}>Last free recipe today — </Text>
+            <Text style={[styles.warningText, { color: D.secondary, textDecorationLine: "underline" }]}>
+              Upgrade for unlimited
             </Text>
-          </View>
+          </TouchableOpacity>
         )}
-      </View>
 
-      {/* Warn when 1 left */}
-      {!isSubscribed && loaded && remaining === 1 && (
-        <TouchableOpacity
-          style={styles.warningBanner}
-          onPress={() => setShowGate(true)}
-          activeOpacity={0.85}
-        >
-          <Feather name="alert-circle" size={13} color="#E84040" />
-          <Text style={styles.warningText}>Last free recipe today — </Text>
-          <Text style={[styles.warningText, { color: "#4CAF76", textDecorationLine: "underline" }]}>Upgrade for unlimited</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Messages */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
+        {/* ── Message list ── */}
         <FlatList
           ref={listRef}
           data={messages}
           keyExtractor={(item) => item.id}
-          inverted
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.messagesList}
-          ListHeaderComponent={
+          contentContainerStyle={[
+            styles.messagesList,
+            { paddingTop: 16, paddingBottom: 20 },
+          ]}
+          ListFooterComponent={
             isTyping ? (
-              <View style={[styles.typingIndicator, { backgroundColor: "#1E1B18" }]}>
-                <Text style={styles.typingDots}>• • •</Text>
+              <View style={styles.typingRow}>
+                {/* AI avatar */}
+                <View style={styles.aiAvatar}>
+                  <Feather name="cpu" size={20} color="rgba(230,216,202,0.35)" />
+                </View>
+                {/* Bouncing dots bubble */}
+                <View style={styles.typingBubble}>
+                  <View style={styles.typingDotsRow}>
+                    <BounceDot index={0} />
+                    <BounceDot index={1} />
+                    <BounceDot index={2} />
+                  </View>
+                </View>
               </View>
             ) : null
           }
           renderItem={({ item }) => (
-            <View
-              style={[
-                styles.messageBubble,
-                item.role === "user"
-                  ? [styles.userBubble, { backgroundColor: "#F5A623" }]
-                  : [styles.aiBubble, { backgroundColor: "#1E1B18" }],
-              ]}
-            >
-              {item.isPremium && (
-                <View style={styles.premiumTag}>
-                  <Feather name="zap" size={9} color="#4CAF76" />
-                  <Text style={styles.premiumTagText}>Premium response</Text>
+            item.role === "assistant" ? (
+              /* ── AI bubble ── */
+              <View style={styles.aiRow}>
+                <View style={styles.aiAvatar}>
+                  <Feather name="coffee" size={20} color={D.primary} />
                 </View>
-              )}
-              <Text
-                style={[
-                  styles.messageText,
-                  { color: item.role === "user" ? "#fff" : "#F0EDE8" },
-                ]}
-              >
-                {item.content}
-              </Text>
-              <Text style={styles.messageTime}>{formatTime(item.timestamp)}</Text>
-            </View>
+                <View style={styles.aiBubble}>
+                  {item.isPremium && (
+                    <View style={styles.premiumTag}>
+                      <Feather name="zap" size={9} color={D.secondary} />
+                      <Text style={styles.premiumTagText}>Premium response</Text>
+                    </View>
+                  )}
+                  <BoldText
+                    text={item.content}
+                    style={styles.aiMessageText}
+                  />
+                  <Text style={styles.messageTime}>{formatTime(item.timestamp)}</Text>
+                </View>
+              </View>
+            ) : (
+              /* ── User bubble ── */
+              <View style={styles.userRow}>
+                <View style={styles.userBubble}>
+                  <BoldText
+                    text={item.content}
+                    style={styles.userMessageText}
+                  />
+                  <Text style={styles.messageTimeUser}>{formatTime(item.timestamp)}</Text>
+                </View>
+              </View>
+            )
           )}
         />
 
-        {/* Quick prompts */}
-        {messages.length === 1 && (
-          <View style={styles.quickPrompts}>
-            <ScrollRowChips prompts={QUICK_PROMPTS} onSelect={sendMessage} />
-          </View>
-        )}
+        {/* ── Bottom input area ── */}
+        <View style={[styles.inputArea, { paddingBottom: bottomPadding + 8 }]}>
 
-        {/* Input */}
-        <View style={[styles.inputContainer, { paddingBottom: bottomPadding + 8, backgroundColor: "#141210" }]}>
-          {/* Upgrade nudge when at limit */}
+          {/* Limit banner */}
           {!isSubscribed && isAtLimit && loaded && (
             <TouchableOpacity
               style={styles.limitBanner}
               onPress={() => setShowGate(true)}
               activeOpacity={0.85}
             >
-              <Feather name="lock" size={13} color="#E84040" />
+              <Feather name="lock" size={13} color={D.danger} />
               <Text style={styles.limitBannerText}>Daily limit reached · </Text>
-              <Text style={[styles.limitBannerText, { color: "#4CAF76" }]}>Upgrade to continue</Text>
+              <Text style={[styles.limitBannerText, { color: D.secondary }]}>Upgrade to continue</Text>
             </TouchableOpacity>
           )}
-          <View style={[styles.inputRow, { backgroundColor: "#1E1B18", opacity: !isSubscribed && isAtLimit ? 0.45 : 1 }]}>
+
+          {/* Quick prompt chips — only shown on first message */}
+          {messages.length === 1 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipsRow}
+            >
+              {QUICK_PROMPTS.map((p) => (
+                <TouchableOpacity
+                  key={p}
+                  style={styles.chip}
+                  onPress={() => sendMessage(p)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.chipText}>{p}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Input bar */}
+          <View
+            style={[
+              styles.inputBar,
+              isFocused ? styles.inputBarFocused : null,
+              { opacity: !isSubscribed && isAtLimit ? 0.5 : 1 },
+            ]}
+          >
+            {/* Left add button */}
+            <TouchableOpacity style={styles.inputIconBtn}>
+              <Feather name="plus-circle" size={22} color="rgba(230,216,202,0.45)" />
+            </TouchableOpacity>
+
             <TextInput
-              style={[styles.textInput, { color: "#F0EDE8" }]}
-              placeholder={!isSubscribed && isAtLimit ? "Daily limit reached — upgrade for more" : "Ask about recipes, ingredients..."}
-              placeholderTextColor="#9E9E9E"
+              style={styles.textInput}
+              placeholder={
+                !isSubscribed && isAtLimit
+                  ? "Daily limit reached — upgrade for more"
+                  : "Ask your chef anything..."
+              }
+              placeholderTextColor="rgba(230,216,202,0.4)"
               value={input}
               onChangeText={setInput}
-              multiline
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              multiline={false}
               maxLength={500}
               returnKeyType="send"
               onSubmitEditing={() => sendMessage()}
               editable={isSubscribed || !isAtLimit}
             />
+
+            {/* Send button */}
             <TouchableOpacity
-              style={[styles.sendBtn, { backgroundColor: input.trim() ? "#F5A623" : "#2A2724" }]}
+              style={styles.sendBtn}
               onPress={() => (!isSubscribed && isAtLimit) ? setShowGate(true) : sendMessage()}
               disabled={!input.trim() && !(isAtLimit && !isSubscribed)}
+              activeOpacity={0.8}
             >
-              <Feather name={!isSubscribed && isAtLimit ? "lock" : "send"} size={18} color={input.trim() ? "#fff" : "#666"} />
+              <Feather
+                name={!isSubscribed && isAtLimit ? "lock" : "send"}
+                size={18}
+                color="#FFFFFF"
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -549,80 +720,249 @@ export default function AIChefScreen() {
   );
 }
 
-function ScrollRowChips({ prompts, onSelect }: { prompts: string[]; onSelect: (p: string) => void }) {
-  return (
-    <View style={chipStyles.container}>
-      {prompts.map((p) => (
-        <TouchableOpacity
-          key={p}
-          style={[chipStyles.chip, { backgroundColor: "#1E1B18", borderColor: "#2A2724" }]}
-          onPress={() => onSelect(p)}
-        >
-          <Text style={chipStyles.chipText}>{p}</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
-
-const chipStyles = StyleSheet.create({
-  container: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, paddingBottom: 12 },
-  chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 100, borderWidth: 1 },
-  chipText: { color: "#F0EDE8", fontSize: 13, fontWeight: "500" },
-});
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: D.background },
+  flex: { flex: 1 },
+
+  // ── Header ────────────────────────────────────────────────────────────────
   header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 16, paddingBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    backgroundColor: "rgba(20,18,16,0.92)",
+    zIndex: 50,
   },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerCenter: { flexDirection: "row", alignItems: "center", gap: 12 },
-  chefAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  chefAvatarEmoji: { fontSize: 22 },
-  headerTitle: { color: "#F0EDE8", fontSize: 16, fontWeight: "700" },
-  headerSub: { color: "#9E9E9E", fontSize: 12 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 14 },
+  headerIconBtn: {
+    minWidth: 44, minHeight: 44,
+    alignItems: "center", justifyContent: "center",
+  },
+  headerTitleCol: { gap: 2 },
+  headerTitle: {
+    fontFamily: "Epilogue_700Bold",
+    fontSize: 20,
+    color: "#FFFFFF",
+    letterSpacing: -0.3,
+  },
+  headerStatusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  headerStatusText: {
+    fontSize: 11,
+    fontFamily: "Epilogue_700Bold",
+    letterSpacing: 1.5,
+    color: "#4CAF76",
+    textTransform: "uppercase",
+  },
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#4CAF76",
+  },
+
+  // ── Context banner ────────────────────────────────────────────────────────
   contextBanner: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 16, paddingVertical: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
   },
-  contextText: { fontSize: 13, fontWeight: "500", flex: 1 },
+  contextText: {
+    fontSize: 13,
+    fontFamily: "Epilogue_400Regular",
+    flex: 1,
+  },
   usageChip: {
-    backgroundColor: "#2A2724", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 100,
+    backgroundColor: "#2A2724",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 100,
   },
-  usageChipText: { color: "#F0EDE8", fontSize: 11, fontFamily: "Inter_500Medium" },
+  usageChipText: { color: D.text, fontSize: 11, fontFamily: "Epilogue_400Regular" },
+
   warningBanner: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: "#E84040" + "12", paddingHorizontal: 16, paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#E84040" + "12",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
-  warningText: { color: "#E84040", fontSize: 12, fontFamily: "Inter_400Regular" },
-  messagesList: { paddingHorizontal: 16, paddingVertical: 16, gap: 12 },
-  messageBubble: { maxWidth: "82%", padding: 14, borderRadius: 18, gap: 6 },
-  userBubble: { alignSelf: "flex-end", borderBottomRightRadius: 4 },
-  aiBubble: { alignSelf: "flex-start", borderBottomLeftRadius: 4 },
+  warningText: { color: D.danger, fontSize: 12, fontFamily: "Epilogue_400Regular" },
+
+  // ── Message list ──────────────────────────────────────────────────────────
+  messagesList: { paddingHorizontal: 20, gap: 4 },
+
+  // AI message row
+  aiRow: { flexDirection: "row", gap: 12, maxWidth: "88%", marginBottom: 20 },
+  aiAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#2A2A2A",
+    borderWidth: 1,
+    borderColor: D.border,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  aiBubble: {
+    backgroundColor: "#1E1E1E",
+    borderWidth: 1,
+    borderColor: D.border,
+    borderRadius: 20,
+    borderTopLeftRadius: 4,
+    padding: 16,
+    flex: 1,
+    gap: 6,
+  },
+  aiMessageText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: D.text,
+    fontFamily: "Epilogue_400Regular",
+  },
+
+  // User message row
+  userRow: { alignItems: "flex-end", marginBottom: 20 },
+  userBubble: {
+    backgroundColor: "#F5A623",
+    borderRadius: 20,
+    borderTopRightRadius: 4,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    maxWidth: "80%",
+    gap: 4,
+  },
+  userMessageText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#644000",
+    fontFamily: "Epilogue_400Regular",
+  },
+
+  messageTime: {
+    fontSize: 11,
+    color: "rgba(230,216,202,0.4)",
+    alignSelf: "flex-end",
+    fontFamily: "Epilogue_400Regular",
+  },
+  messageTimeUser: {
+    fontSize: 11,
+    color: "rgba(100,64,0,0.55)",
+    alignSelf: "flex-end",
+    fontFamily: "Epilogue_400Regular",
+  },
+
+  // Premium tag
   premiumTag: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: "#4CAF76" + "20", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 100, alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#4CAF76" + "20",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 100,
+    alignSelf: "flex-start",
   },
-  premiumTagText: { color: "#4CAF76", fontSize: 10, fontFamily: "Inter_500Medium" },
-  messageText: { fontSize: 15, lineHeight: 22 },
-  messageTime: { fontSize: 11, color: "rgba(255,255,255,0.4)", alignSelf: "flex-end" },
-  typingIndicator: {
-    alignSelf: "flex-start", padding: 14, borderRadius: 18, borderBottomLeftRadius: 4, marginBottom: 8,
+  premiumTagText: { color: "#4CAF76", fontSize: 10, fontFamily: "Epilogue_700Bold" },
+
+  // ── Typing indicator ──────────────────────────────────────────────────────
+  typingRow: { flexDirection: "row", gap: 12, marginBottom: 20 },
+  typingBubble: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 99,
+    alignSelf: "flex-start",
   },
-  typingDots: { color: "#9E9E9E", fontSize: 18, letterSpacing: 4 },
-  quickPrompts: { paddingTop: 4 },
-  inputContainer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#2A2724" },
+  typingDotsRow: { flexDirection: "row", alignItems: "center" },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(230,216,202,0.6)",
+    marginHorizontal: 2,
+  },
+
+  // ── Bottom input area ─────────────────────────────────────────────────────
+  inputArea: {
+    backgroundColor: D.background,
+    paddingTop: 4,
+  },
+
   limitBanner: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingVertical: 8, marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 4,
   },
-  limitBannerText: { color: "#E84040", fontSize: 13, fontFamily: "Inter_500Medium" },
-  inputRow: {
-    flexDirection: "row", alignItems: "flex-end", borderRadius: 24,
-    paddingLeft: 16, paddingRight: 6, paddingVertical: 6, gap: 8,
+  limitBannerText: { color: D.danger, fontSize: 13, fontFamily: "Epilogue_400Regular" },
+
+  chipsRow: {
+    paddingHorizontal: 16,
+    gap: 10,
+    paddingVertical: 10,
   },
-  textInput: { flex: 1, fontSize: 15, maxHeight: 100, paddingVertical: 8, lineHeight: 22 },
-  sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: D.border,
+    borderRadius: 999,
+  },
+  chipText: {
+    fontSize: 13,
+    fontFamily: "Epilogue_400Regular",
+    color: "#FFFFFF",
+  },
+
+  inputBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: "#2A2A2A",
+    borderWidth: 1.5,
+    borderColor: D.border,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+  },
+  inputBarFocused: {
+    borderColor: "rgba(245,166,35,0.5)",
+  },
+  inputIconBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  textInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    backgroundColor: "transparent",
+    color: "#FFFFFF",
+    fontFamily: "Epilogue_400Regular",
+    fontSize: 15,
+    paddingVertical: 8,
+  },
+  sendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F5A623",
+    alignItems: "center",
+    justifyContent: "center",
+    ...Platform.select({
+      ios:     { shadowColor: "#F5A623", shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 4 },
+      web:     { boxShadow: "0 2px 8px rgba(245,166,35,0.35)" },
+    }),
+  },
 });
