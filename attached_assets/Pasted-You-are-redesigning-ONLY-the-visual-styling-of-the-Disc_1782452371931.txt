@@ -1,0 +1,498 @@
+You are redesigning ONLY the visual styling of the Discover/Explore
+screen in the PantrySwipe Expo app. Stack: Expo SDK 54, expo-router v6,
+React Native 0.81, TypeScript, pnpm workspaces, PanResponder (NOT
+gesture-handler), @expo/vector-icons (Feather), react-native-reanimated,
+expo-blur, expo-haptics.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — READ BEFORE TOUCHING ANYTHING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Read these files completely. Do not guess their contents:
+  - artifacts/pantryswipe/app/(tabs)/          ← list all files here
+      first, identify the exact filename of the Discover/Explore screen
+      (it may be explore.tsx, discover.tsx, or index.tsx)
+  - [TARGET FILE once identified]
+  - artifacts/pantryswipe/components/SwipeCard.tsx
+  - artifacts/pantryswipe/context/AppContext.tsx
+  - artifacts/pantryswipe/data/mockData.ts
+  - artifacts/pantryswipe/constants/colors.ts
+  - artifacts/pantryswipe/package.json
+
+From the TARGET FILE, note down EXACTLY:
+  - The PanResponder setup and all gesture handlers
+  - The search state variable name and onChangeText handler
+  - The active filter chip state variable and all onPress handlers
+  - The meal type tab state variable and all onPress handlers
+  - The notification bell onPress handler
+  - The user avatar onPress handler
+  - How recipe data is sourced (AppContext field names)
+  - How pantry match % is computed (if it is)
+  - The recipe card onPress navigation call
+  - The filter button onPress handler
+
+From AppContext.tsx, note:
+  - user.name field (exact name)
+  - user.avatar field (exact name, and whether it's a URI or require())
+  - The recipe data array field name
+  - The pantryItems field name
+  - How pantry match is computed if a helper exists
+
+From mockData.ts, note:
+  - The image field format (require() path or URI string)
+  - The recipe data structure (name, kcal, prepTime, cuisine,
+    difficulty, ingredients, pantryMatch fields)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ABSOLUTE DO NOT TOUCH LIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NEVER modify these under any circumstances:
+  - artifacts/pantryswipe/components/SwipeCard.tsx
+      This file contains PanResponder gesture logic. Touching it
+      destroys the core swipe feature. Do not open it for editing.
+      Do not copy any of its logic elsewhere. Do not rewire it.
+  - artifacts/pantryswipe/context/AppContext.tsx
+  - artifacts/pantryswipe/data/mockData.ts
+  - artifacts/pantryswipe/app/_layout.tsx
+  - Any PanResponder setup, gesture handler, or onGrant/onMove/
+    onRelease logic in the target file
+  - Any onPress, navigation call, filter logic, search handler,
+    or state update — only restyle, never rewire
+  - Any component imported by more than one screen
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL TRANSLATION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RULE 1 — BANNED WEB-ONLY APIS (crash on device):
+  window.*, document.*, querySelector(), classList,
+  card.style.transform, card.style.borderColor, touchstart/touchmove/
+  touchend DOM events, addEventListener(), calc(), vh/vw/% height in
+  root Views, backdrop-filter CSS, perspective CSS, hover:, :active,
+  focus:ring-0, border-none CSS class, animate-pulse Tailwind class,
+  bg-gradient-to-t CSS, aspect-ratio CSS shorthand
+
+RULE 2 — BANNED: EXTERNAL IMAGE URLS
+  No lh3.googleusercontent.com or any remote URL in any Image source.
+  replit.md explicitly requires require() for all assets.
+  Recipe card image → from mockData recipe.image (require() format)
+  User avatar → from AppContext user.avatar field; if null/undefined,
+    show a 40×40 circle with user initials in Epilogue_700Bold
+
+RULE 3 — BANNED: HARDCODED DATA
+  "Evening, haren" → compute dynamically:
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Morning' : hour < 17
+      ? 'Afternoon' : 'Evening';
+    Display: `${greeting}, ${user.name} 👋`
+
+  "0% pantry match", "0/15 in pantry", "+15 to buy" → read from
+    AppContext/computed values. If no computation exists yet, show
+    the values that already exist in the current file — do not
+    replace working computed values with hardcoded strings.
+
+  Recipe name, kcal, cuisine, difficulty, rating → from mockData/
+    AppContext recipe data. Never hardcode "Venetian Duck Ragu" etc.
+
+RULE 4 — SWIPE CARD HEIGHT: NO calc() OR vh
+  The Stitch uses calc(100vh - 380px). Replace with:
+
+  import { Dimensions } from 'react-native';
+  const { height: screenHeight } = Dimensions.get('window');
+  const CARD_HEIGHT = screenHeight - 380;  // adjust value as needed
+    after reading the current card height from the existing file —
+    use whatever value currently exists if there already is one.
+
+RULE 5 — NO MATERIAL SYMBOLS ICONS
+  Use @expo/vector-icons Feather only:
+    menu              → Feather "menu"
+    notifications     → Feather "bell"
+    search            → Feather "search"
+    tune              → Feather "sliders"
+    restaurant        → Feather "coffee"
+    schedule          → Feather "clock"
+    local_fire_department → Feather "zap"
+    star (filled)     → Feather "star" (color: Colors.primary)
+    check             → Feather "check"
+    today             → Feather "calendar"
+    inventory_2       → Feather "package"
+    calendar_month    → Feather "calendar"
+    explore           → Feather "compass"
+    person            → Feather "user"
+
+RULE 6 — FILTER CHIPS: useState ONLY
+  The active filter chip must use the existing state variable from
+  the target file. Only restyle the active vs inactive appearance.
+  Never add a new useState or remove the existing one.
+
+RULE 7 — MEAL TYPE TABS: PRESERVE EXISTING LOGIC
+  Read the current meal type tab implementation. Only restyle
+  the active/inactive tab appearance. Never change the state
+  variable name, the tab values, or the onPress handlers.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COLOR TOKEN MAPPING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Import all colors from colors.ts. Never write raw hex in components.
+Add any missing tokens to colors.ts first.
+
+  Stitch primary (#835500)        → Colors.primary      #F5A623
+  Stitch on-primary               → '#FFFFFF'
+  Stitch secondary (#006d3f)      → Colors.secondary    #4CAF76
+  Stitch on-surface (#211a12)     → Colors.textPrimary  #141210
+  Stitch on-surface-variant       → Colors.textMuted    #7A7570
+  Stitch surface (#fff8f4)        → Colors.surface      #FFFFFF
+  Stitch background               → Colors.background   #FAFAF8
+  Stitch surface-container-low    → '#FFF1E4'
+  Stitch surface-container-highest→ '#EEE0D2'
+  Stitch primary-container        → Colors.primary      #F5A623
+  Stitch primary-fixed            → '#FFDDB4'
+  Stitch primary-fixed-dim        → '#FFB955'
+  Stitch on-primary-container     → '#644000'
+  Stitch error (#ba1a1a)          → Colors.danger       #E84040
+  Stitch outline-variant          → '#D7C3AE'
+  Stitch on-surface (dark card bg)→ Colors.textPrimary  #141210
+  Stitch surface-bright           → '#FFF8F4'
+  Stitch surface-variant          → '#EEE0D2'
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CROSS-PLATFORM HELPERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Add these once near the top of the screen file:
+
+  import { Platform, Dimensions } from 'react-native';
+  import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+  const cardShadow = Platform.select({
+    ios: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.18,
+      shadowRadius: 24,
+    },
+    android: { elevation: 8 },
+    web: { boxShadow: '0 12px 24px rgba(0,0,0,0.18)' },
+  });
+
+  const navShadow = Platform.select({
+    ios: {
+      shadowColor: 'rgba(131,85,0,1)',
+      shadowOffset: { width: 0, height: -8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 24,
+    },
+    android: { elevation: 12 },
+    web: { boxShadow: '0 -8px 24px rgba(131,85,0,0.08)' },
+  });
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION-BY-SECTION VISUAL SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. HEADER BAR
+   insets = useSafeAreaInsets()
+
+   On iOS: position absolute, zIndex 50, left/right 0, top 0
+     Background: BlurView tint="light" intensity=80,
+       style=StyleSheet.absoluteFill
+   On Android/web: backgroundColor 'rgba(250,250,248,0.95)'
+
+   Layout: flexDirection row, justifyContent space-between,
+     alignItems center, paddingHorizontal 24,
+     paddingTop insets.top + 8, paddingBottom 14
+
+   Left group:
+     Feather "menu" size 26, color Colors.primary
+       → preserve existing onPress (menu/drawer open)
+       minHeight 44, minWidth 44, centered
+     "PantrySwipe" text: fontFamily Epilogue_700Bold, fontSize 32,
+       letterSpacing -1, color Colors.primary, marginLeft 12
+
+   Right group: flexDirection row, gap 16, alignItems center
+     Notification button:
+       position relative, minHeight 44, minWidth 44, centered
+       Feather "bell" size 22, color Colors.textMuted
+       Notification dot: position absolute, top 8, right 8,
+         width 8, height 8, borderRadius 4,
+         backgroundColor Colors.danger,
+         borderWidth 2, borderColor Colors.background
+       → preserve existing onPress
+
+     Avatar: width 40, height 40, borderRadius 20, overflow hidden,
+       borderWidth 2, borderColor 'rgba(245,166,35,0.15)',
+       backgroundColor Colors.primary (fallback bg)
+       Source: AppContext user.avatar
+       If null: show Text with user initials, centered,
+         fontFamily Epilogue_700Bold, fontSize 14, color '#FFFFFF'
+       → preserve existing avatar onPress
+
+2. GREETING SECTION
+   paddingHorizontal 24, marginTop (header height + 12)
+
+   Line 1: `${greeting}, ${user.name} 👋`
+     fontFamily Epilogue_400Regular, fontSize 14,
+     fontWeight '600', letterSpacing 0.5, color Colors.textMuted
+     marginBottom 6
+
+   Line 2: "What are we cooking?"
+     fontFamily Epilogue_700Bold, fontSize 28,
+     color Colors.textPrimary, letterSpacing -0.5
+
+3. SEARCH BAR
+   marginTop 20, marginHorizontal 16
+
+   Container: flexDirection row, alignItems center, gap 12,
+     backgroundColor '#FFF1E4', borderRadius 999,
+     paddingHorizontal 18, paddingVertical 12,
+     borderWidth 1, borderColor 'rgba(215,195,174,0.3)',
+     shadowColor '#000', shadowOpacity 0.04, shadowRadius 8,
+     shadowOffset {width:0,height:2}, elevation 2
+
+   Feather "search" size 20, color '#857462'
+
+   TextInput:
+     flex 1, backgroundColor 'transparent',
+     fontFamily Epilogue_400Regular, fontSize 16,
+     color Colors.textPrimary,
+     placeholderTextColor 'rgba(131,101,0,0.4)',
+     placeholder "recipes, ingredients, cuisine..."
+     → preserve existing onChangeText, value from current file
+
+   Filter button: width 36, height 36, borderRadius 18,
+     backgroundColor Colors.primary,
+     alignItems center, justifyContent center
+     Feather "sliders" size 18, color '#FFFFFF'
+     → preserve existing onPress
+
+4. FILTER CHIPS (horizontal scroll)
+   marginTop 16
+   ScrollView horizontal showsHorizontalScrollIndicator={false}
+   contentContainerStyle: paddingHorizontal 16, gap 10
+
+   Active chip (matches existing activeFilter state):
+     paddingHorizontal 16, paddingVertical 10, borderRadius 999,
+     backgroundColor Colors.primary,
+     shadowColor Colors.primary, shadowOpacity 0.25,
+     shadowRadius 8, shadowOffset {width:0,height:3}, elevation 4
+     Text: fontFamily Epilogue_700Bold, fontSize 13, color '#FFFFFF'
+
+   Inactive chip:
+     paddingHorizontal 16, paddingVertical 10, borderRadius 999,
+     backgroundColor '#EEE0D2'
+     Text: fontFamily Epilogue_400Regular, fontSize 13,
+       color Colors.textMuted
+
+   Chips (emoji + label — read existing chip data from file):
+     🍽️ Just Me | 🕯️ Date Night | 👨‍👩‍👧 Family | 👯 Friends
+   → preserve ALL existing onPress handlers exactly
+
+5. MEAL TYPE TABS (Breakfast / Lunch / Dinner)
+   marginTop 16, marginHorizontal 16
+
+   Container: flexDirection row, backgroundColor '#EEE0D2',
+     borderRadius 999, padding 4
+
+   Active tab (read existing active meal type from state):
+     flex 1, backgroundColor Colors.surface, borderRadius 999,
+     paddingVertical 10, alignItems center, justifyContent center,
+     shadowColor '#000', shadowOpacity 0.06, shadowRadius 4,
+     shadowOffset {width:0,height:1}, elevation 2
+     Text: fontFamily Epilogue_700Bold, fontSize 13,
+       color Colors.primary
+
+   Inactive tab:
+     flex 1, paddingVertical 10, alignItems center,
+     justifyContent center
+     Text: fontFamily Epilogue_400Regular, fontSize 13,
+       color Colors.textMuted
+
+   → preserve ALL existing onPress handlers exactly
+
+6. SWIPE CARD DECK
+   marginTop 20, marginHorizontal 16
+
+   Container View:
+     height: CARD_HEIGHT (from Dimensions calc — see Rule 4)
+     position relative
+
+   Background stack card (purely visual, no interaction):
+     position absolute, top 12, left 12, right 12, bottom 0,
+     backgroundColor '#EEE0D2', borderRadius 32,
+     transform [{ scale: 0.95 }], opacity 0.5,
+     borderWidth 1, borderColor 'rgba(215,195,174,0.15)'
+
+   Active card wrapper:
+     position absolute, inset 0 (top/left/right/bottom: 0)
+     borderRadius 32, overflow hidden
+     backgroundColor Colors.textPrimary
+     ...cardShadow
+
+     DO NOT add any gesture handling here.
+     The SwipeCard component handles ALL gesture logic internally.
+     Only wrap it with the styled container View.
+
+   IMAGE AREA (top ~65% of card):
+     width '100%', height '65%', overflow hidden
+     Image: width '100%', height '100%', resizeMode 'cover'
+       source: recipe.image from AppContext/mockData (require())
+       NEVER use a remote URL
+
+     TOP BADGES (absolute positioned):
+       Cuisine badge (top-left):
+         position absolute, top 16, left 16
+         backgroundColor 'rgba(0,0,0,0.45)',
+         If Platform.OS === 'ios': wrap in BlurView tint="dark"
+           intensity=50 else plain View
+         paddingHorizontal 10, paddingVertical 6, borderRadius 10
+         Row: Feather "coffee" size 12, color '#FFFFFF', gap 6
+         Text: recipe.cuisine, fontSize 12, fontWeight '600',
+           color '#FFFFFF'
+
+       Difficulty badge (top-right):
+         position absolute, top 16, right 16
+         backgroundColor Colors.primary,
+         paddingHorizontal 10, paddingVertical 6, borderRadius 10
+         Text: recipe.difficulty (Medium/Easy/Hard),
+           fontSize 12, fontWeight '700', color '#644000'
+
+       Bottom gradient overlay:
+         position absolute, bottom 0, left 0, right 0, height 80
+         Use LinearGradient if expo-linear-gradient installed:
+           colors=['transparent','#141210']
+         Else: plain View backgroundColor 'rgba(20,18,16,0.7)'
+
+   CONTENT AREA (bottom ~35% of card):
+     flex 1, padding 20, flexDirection column,
+     justifyContent space-between,
+     backgroundColor Colors.textPrimary
+
+     TOP: Pantry match row
+       flexDirection row, alignItems center, gap 8, marginBottom 8
+       Match pill:
+         flexDirection row, alignItems center, gap 6,
+         paddingHorizontal 8, paddingVertical 4, borderRadius 8,
+         backgroundColor 'rgba(255,255,255,0.08)'
+         Dot: width 8, height 8, borderRadius 4,
+           backgroundColor Colors.secondary
+         Text: `${matchPercent}% pantry match`
+           fontSize 12, color 'rgba(255,255,255,0.65)'
+           fontFamily Epilogue_400Regular
+         (matchPercent from AppContext computed value or existing
+          state in the target file — never hardcode 0%)
+
+     RECIPE TITLE:
+       fontFamily Epilogue_700Bold, fontSize 24,
+       color '#FFF8F4', marginBottom 8, letterSpacing -0.3
+
+     STATS ROW:
+       flexDirection row, flexWrap wrap, gap 16
+       Each stat: flexDirection row, alignItems center, gap 6
+         Feather icon size 14, color 'rgba(255,255,255,0.55)'
+         Text: fontSize 12, color 'rgba(255,255,255,0.55)',
+           fontFamily Epilogue_400Regular
+       Stats:
+         Feather "clock" + recipe.prepTime + "m"
+         Feather "zap" + recipe.kcal + " kcal"
+         Feather "star" + recipe.rating (color Colors.primary
+           for the star icon)
+
+     BOTTOM ACTION CHIPS ROW:
+       flexDirection row, gap 10, marginTop 16
+
+       Pantry count chip:
+         flexDirection row, alignItems center, gap 6,
+         paddingHorizontal 10, paddingVertical 6, borderRadius 999,
+         backgroundColor 'rgba(255,255,255,0.10)',
+         borderWidth 1, borderColor 'rgba(255,255,255,0.15)'
+         Feather "check" size 12, color 'rgba(255,255,255,0.75)'
+         Text: `${inPantryCount}/${totalIngredients} in pantry`
+           fontSize 11, color 'rgba(255,255,255,0.75)'
+
+       Buy count chip:
+         paddingHorizontal 10, paddingVertical 6, borderRadius 999,
+         backgroundColor 'rgba(245,166,35,0.18)',
+         borderWidth 1, borderColor 'rgba(245,166,35,0.3)'
+         Text: `+${toBuyCount} to buy`
+           fontSize 11, color '#FFB955'
+
+7. SWIPE INSTRUCTION TEXT
+   marginTop 16, marginBottom 8, textAlign center
+
+   Use Reanimated animated opacity pulse:
+     const pulseOpacity = useSharedValue(0.4);
+     useEffect(() => {
+       pulseOpacity.value = withRepeat(
+         withTiming(1, { duration: 1000 }),
+         -1, true
+       );
+     }, []);
+     const pulseStyle = useAnimatedStyle(() => ({
+       opacity: pulseOpacity.value
+     }));
+
+   Wrap in Animated.View with pulseStyle:
+     Text: "Swipe right to Cook  •  Swipe left to Skip  •  Swipe up to Save"
+       fontSize 11, fontWeight '600', letterSpacing 1.5,
+       textTransform uppercase, color Colors.textMuted,
+       textAlign center
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STYLING RULES — MANDATORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ALL styles in StyleSheet.create() at bottom of file.
+   Zero inline style objects in render except:
+   - Dynamic values: style={[styles.chip, active && styles.chipActive]}
+   - Platform.select() spreads: ...cardShadow
+
+2. Every touchable: minHeight 44, minWidth 44.
+
+3. No remote image URLs anywhere.
+
+4. No hardcoded user name, recipe names, kcal, or match percentages.
+
+5. SwipeCard.tsx: do not open, do not edit, do not reference new props.
+
+6. All gesture logic in the target file: untouched, verbatim.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY FINAL STEPS — DO NOT SKIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Grep checks — fix any found before continuing:
+   grep -n "window\." [TARGET_FILE]
+   grep -n "addEventListener" [TARGET_FILE]
+   grep -n "googleusercontent" [TARGET_FILE]
+   grep -n "card.style" [TARGET_FILE]
+   grep -n "querySelector" [TARGET_FILE]
+   grep -n "touchstart\|touchmove\|touchend" [TARGET_FILE]
+
+2. Confirm SwipeCard.tsx was NOT modified:
+   git diff artifacts/pantryswipe/components/SwipeCard.tsx
+   Must show zero changes.
+
+3. TypeScript check — fix ALL errors:
+   cd artifacts/pantryswipe && pnpm run typecheck
+
+4. Logic integrity — read the code and verify:
+   - PanResponder setup untouched in target file
+   - Search onChangeText preserved
+   - Filter chip onPress handlers all preserved
+   - Meal type tab onPress handlers all preserved
+   - Greeting uses dynamic time + AppContext user.name
+   - Card image uses require() from mockData — no remote URLs
+   - Pantry match % comes from computed/AppContext value
+   - Swipe instruction uses Reanimated pulse (no animate-pulse class)
+   - Avatar comes from AppContext with initials fallback
+
+5. Report back with:
+   - Exact filename of the Discover screen
+   - Every file modified (list them all)
+   - Every AppContext field name used
+   - Any field that did NOT exist and how you handled it
+   - Grep check results (clean / found + fixed)
+   - Git diff result for SwipeCard.tsx (must be empty)
+   - TypeScript check result (pass / errors + fixed)

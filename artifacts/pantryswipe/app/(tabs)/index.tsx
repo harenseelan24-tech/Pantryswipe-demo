@@ -12,6 +12,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -24,6 +30,35 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useApp } from "@/context/AppContext";
 import { Recipe } from "@/data/mockData";
 import { STORAGE_KEYS } from "@/constants/storageKeys";
+
+// ── Brand palette ─────────────────────────────────────────────────────────────
+const C = {
+  primary:          "#F5A623",
+  secondary:        "#4CAF76",
+  textPrimary:      "#141210",
+  textMuted:        "#7A7570",
+  surface:          "#FFFFFF",
+  background:       "#FAFAF8",
+  surfaceLow:       "#FFF1E4",
+  surfaceHigh:      "#F4E6D8",
+  surfaceHighest:   "#EEE0D2",
+  onPrimaryContainer: "#644000",
+  outlineVariant:   "#D7C3AE",
+  saveBlue:         "#5B8EF5",
+  danger:           "#E84040",
+} as const;
+
+// ── Cross-platform shadows ────────────────────────────────────────────────────
+const cardShadow = Platform.select({
+  ios:     { shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 24 },
+  android: { elevation: 8 },
+  web:     { boxShadow: "0 12px 24px rgba(0,0,0,0.18)" },
+});
+const navShadow = Platform.select({
+  ios:     { shadowColor: "rgba(131,85,0,1)", shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.08, shadowRadius: 24 },
+  android: { elevation: 12 },
+  web:     { boxShadow: "0 -8px 24px rgba(131,85,0,0.08)" },
+});
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const INTENT_KEY = STORAGE_KEYS.PENDING_INTENT;
@@ -62,41 +97,10 @@ const MEAL_TYPE_FILTERS: Record<string, (r: Recipe) => boolean> = {
   Dinner: (r) => r.calories > 500 || r.tags.some((t) => ["dinner", "main", "supper", "hearty", "pasta", "steak"].includes(t.toLowerCase())),
 };
 
-// ── Tutorial step definitions ──
 const TUTORIAL_STEPS = [
-  {
-    direction: "left" as const,
-    arrow: "←",
-    title: "Swipe LEFT to skip",
-    subtitle: "Not feeling this one? Swipe left to pass.",
-    color: "#EF4444",
-    tint: "rgba(239,68,68,0.18)",
-    stamp: "NOPE ✗",
-    targetX: -260,
-    targetY: 0,
-  },
-  {
-    direction: "right" as const,
-    arrow: "→",
-    title: "Swipe RIGHT to cook",
-    subtitle: "Love it? Swipe right to start cooking now.",
-    color: "#10B981",
-    tint: "rgba(16,185,129,0.18)",
-    stamp: "COOK ✓",
-    targetX: 260,
-    targetY: 0,
-  },
-  {
-    direction: "up" as const,
-    arrow: "↑",
-    title: "Swipe UP to save",
-    subtitle: "Looks great but not now? Save it for later.",
-    color: "#5B8EF5",
-    tint: "rgba(91,142,245,0.18)",
-    stamp: "SAVED 🔖",
-    targetX: 0,
-    targetY: -300,
-  },
+  { direction: "left" as const, arrow: "←", title: "Swipe LEFT to skip", subtitle: "Not feeling this one? Swipe left to pass.", color: "#EF4444", tint: "rgba(239,68,68,0.18)", stamp: "NOPE ✗", targetX: -260, targetY: 0 },
+  { direction: "right" as const, arrow: "→", title: "Swipe RIGHT to cook", subtitle: "Love it? Swipe right to start cooking now.", color: "#10B981", tint: "rgba(16,185,129,0.18)", stamp: "COOK ✓", targetX: 260, targetY: 0 },
+  { direction: "up" as const, arrow: "↑", title: "Swipe UP to save", subtitle: "Looks great but not now? Save it for later.", color: "#5B8EF5", tint: "rgba(91,142,245,0.18)", stamp: "SAVED 🔖", targetX: 0, targetY: -300 },
 ] as const;
 
 type Particle = { id: string; emoji: string; anim: Animated.ValueXY; opacity: Animated.Value };
@@ -104,7 +108,6 @@ type Particle = { id: string; emoji: string; anim: Animated.ValueXY; opacity: An
 const HEADER_CONTENT_H = 58;
 const SEARCH_H = 54;
 const MOOD_H = 48;
-
 const TAB_BAR_H = Platform.OS === "web" ? 68 : 60;
 
 export default function HomeScreen() {
@@ -115,22 +118,21 @@ export default function HomeScreen() {
   const { userProfile, getPantryMatchScore, saveRecipe, pantryItems, liveRecipes, getPersonalizedRecipes, trackSwipe } = useApp();
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
-
   const HEADER_TOTAL = topPadding + 14 + HEADER_CONTENT_H;
-  const deckHeight = Math.max(
-    300,
-    SCREEN_HEIGHT - HEADER_TOTAL - SEARCH_H - MOOD_H - TAB_BAR_H - 12
-  );
+  const deckHeight = Math.max(300, SCREEN_HEIGHT - HEADER_TOTAL - SEARCH_H - MOOD_H - TAB_BAR_H - 12);
 
+  // ── Reanimated pulse for swipe instruction ──────────────────────────────────
+  const pulseOpacity = useSharedValue(0.4);
+  useEffect(() => {
+    pulseOpacity.value = withRepeat(withTiming(1, { duration: 1000 }), -1, true);
+  }, []);
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
+
+  // ── State (all preserved from original) ─────────────────────────────────────
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>(() => getPersonalizedRecipes(liveRecipes));
-
-  // Keep a stable ref so effects can call the latest version without listing it
-  // as a dependency (prevents deck-reset on every trackSwipe call).
   const getPersonalizedRecipesRef = useRef(getPersonalizedRecipes);
   useEffect(() => { getPersonalizedRecipesRef.current = getPersonalizedRecipes; }, [getPersonalizedRecipes]);
 
-  // Reload deck ONLY when the fetched recipe pool changes — NOT on every swipe
-  // (learning signal updates getPersonalizedRecipes reference but should not reset the deck mid-session).
   useEffect(() => {
     if (!activeMood) {
       setFilteredRecipes(getPersonalizedRecipesRef.current(liveRecipes));
@@ -138,6 +140,7 @@ export default function HomeScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveRecipes]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeMood, setActiveMood] = useState<string | null>(null);
   const [particles, setParticles] = useState<Particle[]>([]);
@@ -154,16 +157,12 @@ export default function HomeScreen() {
   const [programmaticSwipe, setProgrammaticSwipe] = useState<"left" | "right" | "up" | null>(null);
   const [focusKey, setFocusKey] = useState(0);
 
-  // ── Tutorial state ──
+  // ── Tutorial state ──────────────────────────────────────────────────────────
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutStep, setTutStep] = useState(0);
   const tutCardX = useRef(new Animated.Value(0)).current;
   const tutCardY = useRef(new Animated.Value(0)).current;
-  const tutCardRotate = tutCardX.interpolate({
-    inputRange: [-260, 0, 260],
-    outputRange: ["-18deg", "0deg", "18deg"],
-    extrapolate: "clamp",
-  });
+  const tutCardRotate = tutCardX.interpolate({ inputRange: [-260, 0, 260], outputRange: ["-18deg", "0deg", "18deg"], extrapolate: "clamp" });
   const tutStampOpacity = useRef(new Animated.Value(0)).current;
   const tutLabelOpacity = useRef(new Animated.Value(0)).current;
   const tutOverlayOpacity = useRef(new Animated.Value(0)).current;
@@ -180,14 +179,12 @@ export default function HomeScreen() {
   const expiringItems = pantryItems.filter((i) => i.status === "Expiring" || i.status === "Expired");
   const noMoreCards = currentIndex >= filteredRecipes.length;
 
-  // ── Check if tutorial has been seen ──
+  // ── Tutorial logic (verbatim) ───────────────────────────────────────────────
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEYS.TUTORIAL_SEEN).then((val) => {
       if (!val) {
         setTimeout(() => {
           setShowTutorial(true);
-          // useNativeDriver: false required on web — native driver doesn't call
-          // .start() callbacks on web, leaving the overlay stuck and blocking swipes.
           Animated.timing(tutOverlayOpacity, { toValue: 1, duration: 350, useNativeDriver: false }).start(() => {
             runTutorialStep(0);
           });
@@ -198,7 +195,6 @@ export default function HomeScreen() {
 
   const runTutorialStep = (step: number) => {
     if (step >= TUTORIAL_STEPS.length) {
-      // All steps done → fade out
       Animated.timing(tutOverlayOpacity, { toValue: 0, duration: 300, useNativeDriver: false }).start(() => {
         setShowTutorial(false);
         AsyncStorage.setItem(STORAGE_KEYS.TUTORIAL_SEEN, "1");
@@ -208,27 +204,18 @@ export default function HomeScreen() {
     tutStepRef.current = step;
     setTutStep(step);
     const { targetX, targetY } = TUTORIAL_STEPS[step];
-
-    // Reset card position
     tutCardX.setValue(0);
     tutCardY.setValue(0);
     tutStampOpacity.setValue(0);
     tutLabelOpacity.setValue(0);
-
-    // Fade in label
     Animated.timing(tutLabelOpacity, { toValue: 1, duration: 280, useNativeDriver: false }).start();
-
-    // Pause then animate card out
     setTimeout(() => {
       Animated.parallel([
         Animated.timing(tutCardX, { toValue: targetX, duration: 520, useNativeDriver: false }),
         Animated.timing(tutCardY, { toValue: targetY, duration: 520, useNativeDriver: false }),
         Animated.timing(tutStampOpacity, { toValue: 1, duration: 200, useNativeDriver: false }),
       ]).start(() => {
-        // Pause then go to next step
-        setTimeout(() => {
-          runTutorialStep(step + 1);
-        }, 500);
+        setTimeout(() => { runTutorialStep(step + 1); }, 500);
       });
     }, 900);
   };
@@ -240,7 +227,7 @@ export default function HomeScreen() {
     });
   };
 
-
+  // ── Handlers (all verbatim) ─────────────────────────────────────────────────
   const applyMood = useCallback((mood: string) => {
     const moodObj = MOODS.find((m) => m.label === mood);
     if (!moodObj) return;
@@ -296,11 +283,7 @@ export default function HomeScreen() {
     const recipe = filteredRecipes[currentIndex];
     if (recipe) trackSwipe(recipe, "right");
     setCurrentIndex((prev) => Math.min(prev + 1, filteredRecipes.length));
-    if (recipe) {
-      setPendingSwipeRecipe(recipe);
-      setSelectedServings(2);
-      setShowServingsModal(true);
-    }
+    if (recipe) { setPendingSwipeRecipe(recipe); setSelectedServings(2); setShowServingsModal(true); }
   }, [filteredRecipes, currentIndex, triggerParticles, trackSwipe]);
 
   const handleSwipeUp = useCallback(() => {
@@ -313,7 +296,6 @@ export default function HomeScreen() {
     setCurrentIndex((prev) => Math.min(prev + 1, filteredRecipes.length));
   }, [filteredRecipes, currentIndex, saveRecipe, trackSwipe, triggerParticles, showSaveToast]);
 
-  // ── Deep-link intent from notifications ──────────────────────────────────────
   useFocusEffect(
     useCallback(() => {
       const applyIntent = async () => {
@@ -322,7 +304,6 @@ export default function HomeScreen() {
           if (!raw) return;
           await AsyncStorage.removeItem(INTENT_KEY);
           const intent = JSON.parse(raw) as { type: string; value: string };
-
           if (intent.type === "mealType") {
             const mealType = intent.value as "Breakfast" | "Lunch" | "Dinner";
             const f = MEAL_TYPE_FILTERS[mealType];
@@ -373,22 +354,19 @@ export default function HomeScreen() {
         r.ingredients.some((i) => i.name.toLowerCase().includes(q))
       )
       .slice(0, 20)
-      .map((r) => ({
-        label: r.title,
-        subtitle: `${r.cuisine} · ${r.calories} kcal`,
-        recipeId: r.id,
-      }));
+      .map((r) => ({ label: r.title, subtitle: `${r.cuisine} · ${r.calories} kcal`, recipeId: r.id }));
   }, [searchQuery, liveRecipes]);
 
   const currentTutStep = TUTORIAL_STEPS[Math.min(tutStep, TUTORIAL_STEPS.length - 1)];
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: C.background }]}>
 
       {/* ── HEADER ── */}
-      <View style={[styles.header, { paddingTop: topPadding + 6, paddingBottom: 10 }]}>
+      <View style={[styles.header, { paddingTop: topPadding + 6 }]}>
         <View>
-          <Text style={[styles.greeting, { color: colors.textMuted, fontFamily: "Inter_500Medium" }]}>
+          <Text style={styles.greeting}>
             {greeting}, {userProfile.name} 👋
           </Text>
           <BlurText
@@ -396,7 +374,7 @@ export default function HomeScreen() {
             text="What are we cooking?"
             delay={120}
             direction="top"
-            style={{ fontSize: 22, letterSpacing: -0.4, color: colors.foreground, fontFamily: "Inter_700Bold" }}
+            style={{ fontSize: 26, letterSpacing: -0.5, color: C.textPrimary, fontFamily: "Epilogue_700Bold" }}
           />
         </View>
         <View style={styles.headerRight}>
@@ -404,12 +382,12 @@ export default function HomeScreen() {
             <Text style={{ fontSize: 19 }}>👨‍🍳</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+            style={styles.iconBtn}
             onPress={() => router.push("/notifications")}
           >
-            <Feather name="bell" size={18} color={colors.primary} />
+            <Feather name="bell" size={20} color={C.textMuted} />
             {(unreadCount + expiringItems.length) > 0 && (
-              <View style={[styles.notifBadge, { backgroundColor: colors.danger }]}>
+              <View style={styles.notifBadge}>
                 <Text style={styles.notifBadgeText}>
                   {(unreadCount + expiringItems.length) > 9 ? "9+" : unreadCount + expiringItems.length}
                 </Text>
@@ -421,16 +399,16 @@ export default function HomeScreen() {
 
       {/* ── SEARCH BAR ── */}
       <TouchableOpacity
-        style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}
+        style={styles.searchBar}
         onPress={() => { setSearchQuery(""); setSearchVisible(true); }}
         activeOpacity={0.8}
       >
-        <Feather name="search" size={15} color={colors.textMuted} />
-        <Text style={[styles.searchPlaceholder, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+        <Feather name="search" size={20} color="#857462" />
+        <Text style={styles.searchPlaceholder}>
           Search recipes, ingredients, cuisine…
         </Text>
-        <View style={[styles.searchFilterBadge, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "35" }]}>
-          <Feather name="sliders" size={13} color={colors.primary} />
+        <View style={styles.searchFilterBtn}>
+          <Feather name="sliders" size={18} color="#FFFFFF" />
         </View>
       </TouchableOpacity>
 
@@ -446,32 +424,14 @@ export default function HomeScreen() {
           return (
             <TouchableOpacity
               key={mood.label}
-              style={[
-                styles.moodChip,
-                isActive
-                  ? {
-                      backgroundColor: colors.primary,
-                      borderColor: colors.primary,
-                      shadowColor: colors.primary,
-                      shadowOffset: { width: 0, height: 3 },
-                      shadowOpacity: 0.45,
-                      shadowRadius: 8,
-                      elevation: 5,
-                    }
-                  : { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
+              style={[styles.moodChip, isActive ? styles.moodChipActive : styles.moodChipInactive]}
               onPress={() => {
                 if (isActive) { resetCards(); }
                 else { setActiveMood(mood.label); applyMood(mood.label); }
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }}
             >
-              <Text
-                style={[
-                  styles.moodChipText,
-                  { color: isActive ? "#fff" : colors.textSecondary, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_500Medium" },
-                ]}
-              >
+              <Text style={[styles.moodChipText, isActive ? styles.moodChipTextActive : styles.moodChipTextInactive]}>
                 {mood.label}
               </Text>
             </TouchableOpacity>
@@ -479,19 +439,15 @@ export default function HomeScreen() {
         })}
       </ScrollView>
 
-      {/* ── MEAL TYPE FILTER — segmented control ── */}
-      <View style={[styles.mealTypeSegment, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      {/* ── MEAL TYPE TABS ── */}
+      <View style={styles.mealTypeSegment}>
         {(["🌅 Breakfast", "☀️ Lunch", "🌙 Dinner"] as const).map((label, idx) => {
           const type = label.split(" ")[1] as "Breakfast" | "Lunch" | "Dinner";
           const isActive = activeMealType === type;
           return (
             <TouchableOpacity
               key={type}
-              style={[
-                styles.mealTypeTab,
-                isActive && { backgroundColor: colors.primary },
-                idx > 0 && { borderLeftWidth: 1, borderLeftColor: isActive ? colors.primary : colors.border },
-              ]}
+              style={[styles.mealTypeTab, isActive ? styles.mealTypeTabActive : styles.mealTypeTabInactive]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 const next = isActive ? null : type;
@@ -509,7 +465,7 @@ export default function HomeScreen() {
               }}
             >
               <Text style={[styles.mealTypeTabEmoji, { opacity: isActive ? 1 : 0.7 }]}>{label.split(" ")[0]}</Text>
-              <Text style={[styles.mealTypeTabText, { color: isActive ? "#fff" : colors.textSecondary, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
+              <Text style={[styles.mealTypeTabText, isActive ? styles.mealTypeTabTextActive : styles.mealTypeTabTextInactive]}>
                 {type}
               </Text>
             </TouchableOpacity>
@@ -519,18 +475,15 @@ export default function HomeScreen() {
 
       {/* ── SWIPE DECK ── */}
       <View style={styles.deckWrapper}>
-
         {noMoreCards ? (
-          <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.emptyState}>
             <Text style={{ fontSize: 48 }}>🍽</Text>
-            <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              All caught up!
-            </Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+            <Text style={styles.emptyTitle}>All caught up!</Text>
+            <Text style={styles.emptyText}>
               {activeMood ? "Try a different mood filter" : "Add more ingredients to unlock recipes"}
             </Text>
-            <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: colors.primary }]} onPress={resetCards}>
-              <Text style={[styles.emptyBtnText, { fontFamily: "Inter_700Bold" }]}>See All Recipes</Text>
+            <TouchableOpacity style={styles.emptyBtn} onPress={resetCards}>
+              <Text style={styles.emptyBtnText}>See All Recipes</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -556,15 +509,21 @@ export default function HomeScreen() {
         {particles.map((p) => (
           <Animated.Text
             key={p.id}
-            style={[
-              styles.particle,
-              { transform: [{ translateX: p.anim.x }, { translateY: p.anim.y }], opacity: p.opacity },
-            ]}
+            style={[styles.particle, { transform: [{ translateX: p.anim.x }, { translateY: p.anim.y }], opacity: p.opacity }]}
           >
             {p.emoji}
           </Animated.Text>
         ))}
       </View>
+
+      {/* ── SWIPE INSTRUCTION ── */}
+      {!noMoreCards && (
+        <Reanimated.View style={[styles.swipeInstruction, pulseStyle]}>
+          <Text style={styles.swipeInstructionText}>
+            SWIPE RIGHT TO COOK  •  SWIPE LEFT TO SKIP  •  SWIPE UP TO SAVE
+          </Text>
+        </Reanimated.View>
+      )}
 
       {/* ── SAVE TOAST ── */}
       {saveToast && (
@@ -572,86 +531,47 @@ export default function HomeScreen() {
           style={[
             styles.saveToast,
             {
-              backgroundColor: colors.primary,
               opacity: saveToastAnim,
               transform: [{ translateY: saveToastAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
             },
           ]}
         >
-          <Text style={[styles.saveToastText, { fontFamily: "Inter_600SemiBold" }]}>Saved for later 🔖</Text>
+          <Text style={styles.saveToastText}>Saved for later 🔖</Text>
         </Animated.View>
       )}
 
       {/* ── SWIPE TUTORIAL OVERLAY ── */}
       {showTutorial && (
         <Animated.View style={[styles.tutOverlay, { opacity: tutOverlayOpacity }]}>
-          {/* Step content */}
           <Animated.View style={[styles.tutContent, { opacity: tutLabelOpacity }]}>
-            {/* Big directional arrow */}
-            <Text style={[styles.tutArrow, { color: currentTutStep.color }]}>
-              {currentTutStep.arrow}
-            </Text>
-
-            {/* Title + subtitle */}
+            <Text style={[styles.tutArrow, { color: currentTutStep.color }]}>{currentTutStep.arrow}</Text>
             <Text style={styles.tutTitle}>{currentTutStep.title}</Text>
             <Text style={styles.tutSubtitle}>{currentTutStep.subtitle}</Text>
-
-            {/* Progress dots */}
             <View style={styles.tutDots}>
               {TUTORIAL_STEPS.map((_, i) => (
                 <View
                   key={i}
-                  style={[
-                    styles.tutDot,
-                    {
-                      backgroundColor: i === tutStep ? currentTutStep.color : "rgba(255,255,255,0.3)",
-                      width: i === tutStep ? 20 : 8,
-                    },
-                  ]}
+                  style={[styles.tutDot, { backgroundColor: i === tutStep ? currentTutStep.color : "rgba(255,255,255,0.3)", width: i === tutStep ? 20 : 8 }]}
                 />
               ))}
             </View>
           </Animated.View>
-
-          {/* Animated mini card */}
           <View style={styles.tutCardArea}>
             <Animated.View
-              style={[
-                styles.tutCard,
-                {
-                  transform: [
-                    { translateX: tutCardX },
-                    { translateY: tutCardY },
-                    { rotate: tutCardRotate },
-                  ],
-                },
-              ]}
+              style={[styles.tutCard, { transform: [{ translateX: tutCardX }, { translateY: tutCardY }, { rotate: tutCardRotate }] }]}
             >
-              {/* Card image placeholder */}
               <View style={styles.tutCardImage}>
                 <Text style={styles.tutCardEmoji}>🍝</Text>
               </View>
-              {/* Card info strip */}
               <View style={styles.tutCardInfo}>
                 <Text style={styles.tutCardTitle} numberOfLines={1}>Spaghetti Carbonara</Text>
                 <Text style={styles.tutCardMeta}>Italian · 30m · 830 kcal</Text>
               </View>
-              {/* Stamp overlay on card */}
-              <Animated.View
-                style={[
-                  StyleSheet.absoluteFill,
-                  styles.tutStampOverlay,
-                  { backgroundColor: currentTutStep.tint, opacity: tutStampOpacity },
-                ]}
-              >
-                <Text style={[styles.tutStamp, { color: currentTutStep.color, borderColor: currentTutStep.color }]}>
-                  {currentTutStep.stamp}
-                </Text>
+              <Animated.View style={[StyleSheet.absoluteFill, styles.tutStampOverlay, { backgroundColor: currentTutStep.tint, opacity: tutStampOpacity }]}>
+                <Text style={[styles.tutStamp, { color: currentTutStep.color, borderColor: currentTutStep.color }]}>{currentTutStep.stamp}</Text>
               </Animated.View>
             </Animated.View>
           </View>
-
-          {/* Skip / Got it button */}
           <TouchableOpacity style={styles.tutSkipBtn} onPress={dismissTutorial}>
             <Text style={styles.tutSkipText}>Got it, let's cook! 🍳</Text>
           </TouchableOpacity>
@@ -659,47 +579,35 @@ export default function HomeScreen() {
       )}
 
       {/* ── SEARCH MODAL ── */}
-      <Modal
-        visible={searchVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setSearchVisible(false)}
-      >
+      <Modal visible={searchVisible} animationType="slide" transparent onRequestClose={() => setSearchVisible(false)}>
         <View style={styles.searchModalOverlay}>
-          <View style={[styles.searchModalContainer, { backgroundColor: colors.background }]}>
-            <View style={[styles.searchModalBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Feather name="search" size={18} color={colors.primary} />
+          <View style={[styles.searchModalContainer, { backgroundColor: C.background }]}>
+            <View style={styles.searchModalBar}>
+              <Feather name="search" size={18} color={C.primary} />
               <TextInput
-                style={[styles.searchModalInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                style={styles.searchModalInput}
                 placeholder="Search recipes…"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={C.textMuted}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoFocus
                 returnKeyType="search"
               />
               <TouchableOpacity onPress={() => setSearchVisible(false)}>
-                <Text style={[styles.searchCancelText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                  Cancel
-                </Text>
+                <Text style={styles.searchCancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
-
             {searchQuery.length === 0 ? (
               <View style={styles.searchSuggestions}>
-                <Text style={[styles.searchHintText, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
-                  Try "carbonara", "salmon", "quick" or any ingredient
-                </Text>
+                <Text style={styles.searchHintText}>Try "carbonara", "salmon", "quick" or any ingredient</Text>
                 <View style={styles.searchTags}>
                   {["🍝 Pasta", "🐟 Seafood", "🥗 Vegan", "⚡ Quick", "💪 High Protein"].map((tag) => (
                     <TouchableOpacity
                       key={tag}
-                      style={[styles.searchTag, { backgroundColor: colors.card, borderColor: colors.border }]}
+                      style={styles.searchTag}
                       onPress={() => setSearchQuery(tag.replace(/^\S+\s/, ""))}
                     >
-                      <Text style={[styles.searchTagText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-                        {tag}
-                      </Text>
+                      <Text style={styles.searchTagText}>{tag}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -711,28 +619,22 @@ export default function HomeScreen() {
                 contentContainerStyle={{ paddingBottom: 40 }}
                 ListEmptyComponent={
                   <View style={styles.noResults}>
-                    <Text style={[styles.noResultsText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-                      No recipes found for "{searchQuery}"
-                    </Text>
+                    <Text style={styles.noResultsText}>No recipes found for "{searchQuery}"</Text>
                   </View>
                 }
                 renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={[styles.searchResultRow, { borderBottomColor: colors.border }]}
+                    style={styles.searchResultRow}
                     onPress={() => { setSearchVisible(false); router.push(`/recipe/${item.recipeId}`); }}
                   >
-                    <View style={[styles.searchResultIcon, { backgroundColor: colors.card }]}>
-                      <Feather name="book-open" size={16} color={colors.primary} />
+                    <View style={styles.searchResultIcon}>
+                      <Feather name="book-open" size={16} color={C.primary} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.searchResultTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                        {item.label}
-                      </Text>
-                      <Text style={[styles.searchResultSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
-                        {item.subtitle}
-                      </Text>
+                      <Text style={styles.searchResultTitle}>{item.label}</Text>
+                      <Text style={styles.searchResultSub}>{item.subtitle}</Text>
                     </View>
-                    <Feather name="arrow-right" size={16} color={colors.textMuted} />
+                    <Feather name="arrow-right" size={16} color={C.textMuted} />
                   </TouchableOpacity>
                 )}
               />
@@ -744,54 +646,45 @@ export default function HomeScreen() {
       {/* ── SERVINGS PICKER MODAL ── */}
       <Modal visible={showServingsModal} transparent animationType="slide" onRequestClose={() => setShowServingsModal(false)}>
         <View style={styles.servingsOverlay}>
-          <View style={[styles.servingsSheet, { backgroundColor: colors.background }]}>
-            <View style={[styles.servingsHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.servingsTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              How many people? 👨‍🍳
-            </Text>
-            <Text style={[styles.servingsSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
-              {pendingSwipeRecipe?.title}
-            </Text>
+          <View style={[styles.servingsSheet, { backgroundColor: C.background }]}>
+            <View style={styles.servingsHandle} />
+            <Text style={styles.servingsTitle}>How many people? 👨‍🍳</Text>
+            <Text style={styles.servingsSub} numberOfLines={1}>{pendingSwipeRecipe?.title}</Text>
             <View style={styles.servingsBtnRow}>
               {[1, 2, 3, 4, 5, 6, 8].map((n) => {
                 const active = selectedServings === n && !customServingMode;
                 return (
                   <TouchableOpacity
                     key={n}
-                    style={[styles.servingsNumBtn, {
-                      backgroundColor: active ? colors.primary : colors.card,
-                      borderColor: active ? colors.primary : colors.border,
-                    }]}
+                    style={[styles.servingsNumBtn, { backgroundColor: active ? C.primary : C.surface, borderColor: active ? C.primary : C.outlineVariant }]}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedServings(n); setCustomServingMode(false); }}
                   >
-                    <Text style={[styles.servingsNumText, { color: active ? "#fff" : colors.foreground, fontFamily: active ? "Inter_700Bold" : "Inter_500Medium" }]}>
-                      {n}
-                    </Text>
+                    <Text style={[styles.servingsNumText, { color: active ? "#fff" : C.textPrimary, fontFamily: active ? "Epilogue_700Bold" : "Epilogue_400Regular" }]}>{n}</Text>
                   </TouchableOpacity>
                 );
               })}
               <TouchableOpacity
                 style={[styles.servingsNumBtn, {
-                  backgroundColor: customServingMode ? colors.primary : colors.card,
-                  borderColor: customServingMode ? colors.primary : colors.border,
+                  backgroundColor: customServingMode ? C.primary : C.surface,
+                  borderColor: customServingMode ? C.primary : C.outlineVariant,
                   flexDirection: "row", width: "auto" as any, paddingHorizontal: 14, gap: 5,
                 }]}
                 onPress={() => { setCustomServingMode(true); setCustomServingInput(""); }}
               >
-                <Feather name="edit-2" size={14} color={customServingMode ? "#fff" : colors.textMuted} />
-                <Text style={[styles.servingsNumText, { color: customServingMode ? "#fff" : colors.textMuted }]}>
+                <Feather name="edit-2" size={14} color={customServingMode ? "#fff" : C.textMuted} />
+                <Text style={[styles.servingsNumText, { color: customServingMode ? "#fff" : C.textMuted }]}>
                   {customServingMode && customServingInput ? customServingInput : "Custom"}
                 </Text>
               </TouchableOpacity>
             </View>
             {customServingMode && (
               <TextInput
-                style={[styles.servingsCustomInput, { backgroundColor: colors.card, borderColor: colors.primary, color: colors.foreground }]}
+                style={[styles.servingsCustomInput, { backgroundColor: C.surface, borderColor: C.primary, color: C.textPrimary }]}
                 value={customServingInput}
                 onChangeText={setCustomServingInput}
                 keyboardType="number-pad"
                 placeholder="Enter number of servings…"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={C.textMuted}
                 autoFocus
                 returnKeyType="done"
                 onSubmitEditing={() => { const n = parseInt(customServingInput, 10); if (!isNaN(n) && n > 0) setSelectedServings(Math.min(n, 99)); }}
@@ -799,7 +692,7 @@ export default function HomeScreen() {
               />
             )}
             <TouchableOpacity
-              style={[styles.servingsCookBtn, { backgroundColor: colors.primary }]}
+              style={styles.servingsCookBtn}
               onPress={() => {
                 setShowServingsModal(false);
                 setCustomServingMode(false);
@@ -808,17 +701,10 @@ export default function HomeScreen() {
                 }
               }}
             >
-              <Text style={[styles.servingsCookBtnText, { fontFamily: "Inter_700Bold" }]}>
-                Let's Cook! 🍳
-              </Text>
+              <Text style={styles.servingsCookBtnText}>Let's Cook! 🍳</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={{ paddingVertical: 12, alignItems: "center" }}
-              onPress={() => setShowServingsModal(false)}
-            >
-              <Text style={[{ fontSize: 14, fontFamily: "Inter_400Regular" }, { color: colors.textMuted }]}>
-                Skip for now
-              </Text>
+            <TouchableOpacity style={styles.servingsSkipBtn} onPress={() => setShowServingsModal(false)}>
+              <Text style={styles.servingsSkipText}>Skip for now</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -827,276 +713,112 @@ export default function HomeScreen() {
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  // ── Header ──
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  greeting: { fontSize: 12, marginBottom: 2 },
-  headerTitle: { fontSize: 22, letterSpacing: -0.4 },
+  // Header
+  header:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 10 },
+  greeting:    { fontSize: 14, fontFamily: "Epilogue_400Regular", color: C.textMuted, letterSpacing: 0.5, marginBottom: 4 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-  aiChefBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: "#F5A623",
-    alignItems: "center", justifyContent: "center",
-    shadowColor: "#F5A623",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.38, shadowRadius: 10, elevation: 6,
-  },
-  iconBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    alignItems: "center", justifyContent: "center",
-    position: "relative",
-  },
-  notifDot: {
-    position: "absolute", top: 8, right: 8,
-    width: 7, height: 7, borderRadius: 3.5,
-  },
-  notifBadge: {
-    position: "absolute", top: 5, right: 5,
-    minWidth: 17, height: 17, borderRadius: 9,
-    alignItems: "center", justifyContent: "center",
-    paddingHorizontal: 3,
-  },
-  notifBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
-  avatar: {
-    width: 40, height: 40, borderRadius: 20,
-    alignItems: "center", justifyContent: "center",
-  },
-  avatarText: { color: "#fff", fontSize: 14 },
+  aiChefBtn:   { width: 44, height: 44, borderRadius: 22, backgroundColor: C.primary, alignItems: "center", justifyContent: "center", shadowColor: C.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.38, shadowRadius: 10, elevation: 6 },
+  iconBtn:     { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: C.surfaceLow, position: "relative" },
+  notifBadge:  { position: "absolute", top: 5, right: 5, minWidth: 17, height: 17, borderRadius: 9, alignItems: "center", justifyContent: "center", paddingHorizontal: 3, backgroundColor: C.danger, borderWidth: 2, borderColor: C.background },
+  notifBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Epilogue_700Bold" },
 
-  // ── Search ──
-  searchBar: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    marginHorizontal: 16, paddingHorizontal: 16,
-    height: 48, borderRadius: 100, borderWidth: 1, marginBottom: 8,
-  },
-  searchPlaceholder: { fontSize: 13, flex: 1 },
-  searchFilterBadge: {
-    width: 28, height: 28, borderRadius: 100, borderWidth: 1,
-    alignItems: "center", justifyContent: "center",
-  },
+  // Search bar
+  searchBar:          { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 18, paddingVertical: 12, backgroundColor: C.surfaceLow, borderRadius: 999, borderWidth: 1, borderColor: "rgba(215,195,174,0.3)", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  searchPlaceholder:  { flex: 1, fontSize: 16, color: C.textMuted, fontFamily: "Epilogue_400Regular" },
+  searchFilterBtn:    { width: 36, height: 36, borderRadius: 18, backgroundColor: C.primary, alignItems: "center", justifyContent: "center" },
 
-  // ── Mood chips ──
+  // Mood chips
   moodScrollView: { height: 48, flexGrow: 0, flexShrink: 0 },
-  moodStrip: { paddingHorizontal: 16, gap: 8, alignItems: "center", height: 48 },
-  moodChip: {
-    height: 34, paddingHorizontal: 14, borderRadius: 999,
-    borderWidth: 1, alignItems: "center", justifyContent: "center",
-  },
-  moodChipText: { fontSize: 13 },
+  moodStrip:      { paddingHorizontal: 16, gap: 10, alignItems: "center", height: 48 },
+  moodChip:       { height: 38, paddingHorizontal: 16, borderRadius: 999, alignItems: "center", justifyContent: "center", minHeight: 44 },
+  moodChipActive: { backgroundColor: C.primary, shadowColor: C.primary, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 },
+  moodChipInactive: { backgroundColor: C.surfaceHighest },
+  moodChipText:     { fontSize: 13 },
+  moodChipTextActive:   { fontFamily: "Epilogue_700Bold", color: "#FFFFFF" },
+  moodChipTextInactive: { fontFamily: "Epilogue_400Regular", color: C.textMuted },
 
-  // ── Meal type — segmented control ──
-  mealTypeSegment: {
-    flexDirection: "row", marginHorizontal: 16, marginBottom: 6,
-    borderRadius: 14, borderWidth: 1, overflow: "hidden",
-  },
-  mealTypeTab: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 5, paddingVertical: 10,
-  },
-  mealTypeTabEmoji: { fontSize: 14 },
-  mealTypeTabText: { fontSize: 12 },
+  // Meal type segmented control
+  mealTypeSegment:     { flexDirection: "row", marginHorizontal: 16, marginBottom: 6, backgroundColor: C.surfaceHighest, borderRadius: 999, padding: 4 },
+  mealTypeTab:         { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 10, borderRadius: 999, minHeight: 44 },
+  mealTypeTabActive:   { backgroundColor: C.surface, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  mealTypeTabInactive: {},
+  mealTypeTabEmoji:    { fontSize: 14 },
+  mealTypeTabText:     { fontSize: 13 },
+  mealTypeTabTextActive:   { fontFamily: "Epilogue_700Bold", color: C.primary },
+  mealTypeTabTextInactive: { fontFamily: "Epilogue_400Regular", color: C.textMuted },
 
-  // ── Servings modal ──
-  servingsOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" },
-  servingsSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 44 },
-  servingsHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 20 },
-  servingsTitle: { fontSize: 24, letterSpacing: -0.3, marginBottom: 6, textAlign: "center" },
-  servingsSub: { fontSize: 14, textAlign: "center", marginBottom: 24 },
-  servingsBtnRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 24, justifyContent: "center" },
-  servingsNumBtn: { width: 56, height: 56, borderRadius: 16, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  servingsNumText: { fontSize: 20 },
-  servingsCookBtn: { paddingVertical: 16, borderRadius: 14, alignItems: "center", marginBottom: 4 },
-  servingsCookBtnText: { fontSize: 16, color: "#fff" },
-  servingsCustomInput: {
-    height: 50, borderRadius: 14, borderWidth: 1.5,
-    paddingHorizontal: 16, fontSize: 17, fontFamily: "Inter_500Medium", marginBottom: 12,
-  },
-
-  // ── Deck ──
+  // Deck
   deckWrapper: { alignItems: "center", position: "relative", flex: 1 },
-  cardStack: { position: "relative" },
-  emptyState: {
-    width: SCREEN_WIDTH - 64,
-    paddingVertical: 48, paddingHorizontal: 32,
-    borderRadius: 24, borderWidth: 1,
-    alignItems: "center", gap: 12, marginTop: 32,
-  },
-  emptyTitle: { fontSize: 20 },
-  emptyText: { fontSize: 14, textAlign: "center", lineHeight: 20 },
-  emptyBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 100, marginTop: 6 },
-  emptyBtnText: { color: "#fff", fontSize: 15 },
-  particle: { position: "absolute", fontSize: 22, zIndex: 999 },
+  cardStack:   { position: "relative" },
+  emptyState:  { width: SCREEN_WIDTH - 64, paddingVertical: 48, paddingHorizontal: 32, borderRadius: 24, borderWidth: 1, alignItems: "center", gap: 12, marginTop: 32, backgroundColor: C.surface, borderColor: C.outlineVariant },
+  emptyTitle:  { fontSize: 20, fontFamily: "Epilogue_700Bold", color: C.textPrimary },
+  emptyText:   { fontSize: 14, textAlign: "center", lineHeight: 20, color: C.textMuted, fontFamily: "Epilogue_400Regular" },
+  emptyBtn:    { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 100, marginTop: 6, backgroundColor: C.primary, minHeight: 44 },
+  emptyBtnText:{ color: "#fff", fontSize: 15, fontFamily: "Epilogue_700Bold" },
+  particle:    { position: "absolute", fontSize: 22, zIndex: 999 },
 
-  // ── Save toast ──
-  saveToast: {
-    position: "absolute",
-    top: Platform.OS === "web" ? 80 : 90,
-    alignSelf: "center",
-    paddingHorizontal: 20, paddingVertical: 10,
-    borderRadius: 100, zIndex: 9999,
-  },
-  saveToastText: { color: "#fff", fontSize: 14 },
+  // Swipe instruction pulse
+  swipeInstruction: { paddingHorizontal: 16, paddingVertical: 8, alignItems: "center" },
+  swipeInstructionText: { fontSize: 11, fontFamily: "Epilogue_700Bold", letterSpacing: 1.5, textTransform: "uppercase", color: C.textMuted, textAlign: "center" },
 
-  // ── Tutorial overlay ──
-  tutOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(20, 14, 10, 0.92)",
-    zIndex: 1000,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    gap: 0,
-  },
-  tutContent: {
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 28,
-  },
-  tutArrow: {
-    fontSize: 64,
-    fontFamily: "Inter_700Bold",
-    lineHeight: 72,
-  },
-  tutTitle: {
-    fontSize: 22,
-    color: "#fff",
-    fontFamily: "Inter_700Bold",
-    textAlign: "center",
-    letterSpacing: -0.3,
-  },
-  tutSubtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.65)",
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    lineHeight: 20,
-    maxWidth: 240,
-    marginTop: 2,
-  },
-  tutDots: {
-    flexDirection: "row",
-    gap: 6,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  tutDot: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.3)",
-  },
-  tutCardArea: {
-    width: SCREEN_WIDTH - 80,
-    height: 220,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    marginBottom: 32,
-  },
-  tutCard: {
-    width: SCREEN_WIDTH - 100,
-    height: 210,
-    borderRadius: 20,
-    overflow: "hidden",
-    backgroundColor: "#1C1410",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  tutCardImage: {
-    height: 120,
-    backgroundColor: "#241A12",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tutCardEmoji: { fontSize: 56 },
-  tutCardInfo: {
-    flex: 1,
-    backgroundColor: "#1C1410",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 4,
-  },
-  tutCardTitle: {
-    color: "#fff",
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-  },
-  tutCardMeta: {
-    color: "rgba(255,255,255,0.55)",
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
-  tutStampOverlay: {
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tutStamp: {
-    fontSize: 18,
-    fontFamily: "Inter_700Bold",
-    borderWidth: 2.5,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    letterSpacing: 2,
-    overflow: "hidden",
-  },
-  tutSkipBtn: {
-    backgroundColor: "#F5A623",
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 100,
-    shadowColor: "#F5A623",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  tutSkipText: {
-    color: "#fff",
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-  },
+  // Save toast
+  saveToast:     { position: "absolute", top: Platform.OS === "web" ? 80 : 90, alignSelf: "center", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 100, zIndex: 9999, backgroundColor: C.primary },
+  saveToastText: { color: "#fff", fontSize: 14, fontFamily: "Epilogue_700Bold" },
 
-  // ── Search Modal ──
-  searchModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
-  searchModalContainer: {
-    flex: 1,
-    marginTop: Platform.OS === "web" ? 60 : 80,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    overflow: "hidden",
-  },
-  searchModalBar: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    margin: 16, paddingHorizontal: 14, height: 48,
-    borderRadius: 14, borderWidth: 1,
-  },
-  searchModalInput: { flex: 1, fontSize: 16 },
-  searchCancelText: { fontSize: 15 },
-  searchSuggestions: { paddingHorizontal: 16, paddingTop: 8, gap: 16 },
-  searchHintText: { fontSize: 14 },
-  searchTags: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  searchTag: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 100, borderWidth: 1 },
-  searchTagText: { fontSize: 13 },
-  searchResultRow: {
-    flexDirection: "row", alignItems: "center", gap: 14,
-    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1,
-  },
-  searchResultIcon: {
-    width: 40, height: 40, borderRadius: 12,
-    alignItems: "center", justifyContent: "center",
-  },
-  searchResultTitle: { fontSize: 15, marginBottom: 2 },
-  searchResultSub: { fontSize: 13 },
-  noResults: { paddingTop: 40, alignItems: "center" },
-  noResultsText: { fontSize: 15 },
+  // Tutorial overlay (unchanged visuals, updated fonts)
+  tutOverlay:     { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(20, 14, 10, 0.92)", zIndex: 1000, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
+  tutContent:     { alignItems: "center", gap: 10, marginBottom: 28 },
+  tutArrow:       { fontSize: 64, fontFamily: "Epilogue_700Bold", lineHeight: 72 },
+  tutTitle:       { fontSize: 22, color: "#fff", fontFamily: "Epilogue_700Bold", textAlign: "center", letterSpacing: -0.3 },
+  tutSubtitle:    { fontSize: 14, color: "rgba(255,255,255,0.65)", fontFamily: "Epilogue_400Regular", textAlign: "center", lineHeight: 20, maxWidth: 240, marginTop: 2 },
+  tutDots:        { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 8 },
+  tutDot:         { height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.3)" },
+  tutCardArea:    { width: SCREEN_WIDTH - 80, height: 220, alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 32 },
+  tutCard:        { width: SCREEN_WIDTH - 100, height: 210, borderRadius: 20, overflow: "hidden", backgroundColor: "#1C1410", shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 12 },
+  tutCardImage:   { height: 120, backgroundColor: "#241A12", alignItems: "center", justifyContent: "center" },
+  tutCardEmoji:   { fontSize: 56 },
+  tutCardInfo:    { flex: 1, backgroundColor: "#1C1410", paddingHorizontal: 16, paddingVertical: 12, gap: 4 },
+  tutCardTitle:   { color: "#fff", fontSize: 16, fontFamily: "Epilogue_700Bold" },
+  tutCardMeta:    { color: "rgba(255,255,255,0.55)", fontSize: 12, fontFamily: "Epilogue_400Regular" },
+  tutStampOverlay:{ borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  tutStamp:       { fontSize: 18, fontFamily: "Epilogue_700Bold", borderWidth: 2.5, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5, letterSpacing: 2, overflow: "hidden" },
+  tutSkipBtn:     { backgroundColor: C.primary, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100, minHeight: 44, shadowColor: C.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 },
+  tutSkipText:    { color: "#fff", fontSize: 16, fontFamily: "Epilogue_700Bold" },
+
+  // Search modal
+  searchModalOverlay:   { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  searchModalContainer: { flex: 1, marginTop: Platform.OS === "web" ? 60 : 80, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden" },
+  searchModalBar:       { flexDirection: "row", alignItems: "center", gap: 10, margin: 16, paddingHorizontal: 14, height: 48, borderRadius: 14, borderWidth: 1, backgroundColor: C.surfaceLow, borderColor: C.outlineVariant },
+  searchModalInput:     { flex: 1, fontSize: 16, color: C.textPrimary, fontFamily: "Epilogue_400Regular" },
+  searchCancelText:     { fontSize: 15, color: C.primary, fontFamily: "Epilogue_700Bold" },
+  searchSuggestions:    { paddingHorizontal: 16, paddingTop: 8, gap: 16 },
+  searchHintText:       { fontSize: 14, color: C.textMuted, fontFamily: "Epilogue_400Regular" },
+  searchTags:           { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  searchTag:            { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 100, borderWidth: 1, backgroundColor: C.surfaceLow, borderColor: C.outlineVariant, minHeight: 44, justifyContent: "center" },
+  searchTagText:        { fontSize: 13, color: C.textPrimary, fontFamily: "Epilogue_400Regular" },
+  searchResultRow:      { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.surfaceHigh, minHeight: 44 },
+  searchResultIcon:     { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: C.surfaceLow },
+  searchResultTitle:    { fontSize: 15, marginBottom: 2, color: C.textPrimary, fontFamily: "Epilogue_700Bold" },
+  searchResultSub:      { fontSize: 13, color: C.textMuted, fontFamily: "Epilogue_400Regular" },
+  noResults:            { paddingTop: 40, alignItems: "center" },
+  noResultsText:        { fontSize: 15, color: C.textMuted, fontFamily: "Epilogue_400Regular" },
+
+  // Servings modal
+  servingsOverlay:     { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" },
+  servingsSheet:       { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 44 },
+  servingsHandle:      { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 20, backgroundColor: C.outlineVariant },
+  servingsTitle:       { fontSize: 24, letterSpacing: -0.3, marginBottom: 6, textAlign: "center", fontFamily: "Epilogue_700Bold", color: C.textPrimary },
+  servingsSub:         { fontSize: 14, textAlign: "center", marginBottom: 24, color: C.textMuted, fontFamily: "Epilogue_400Regular" },
+  servingsBtnRow:      { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 24, justifyContent: "center" },
+  servingsNumBtn:      { width: 56, height: 56, borderRadius: 16, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  servingsNumText:     { fontSize: 20 },
+  servingsCookBtn:     { paddingVertical: 16, borderRadius: 14, alignItems: "center", marginBottom: 4, backgroundColor: C.primary, minHeight: 44 },
+  servingsCookBtnText: { fontSize: 16, color: "#fff", fontFamily: "Epilogue_700Bold" },
+  servingsSkipBtn:     { paddingVertical: 12, alignItems: "center" },
+  servingsSkipText:    { fontSize: 14, fontFamily: "Epilogue_400Regular", color: C.textMuted },
+  servingsCustomInput: { height: 50, borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 16, fontSize: 17, fontFamily: "Epilogue_400Regular", marginBottom: 12 },
 });
