@@ -1,0 +1,608 @@
+You are redesigning ONLY the visual styling of the Planner screen in the
+PantrySwipe Expo app. Stack: Expo SDK 54, expo-router v6, React Native
+0.81, TypeScript, pnpm workspaces, @expo/vector-icons (Feather),
+react-native-reanimated, expo-haptics, expo-blur.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — READ BEFORE TOUCHING ANYTHING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Read every one of these files completely. Do not guess their contents:
+  - artifacts/pantryswipe/app/(tabs)/planner.tsx   ← TARGET FILE
+  - artifacts/pantryswipe/context/AppContext.tsx
+  - artifacts/pantryswipe/data/mockData.ts
+  - artifacts/pantryswipe/constants/colors.ts
+  - artifacts/pantryswipe/package.json
+
+From AppContext.tsx, note down the EXACT field names for:
+  - The meal plan data structure (mealPlan / weeklyPlan / dailyPlan)
+  - Individual meal fields: name, calories, image, mealType, prepTime
+  - Daily nutrition totals: protein, carbs, fat (actual + target)
+  - Monthly stats fields if they exist
+  - The auto-generate week function name and how it is called
+  - The add-meal FAB handler
+  - The meal card → recipe detail navigation call
+
+From planner.tsx, note down:
+  - Current view structure: is it one screen with Day/Week/Month tabs,
+    or multiple screens? Do NOT change this structure.
+  - Every existing onPress, navigation call, and state variable
+  - Current data sources for all displayed content
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ABSOLUTE DO NOT TOUCH LIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Never modify:
+  - artifacts/pantryswipe/context/AppContext.tsx
+  - artifacts/pantryswipe/data/mockData.ts
+  - artifacts/pantryswipe/app/_layout.tsx
+  - Any file imported by more than one screen
+  - Any navigation call, onPress handler, or state logic
+  - The view structure (Day/Week/Month) — keep whatever currently exists
+  - The FAB onPress for adding meals
+  - The auto-generate week button onPress
+  - Meal card → recipe navigation onPress
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL TRANSLATION RULES
+(Design came from 4 web HTML files — these rules prevent crashes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RULE 1 — BANNED: ALL WEB-ONLY APIS
+These must NEVER appear anywhere in the React Native code:
+  window.addEventListener, window.scrollY, document.querySelector,
+  scrollIntoView(), element.style.opacity, element.classList,
+  DOMContentLoaded, hover:, :active CSS pseudo-classes,
+  backdrop-filter CSS, blur() CSS filter, grid CSS display,
+  aspect-ratio CSS, transition CSS, transform CSS (use RN transform),
+  env(safe-area-inset-bottom), pb-safe-area-inset Tailwind class,
+  .wheel event listener
+
+RULE 2 — BANNED: ALL MATERIAL SYMBOLS ICONS
+Use @expo/vector-icons Feather only. Mapping:
+  arrow_back           → Feather "arrow-left"
+  search               → Feather "search"
+  menu                 → Feather "menu"
+  auto_awesome         → Feather "zap"
+  local_fire_department→ Feather "zap"
+  navigate_next        → Feather "chevron-right"
+  chevron_right        → Feather "chevron-right"
+  chevron_left         → Feather "chevron-left"
+  add                  → Feather "plus"
+  timer                → Feather "clock"
+  wb_twilight          → Feather "sunrise"
+  light_mode           → Feather "sun"
+  cookie               → Feather "coffee"
+  bedtime              → Feather "moon"
+  edit_calendar        → Feather "edit-2"
+  calendar_month       → Feather "calendar"
+  today                → Feather "calendar"
+  inventory_2          → Feather "package"
+  explore              → Feather "compass"
+  person               → Feather "user"
+  event_note           → Feather "file-text"
+
+RULE 3 — BANNED: ALL EXTERNAL IMAGE URLS
+No lh3.googleusercontent.com or any remote URL.
+All meal images must come from AppContext mealPlan data.
+Use the same format (require() or URI) as mockData.ts uses.
+If an image field is missing for a meal, show a colored placeholder
+View with the meal type initial letter centered.
+
+RULE 4 — BANNED: ALL HARDCODED MEAL DATA
+No hardcoded dish names, calorie counts, prep times, or ingredient
+lists. Every value must come from AppContext. This includes:
+  - Meal names (not "Honey Berry Parfait")
+  - Calorie counts (not "420 kcal" hardcoded)
+  - Macro percentages (not style={{ height: '75%' }} hardcoded)
+  - Monthly goals progress (not w-[88%] hardcoded)
+  - Calendar date data (not hardcoded October 2023 rows)
+
+RULE 5 — NO DOM-BASED STATE OR ANIMATIONS
+Replace all DOM interactions:
+
+  Segmented control (Day/Week/Month):
+    const [view, setView] = useState<'day'|'week'|'month'>('week');
+    Each pill: onPress={() => setView('day')} etc.
+    Active pill style applied via: view === 'day' ? styles.pillActive
+      : styles.pillInactive
+
+  Day tap in calendar (month view):
+    const [selectedDay, setSelectedDay] = useState<number | null>(null);
+    const previewOpacity = useRef(new Animated.Value(0)).current;
+    On day press:
+      setSelectedDay(day);
+      Animated.timing(previewOpacity, {
+        toValue: 1, duration: 200,
+        useNativeDriver: true
+      }).start();
+    Day preview View: style={{ opacity: previewOpacity }}
+    Scroll to preview: scrollViewRef.current?.scrollTo({ y: previewY,
+      animated: true })
+
+  Card entrance animation (replaces DOMContentLoaded):
+    import { FadeInDown } from 'react-native-reanimated';
+    On each meal card Animated.View:
+      entering={FadeInDown.delay(index * 80).springify()}
+
+  Card press feedback (replaces hover: and :active CSS):
+    Use Pressable with useAnimatedStyle:
+      const scale = useSharedValue(1);
+      const animStyle = useAnimatedStyle(() =>
+        ({ transform: [{ scale: scale.value }] }));
+      onPressIn: scale.value = withSpring(0.96, { damping: 15 })
+      onPressOut: scale.value = withSpring(1.0, { damping: 15 })
+
+  Header shadow on scroll (replaces window scroll listener):
+    const scrollY = useRef(new Animated.Value(0)).current;
+    headerElevation = scrollY.interpolate({
+      inputRange: [0, 40], outputRange: [0, 0.12], extrapolate: 'clamp'
+    });
+    Use Animated.ScrollView with onScroll + scrollEventThrottle={16}
+    Apply headerElevation to header shadowOpacity (iOS) or elevation
+    (Android) via Animated.View
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COLOR TOKEN MAPPING
+(Stitch Tailwind tokens → colors.ts values)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Import all colors from colors.ts. Add missing tokens there first.
+Never write raw hex values inside component files.
+
+  Stitch primary (#835500)           → Colors.primary   #F5A623
+  Stitch on-primary (#ffffff)        → '#FFFFFF'
+  Stitch secondary (#006d3f)         → Colors.secondary #4CAF76
+  Stitch on-surface (#211a12)        → Colors.textPrimary #141210
+  Stitch on-surface-variant          → Colors.textMuted  #7A7570
+  Stitch surface (#fff8f4)           → Colors.surface    #FFFFFF
+  Stitch background (#fff8f4)        → Colors.background #FAFAF8
+  Stitch surface-container-low       → '#FFF1E4' (add to colors.ts)
+  Stitch surface-container-high      → '#F4E6D8' (add to colors.ts)
+  Stitch surface-container-highest   → '#EEE0D2' (add to colors.ts)
+  Stitch primary-container (#f5a623) → Colors.primary (same value)
+  Stitch on-primary-container        → '#644000' (add to colors.ts)
+  Stitch secondary-container         → 'rgba(76,175,118,0.15)'
+  Stitch outline-variant (#d7c3ae)   → '#D7C3AE' (add to colors.ts)
+  Stitch tertiary (#1a5abe)          → Colors.saveBlue #5B8EF5
+  Stitch error (#ba1a1a)             → Colors.danger #E84040
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CROSS-PLATFORM HELPERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Add these near the top of planner.tsx and use them everywhere.
+Never write raw shadow props inline inside StyleSheet.create():
+
+  import { Platform } from 'react-native';
+  import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+  const cardShadow = Platform.select({
+    ios: {
+      shadowColor: 'rgba(131,85,0,1)',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 24,
+    },
+    android: { elevation: 4 },
+    web: { boxShadow: '0 8px 24px rgba(131,85,0,0.08)' },
+  });
+
+  const fabShadow = Platform.select({
+    ios: {
+      shadowColor: Colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 12,
+    },
+    android: { elevation: 8 },
+    web: { boxShadow: '0 4px 12px rgba(245,166,35,0.35)' },
+  });
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UNIFIED DESIGN SYSTEM
+(Apply consistently across ALL views: Day, Week, Month)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Typography:
+  Display heading:  fontFamily Epilogue_700Bold, fontSize 32,
+    letterSpacing: -0.8
+  Screen title:     fontFamily Epilogue_700Bold, fontSize 28
+  Section heading:  fontFamily Epilogue_700Bold, fontSize 24
+  Card title:       fontFamily Epilogue_700Bold, fontSize 18
+  Label uppercase:  fontFamily Epilogue_700Bold, fontSize 12,
+    letterSpacing: 1.5, textTransform: 'uppercase'
+  Body:             fontFamily Epilogue_400Regular (or Work Sans 400),
+    fontSize 16, lineHeight: 24
+  Caption:          fontSize 12, color: Colors.textMuted
+
+Card system:
+  Standard card:    backgroundColor Colors.surface, borderRadius 20,
+    ...cardShadow
+  Compact row card: backgroundColor '#FFF1E4', borderRadius 16,
+    padding 16, ...cardShadow
+  Hero card:        borderRadius 20, overflow 'hidden', no padding
+    (content overlaid with gradient)
+
+Spacing scale:
+  xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48
+  Screen horizontal padding: 16
+  Card-to-card gap: 12
+  Section-to-section: 32
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HEADER BAR (shared across all views)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const insets = useSafeAreaInsets();
+
+On iOS: wrap header content in BlurView (tint="light" intensity=80)
+  as absoluteFill background
+On Android/web: plain View backgroundColor='rgba(250,250,248,0.95)'
+
+headerBar: {
+  position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50,
+  flexDirection: 'row', justifyContent: 'space-between',
+  alignItems: 'center', paddingHorizontal: 24,
+  paddingTop: insets.top + 8, paddingBottom: 12,
+}
+
+Left: "PantrySwipe" in Epilogue_700Bold, fontSize 28,
+  color: Colors.primary, letterSpacing: -0.5
+Right: Feather "search" icon, size 22, color: Colors.textPrimary,
+  in a TouchableOpacity minHeight:44 minWidth:44 centered
+  → preserve existing search onPress from planner.tsx
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SEGMENTED CONTROL (Day / Week / Month)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If the current planner.tsx already has a view-switching mechanism,
+preserve its state variable name and keep all existing logic.
+Only change the visual appearance of the pills.
+
+Container:
+  backgroundColor: '#F4E6D8', borderRadius: 999,
+  padding: 4, flexDirection: 'row'
+
+Active pill:
+  flex: 1, backgroundColor: Colors.primary,
+  borderRadius: 999, paddingVertical: 10, paddingHorizontal: 20,
+  alignItems: 'center',
+  shadowColor: 'rgba(131,85,0,1)', shadowOpacity: 0.15,
+  shadowRadius: 12, shadowOffset: {width:0, height:4},
+  elevation: 3
+
+  Text: fontFamily Epilogue_700Bold, fontSize 14,
+    letterSpacing: 0.5, color: '#FFFFFF'
+
+Inactive pill:
+  flex: 1, borderRadius: 999, paddingVertical: 10,
+  alignItems: 'center'
+  Text: fontFamily Epilogue_400Regular, fontSize 14,
+    color: Colors.textMuted
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DAY VIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Summary bento row (2 columns):
+  Left card: backgroundColor 'rgba(245,166,35,0.10)', borderRadius 24,
+    padding 20, flex 1
+    Label: "TOTAL CALORIES" in label-uppercase style, color Colors.primary
+    Value: total kcal from AppContext daily total, fontSize 28,
+      fontFamily Epilogue_700Bold, color Colors.primary
+    Sub: "kcal for the day", fontSize 12, color Colors.textMuted
+
+  Right card: backgroundColor 'rgba(76,175,118,0.12)', borderRadius 24,
+    padding 20, flex 1
+    Label: "PREP TIME", color Colors.secondary
+    Value: total prep minutes summed from day's meals, color Colors.secondary
+    Sub: "min total prep"
+
+Meal sections (Breakfast / Lunch / Snack / Dinner):
+  Map over AppContext's daily meals for the selected day.
+  Each section has a header row:
+    Left: Feather icon + meal type label (Epilogue_700Bold, fontSize 20)
+      Breakfast → Feather "sunrise" color Colors.primary
+      Lunch     → Feather "sun" color Colors.secondary
+      Snack     → Feather "coffee" color Colors.saveBlue
+      Dinner    → Feather "moon" color Colors.danger
+    Right: meal time string from data, fontSize 14, color Colors.textMuted
+
+  Breakfast/Lunch/Dinner → HERO CARD layout:
+    borderRadius 20, overflow 'hidden', height 200
+    Full-bleed image (source from AppContext meal.image)
+    LinearGradient overlay: ['transparent', 'rgba(0,0,0,0.85)']
+      from top 40% to bottom — use expo-linear-gradient if installed,
+      else plain View with backgroundColor 'rgba(0,0,0,0.5)'
+    Bottom overlay content (position absolute, bottom 0, padding 16):
+      If dinner: show a "Chef's Choice" pill badge:
+        backgroundColor Colors.primary, color '#644000',
+        fontSize 10, fontWeight '700', uppercase, borderRadius 99,
+        paddingHorizontal 10, paddingVertical 4
+      Meal name: fontFamily Epilogue_700Bold, fontSize 20, color '#FFFFFF'
+      Row: Feather "clock" + prepTime + Feather "zap" + kcal,
+        color 'rgba(255,255,255,0.85)', fontSize 13
+
+  Snack → COMPACT ROW layout:
+    flexDirection 'row', backgroundColor '#FFF1E4',
+    borderRadius 20, padding 16, gap 16, ...cardShadow
+    Image: 80x80, borderRadius 12, overflow 'hidden'
+    Right: meal name (fontSize 16, Epilogue_700Bold),
+      prepTime + kcal row below in Colors.textMuted
+
+  All meal cards: wrap in Pressable with Reanimated scale press feedback
+  onPress: must call existing meal card navigation from planner.tsx
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WEEK VIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Section header row:
+  Left: "Today's Plan" (Epilogue_700Bold, fontSize 24, Colors.textPrimary)
+        + total kcal below (fontSize 14, Colors.textMuted)
+  Right: "Auto-generate week" button
+    backgroundColor: 'rgba(245,166,35,0.15)', borderRadius 99,
+    paddingHorizontal 16, paddingVertical 10,
+    flexDirection 'row', gap 8, alignItems 'center'
+    Feather "zap" size 16, color Colors.primary
+    Text: fontFamily Epilogue_700Bold, fontSize 13, color '#644000'
+    → onPress: MUST call existing auto-generate handler from planner.tsx
+
+Day selector (horizontal scroll):
+  ScrollView horizontal showsHorizontalScrollIndicator={false}
+  paddingVertical 8, gap 8 between pills
+
+  Active day pill:
+    backgroundColor Colors.primary, borderRadius 999,
+    paddingHorizontal 20, paddingVertical 12,
+    shadowColor Colors.primary, shadowOpacity 0.20,
+    shadowRadius 12, elevation 3
+    Text: Epilogue_700Bold, fontSize 14, color '#FFFFFF'
+
+  Inactive day pill:
+    backgroundColor '#F4E6D8', borderRadius 999,
+    paddingHorizontal 20, paddingVertical 12
+    Text: Epilogue_400Regular, fontSize 14, color Colors.textMuted
+
+  Day state: const [selectedDay, setSelectedDay] = useState(
+    currentDayIndex) — preserve existing day state if it exists
+
+Meal cards (vertical list per selected day):
+  Map over AppContext meals for selectedDay.
+  Each card: compact row layout
+    backgroundColor '#FFF1E4', borderRadius 20, padding 16,
+    flexDirection 'row', gap 16, ...cardShadow, marginBottom 12
+    Image: 80x80, borderRadius 12
+    Right column:
+      Day label: "MONDAY" uppercase, fontSize 11, letterSpacing 1.5,
+        color Colors.primary, fontFamily Epilogue_700Bold
+      Meal name: fontSize 18, fontFamily Epilogue_700Bold,
+        color Colors.textPrimary, marginTop 4
+      Kcal row: Feather "zap" size 16 + kcal text, color Colors.textMuted
+    Feather "chevron-right" size 20, color '#D7C3AE', alignSelf 'center'
+    onPress: existing recipe navigation from planner.tsx
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MONTH VIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Month header row:
+  Left: month + year string (Epilogue_700Bold, fontSize 28,
+    Colors.textPrimary)
+  Right: prev/next month buttons
+    Each: TouchableOpacity, borderWidth 1, borderColor '#D7C3AE',
+      borderRadius 99, padding 8, minHeight 44, minWidth 44
+    Feather "chevron-left" / "chevron-right", size 20,
+      color Colors.textMuted
+    onPress: must call existing month navigation from planner.tsx
+
+Day-of-week labels row:
+  ['S','M','T','W','T','F','S']
+  Each: flex 1, textAlign 'center', fontSize 12, fontWeight '700',
+    letterSpacing 1.5, color '#D7C3AE', textTransform 'uppercase',
+    paddingVertical 8
+
+Calendar grid — MUST be dynamically generated:
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const prevMonthDays = new Date(year, month, 0).getDate();
+  Render a 7-column grid using FlatList or manual row building.
+
+  Leading empty slots (prev month days): show day number,
+    color: '#D7C3AE', no onPress
+  Current month days: each in a TouchableOpacity
+    Default day cell:
+      aspectRatio 1, borderRadius 12, alignItems 'center',
+      justifyContent 'center', backgroundColor 'transparent'
+      Number: fontFamily Epilogue_700Bold, fontSize 14,
+        color Colors.textPrimary
+      Meal dot (if AppContext has a meal for this day):
+        6x6 circle, borderRadius 3, backgroundColor Colors.primary,
+        position absolute, bottom 6
+        Secondary meal dot: Colors.secondary
+
+    Today cell (date === new Date().getDate() and current month):
+      backgroundColor Colors.primary, borderRadius 12
+      Number: color '#FFFFFF'
+      Dot: backgroundColor 'rgba(255,255,255,0.8)'
+
+    Selected cell (date === selectedDay):
+      borderWidth 2, borderColor Colors.primary, borderRadius 12
+
+    onPress: setSelectedDay(day), animate preview in
+
+Day preview panel (shown below calendar when a day is selected):
+  Animated.View with opacity animated from 0→1 (200ms ease)
+  ScrollView ref scrollTo after animation
+
+  Preview header: "Selected: {dayName} {month} {day}"
+    Epilogue_700Bold, fontSize 20, Colors.textPrimary, marginBottom 16
+
+  Primary meal HERO card (dinner or first meal of selected day):
+    height 240, borderRadius 20, overflow 'hidden', ...cardShadow
+    Full-bleed image from AppContext
+    LinearGradient overlay bottom-to-top
+    Bottom content:
+      Meal type pill badge
+      Meal name: Epilogue_700Bold, fontSize 24, color '#FFFFFF'
+      prepTime + kcal row
+    Edit button (top-right): circular, backgroundColor 'rgba(0,0,0,0.3)',
+      size 40x40, Feather "edit-2" size 18, color '#FFFFFF'
+      → onPress: existing edit handler from planner.tsx
+
+  Remaining meals: compact row cards (same style as Week view rows)
+
+  Ingredient chips (if AppContext provides ingredients for selected day):
+    FlexWrap row of pills:
+      backgroundColor 'rgba(76,175,118,0.15)',
+      color Colors.secondary (or similar from AppContext ingredient colors)
+      borderRadius 999, paddingHorizontal 16, paddingVertical 8
+      fontFamily Epilogue_700Bold, fontSize 13
+
+Monthly Goals card:
+  backgroundColor '#EEE0D2', borderRadius 20, padding 24,
+  marginTop 32, overflow 'hidden', ...cardShadow
+
+  Decorative circle: position absolute, top -32, right -32,
+    width 96, height 96, borderRadius 48,
+    backgroundColor 'rgba(245,166,35,0.12)'
+
+  Title: "Weekly Summary" Epilogue_700Bold, fontSize 24,
+    Colors.textPrimary
+  Subtitle: "Macro distribution target met", fontSize 14,
+    Colors.textMuted, marginTop 4
+
+  3-column macro grid:
+    Each column: backgroundColor '#FFF1E4', borderRadius 16, padding 16,
+      alignItems 'center', flex 1
+    Label: macro name uppercase, fontSize 11, letterSpacing 1.5
+      Protein → Colors.secondary
+      Carbs   → Colors.primary
+      Fat     → Colors.saveBlue
+    Value: fontFamily Epilogue_700Bold, fontSize 22, Colors.textPrimary
+    Progress bar: height 4, borderRadius 2, backgroundColor '#D7C3AE',
+      marginTop 8, width '100%'
+      Fill: height 4, borderRadius 2
+        Protein → backgroundColor Colors.secondary
+        Carbs   → backgroundColor Colors.primary
+        Fat     → backgroundColor Colors.saveBlue
+      Width: (actual / target) * 100 + '%' from AppContext
+        If AppContext monthlyStats doesn't exist, use 0% — never hardcode
+
+  Total row: borderTopWidth 1, borderTopColor '#D7C3AE', paddingTop 16,
+    marginTop 16, flexDirection 'row', justifyContent 'space-between'
+    Left: "Total Calories" fontSize 14, Colors.textMuted
+    Right: total kcal from AppContext, fontFamily Epilogue_700Bold,
+      fontSize 20, Colors.textPrimary
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NUTRITION MACRO BAR (Day view only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Position: sits ABOVE the tab bar, not overlapping it.
+Use: const insets = useSafeAreaInsets();
+Bottom offset: insets.bottom + 64 (approx tab bar height)
+   — do NOT hardcode 88px. If @react-navigation/bottom-tabs is
+   available, use useBottomTabBarHeight() for exact tab height.
+
+Container: backgroundColor 'rgba(238,224,210,0.95)',
+  borderRadius 20, padding 16, marginHorizontal 16,
+  borderWidth 1, borderColor 'rgba(215,195,174,0.3)',
+  ...cardShadow (with blur: BlurView on iOS if installed)
+
+Header row:
+  Left: "Daily Macros" Epilogue_700Bold fontSize 14 Colors.textPrimary
+  Right: "Target: {target} kcal" fontSize 12 Colors.textMuted
+
+3 vertical bar columns + legend:
+  Each bar column (protein, carb, fat):
+    height: 48, borderRadius 4, backgroundColor '#D7C3AE',
+    overflow 'hidden', flex 1, justifyContent 'flex-end'
+    Fill bar: width '100%', borderRadius 4
+      height: computed as (actual/target)*100 + '%'
+      Protein → Colors.secondary
+      Carbs   → Colors.primary
+      Fat     → Colors.saveBlue
+    Label below: uppercase 10px Colors.textMuted
+
+  NEVER hardcode 75%, 45%, 60% heights. Read from AppContext.
+  If nutrition data unavailable: height '0%' with a "-" label.
+
+Legend (right side of macro bars):
+  3 rows, each: 8x8 circle + gram value
+  Same colors as bars
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FAB (Floating Action Button)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Only change the visual style. DO NOT change onPress.
+
+fab: {
+  position: 'absolute',
+  bottom: insets.bottom + 80,  ← adjust to clear tab bar
+  right: 20,
+  width: 56, height: 56, borderRadius: 28,
+  backgroundColor: Colors.primary,
+  alignItems: 'center', justifyContent: 'center',
+  ...fabShadow,
+}
+Icon: Feather "plus", size 26, color '#FFFFFF'
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STYLING RULES — MANDATORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ALL styles in StyleSheet.create() at the bottom of the file.
+   Zero inline style objects in render except for:
+   - Dynamic computed values: style={[styles.fill, { width: pct }]}
+   - Platform.select() spreads: ...cardShadow
+
+2. Every touchable: minHeight 44, minWidth 44 (Apple HIG tap target).
+
+3. All meal names, kcal, prep times from AppContext — never hardcoded.
+
+4. All macro bar heights/widths computed from AppContext data — never
+   hardcoded percentages.
+
+5. Calendar days generated dynamically from Date() — never hardcoded
+   static rows.
+
+6. No external image URLs anywhere in the file.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY FINAL STEPS — DO NOT SKIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After completing all edits, run in this exact order:
+
+1. Grep for banned patterns — fix any found before continuing:
+   grep -n "window\." artifacts/pantryswipe/app/(tabs)/planner.tsx
+   grep -n "document\." artifacts/pantryswipe/app/(tabs)/planner.tsx
+   grep -n "googleusercontent" artifacts/pantryswipe/app/(tabs)/planner.tsx
+   grep -n "classList" artifacts/pantryswipe/app/(tabs)/planner.tsx
+
+2. TypeScript check — fix ALL errors:
+   cd artifacts/pantryswipe && pnpm run typecheck
+
+3. Logic integrity check — read the code and verify:
+   - Segmented control uses useState only, no className toggling
+   - Day tap in calendar uses useState + Animated.timing, no DOM
+   - Auto-generate week button onPress preserved from original file
+   - FAB onPress preserved from original file
+   - Meal card navigation onPress preserved from original file
+   - All meal data sourced from AppContext fields (not hardcoded)
+   - All macro bars computed from AppContext (not hardcoded %)
+   - Calendar grid generated from Date() API (not static rows)
+   - No external image URLs in any Image source prop
+
+4. Report back with:
+   - Every file modified
+   - Every AppContext field name used (confirm each exists)
+   - Any field that did NOT exist and how you handled it
+   - Any Stitch element you could NOT implement and why
+   - Results of grep checks (clean / issues found + fixed)
+   - TypeScript check result (pass / errors + fixed)
