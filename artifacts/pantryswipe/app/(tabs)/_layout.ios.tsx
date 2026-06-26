@@ -82,9 +82,9 @@ function TabIcon({ icon, focused }: { icon: React.ComponentProps<typeof Feather>
 
 const tabIconStyles = StyleSheet.create({
   wrap: {
-    width: 52,
-    height: 30,
-    borderRadius: 15,
+    width: 44,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "transparent",
