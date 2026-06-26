@@ -33,6 +33,20 @@ import type { DetectedItem } from "@/types/scanning";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
+// ── Brand palette (matches Profile light design) ──────────────────────────────
+const C = {
+  primary:     "#F5A623",
+  secondary:   "#4CAF76",
+  textPrimary: "#141210",
+  textMuted:   "#7A7570",
+  surface:     "#FFFFFF",
+  background:  "#FAFAF8",
+  surfaceLow:  "#F5F3EF",
+  surfaceHigh: "#E8E4DE",
+  skipRed:     "#E84040",
+  saveBlue:    "#5B8EF5",
+};
+
 const CATEGORIES = ["All", "Fridge", "Freezer", "Pantry", "Spices", "Sauces", "Produce"] as const;
 const UNITS = ["g", "kg", "ml", "L", "cups", "pieces", "tbsp", "tsp", "cans", "slices", "cloves", "bunches"];
 const CATEGORY_ITEMS = ["Fridge", "Freezer", "Pantry", "Spices", "Sauces", "Produce"] as const;
@@ -151,13 +165,13 @@ function getStatusColor(status: string): string {
 }
 
 const cardShadow = Platform.select({
-  ios:     { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12 },
-  android: { elevation: 3 },
+  ios:     { shadowColor: "#835500", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 10 },
+  android: { elevation: 2 },
   default: {},
 }) as object;
 
 const fabShadow = Platform.select({
-  ios:     { shadowColor: "#F5A623", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12 },
+  ios:     { shadowColor: "#F5A623", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.45, shadowRadius: 14 },
   android: { elevation: 8 },
   default: {},
 }) as object;
@@ -238,15 +252,15 @@ const PantryCard = React.memo(function PantryCard({
   const tint = CATEGORY_TINTS[item.category] ?? CATEGORY_TINTS.default;
   const statusColor = getStatusColor(item.status);
   return (
-    <View style={[cardStyles.card, cardShadow, { backgroundColor: colors.card }]}>
+    <View style={[cardStyles.card, cardShadow, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.surfaceHigh }]}>
       <View style={[cardStyles.statusDot, { backgroundColor: statusColor }]} />
       <View style={[cardStyles.iconCircle, { backgroundColor: tint }]}>
         <Text style={cardStyles.cardEmoji}>{item.emoji}</Text>
       </View>
-      <Text style={[cardStyles.itemName, { color: colors.foreground }]} numberOfLines={2}>
+      <Text style={[cardStyles.itemName, { color: C.textPrimary }]} numberOfLines={2}>
         {item.name}
       </Text>
-      <Text style={[cardStyles.itemQty, { color: colors.textMuted }]}>
+      <Text style={[cardStyles.itemQty, { color: C.textMuted }]}>
         {item.quantity} {item.unit}
       </Text>
       <View style={cardStyles.cardBottom}>
@@ -256,7 +270,7 @@ const PantryCard = React.memo(function PantryCard({
           onPress={onDelete}
           hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
         >
-          <Feather name="trash-2" size={14} color={colors.textMuted} />
+          <Feather name="trash-2" size={14} color={C.textMuted} />
         </TouchableOpacity>
       </View>
     </View>
@@ -554,7 +568,7 @@ export default function PantryScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: C.background }]}>
       {/* ── MAIN GRID ── */}
       <FlatList
         data={filtered}
@@ -576,22 +590,22 @@ export default function PantryScreen() {
             {/* ── HEADER ── */}
             <View style={[styles.header, { paddingTop: topPadding + 6 }]}>
               <View>
-                <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Epilogue_700Bold" }]}>
+                <Text style={[styles.headerTitle, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>
                   My Pantry
                 </Text>
-                <Text style={[styles.headerSub, { color: colors.textSecondary, fontFamily: "Epilogue_400Regular" }]}>
+                <Text style={[styles.headerSub, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                   {pantryItems.length} items tracked
                 </Text>
               </View>
               <View style={styles.headerBtns}>
                 <TouchableOpacity
-                  style={[styles.scanBtn, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+                  style={[styles.scanBtn, { backgroundColor: C.surface, borderColor: C.surfaceHigh, borderWidth: 1 }]}
                   onPress={() => { resetBarcodeModal(); setShowBarcodeModal(true); }}
                 >
-                  <Feather name="camera" size={18} color={colors.primary} />
+                  <Feather name="camera" size={18} color={C.primary} />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.addBtn, { backgroundColor: colors.primary }]}
+                  style={[styles.addBtn, { backgroundColor: C.primary }]}
                   onPress={() => setShowAddChoiceModal(true)}
                 >
                   <Feather name="plus" size={20} color="#fff" />
@@ -600,18 +614,18 @@ export default function PantryScreen() {
             </View>
 
             {/* ── SEARCH ── */}
-            <View style={[styles.searchContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Feather name="search" size={15} color={colors.textMuted} />
+            <View style={[styles.searchContainer, { backgroundColor: C.surfaceLow, borderColor: C.surfaceHigh }]}>
+              <Feather name="search" size={15} color={C.textMuted} />
               <TextInput
-                style={[styles.searchInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                style={[styles.searchInput, { color: C.textPrimary, fontFamily: "Epilogue_400Regular" }]}
                 placeholder="Search ingredients…"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={C.textMuted}
                 value={search}
                 onChangeText={setSearch}
               />
               {search.length > 0 && (
                 <TouchableOpacity onPress={() => setSearch("")}>
-                  <Feather name="x" size={15} color={colors.textMuted} />
+                  <Feather name="x" size={15} color={C.textMuted} />
                 </TouchableOpacity>
               )}
             </View>
@@ -629,7 +643,7 @@ export default function PantryScreen() {
                   <Text style={[styles.expiryAlertText, { fontFamily: "Inter_600SemiBold" }]}>
                     {expiringItems.length} {expiringItems.length === 1 ? "item" : "items"} expiring soon
                   </Text>
-                  <Text style={[styles.expiryViewLink, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                  <Text style={[styles.expiryViewLink, { color: C.primary, fontFamily: "Epilogue_700Bold" }]}>
                     View →
                   </Text>
                 </View>
@@ -652,7 +666,7 @@ export default function PantryScreen() {
                       {activeRanOut.length > 0 ? ` · ${activeRanOut.length} ran out` : " running low"}
                     </Text>{" "}— tap to build your shopping list
                   </Text>
-                  <Text style={[styles.lowStockLink, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                  <Text style={[styles.lowStockLink, { color: C.primary, fontFamily: "Epilogue_700Bold" }]}>
                     List →
                   </Text>
                 </View>
@@ -682,31 +696,31 @@ export default function PantryScreen() {
 
             {/* ── WHAT CAN I MAKE ── */}
             <TouchableOpacity
-              style={[styles.whatCanIMakeCard, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "28" }]}
+              style={[styles.whatCanIMakeCard, { backgroundColor: C.surface, borderColor: C.surfaceHigh }]}
               onPress={() => { setShowWhatCanIMake(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
               activeOpacity={0.85}
             >
-              <View style={[styles.whatCanIMakeIcon, { backgroundColor: colors.primary + "20" }]}>
+              <View style={[styles.whatCanIMakeIcon, { backgroundColor: C.primary + "20" }]}>
                 <Text style={{ fontSize: 22 }}>🍳</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.whatCanIMakeEyebrow, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                <Text style={[styles.whatCanIMakeEyebrow, { color: C.primary, fontFamily: "Epilogue_700Bold" }]}>
                   PANTRY MATCH
                 </Text>
-                <Text style={[styles.whatCanIMakeTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                <Text style={[styles.whatCanIMakeTitle, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>
                   What Can I Make?
                 </Text>
                 <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4, marginTop: 2 }}>
-                  <Text style={[styles.whatCanIMakeCount, { color: colors.primary, fontFamily: "SpaceGrotesk_700Bold" }]}>
+                  <Text style={[styles.whatCanIMakeCount, { color: C.primary, fontFamily: "Epilogue_700Bold" }]}>
                     {matchableRecipes.length}
                   </Text>
-                  <Text style={[styles.whatCanIMakeSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                  <Text style={[styles.whatCanIMakeSub, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                     dishes you can cook now
                   </Text>
                 </View>
               </View>
-              <View style={[styles.stickyChevron, { backgroundColor: colors.primary + "18" }]}>
-                <Feather name="chevron-right" size={16} color={colors.primary} />
+              <View style={[styles.stickyChevron, { backgroundColor: C.primary + "18" }]}>
+                <Feather name="chevron-right" size={16} color={C.primary} />
               </View>
             </TouchableOpacity>
 
@@ -726,8 +740,8 @@ export default function PantryScreen() {
                       style={[
                         styles.categoryTab,
                         isActive
-                          ? { backgroundColor: colors.foreground, borderColor: colors.foreground }
-                          : { backgroundColor: colors.card, borderColor: colors.border },
+                          ? { backgroundColor: C.textPrimary, borderColor: C.textPrimary }
+                          : { backgroundColor: C.surfaceLow, borderColor: C.surfaceHigh },
                       ]}
                       onPress={() => setActiveCategory(cat)}
                     >
@@ -735,7 +749,7 @@ export default function PantryScreen() {
                         style={[
                           styles.categoryTabText,
                           {
-                            color: isActive ? colors.background : colors.textSecondary,
+                            color: isActive ? C.background : C.textMuted,
                             fontFamily: isActive ? "Epilogue_700Bold" : "Epilogue_400Regular",
                           },
                         ]}
@@ -751,8 +765,8 @@ export default function PantryScreen() {
             {/* ── SECTION HEADER ── */}
             <View style={styles.sectionRow}>
               <View>
-                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>My Pantry</Text>
-                <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
+                <Text style={[styles.sectionTitle, { color: C.textPrimary }]}>My Pantry</Text>
+                <Text style={[styles.sectionSubtitle, { color: C.textMuted }]}>
                   {filtered.length} item{filtered.length !== 1 ? "s" : ""}
                 </Text>
               </View>
@@ -761,15 +775,20 @@ export default function PantryScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Feather name="shopping-bag" size={36} color={colors.textMuted} />
-            <Text style={[styles.emptyText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: C.surfaceLow, alignItems: "center", justifyContent: "center", marginBottom: 4 }}>
+              <Feather name="shopping-bag" size={32} color={C.textMuted} />
+            </View>
+            <Text style={[styles.emptyText, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>
               No items in {activeCategory === "All" ? "pantry" : activeCategory}
             </Text>
+            <Text style={{ fontSize: 13, color: C.textMuted, fontFamily: "Epilogue_400Regular", textAlign: "center" }}>
+              Add your first ingredient to get started
+            </Text>
             <TouchableOpacity
-              style={[styles.emptyBtn, { backgroundColor: colors.primary }]}
+              style={[styles.emptyBtn, { backgroundColor: C.primary }]}
               onPress={() => setShowAddModal(true)}
             >
-              <Text style={[styles.emptyBtnText, { fontFamily: "Inter_700Bold" }]}>Add Item</Text>
+              <Text style={[styles.emptyBtnText, { fontFamily: "Epilogue_700Bold" }]}>Add Item</Text>
             </TouchableOpacity>
           </View>
         }
@@ -796,19 +815,19 @@ export default function PantryScreen() {
       >
         <View style={styles.sheetOverlay}>
           <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowWhatCanIMake(false)} activeOpacity={1} />
-          <View style={[styles.sheet, { backgroundColor: colors.background }]}>
-            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+          <View style={[styles.sheet, { backgroundColor: C.background }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: C.surfaceHigh }]} />
             <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.sheetTitle, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>
                 What Can I Make?
               </Text>
-              <View style={[styles.sheetCountPill, { backgroundColor: colors.primary + "18" }]}>
-                <Text style={[styles.sheetCountText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+              <View style={[styles.sheetCountPill, { backgroundColor: C.primary + "18" }]}>
+                <Text style={[styles.sheetCountText, { color: C.primary, fontFamily: "Epilogue_700Bold" }]}>
                   {matchableRecipes.length} dishes
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setShowWhatCanIMake(false)} style={{ marginLeft: "auto" }}>
-                <Feather name="x" size={20} color={colors.textMuted} />
+                <Feather name="x" size={20} color={C.textMuted} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -817,33 +836,33 @@ export default function PantryScreen() {
                 if (groupItems.length === 0) return null;
                 return (
                   <View key={group.label} style={styles.sheetGroup}>
-                    <Text style={[styles.sheetGroupLabel, { color: colors.textMuted, fontFamily: "Inter_600SemiBold" }]}>
+                    <Text style={[styles.sheetGroupLabel, { color: C.textMuted, fontFamily: "Epilogue_700Bold" }]}>
                       {group.label}
                     </Text>
                     {groupItems.slice(0, 5).map(({ recipe, score }) => (
                       <TouchableOpacity
                         key={recipe.id}
-                        style={[styles.sheetRow, { backgroundColor: colors.card }]}
+                        style={[styles.sheetRow, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.surfaceHigh }]}
                         onPress={() => { setShowWhatCanIMake(false); router.push(`/recipe/${recipe.id}`); }}
                         activeOpacity={0.8}
                       >
-                        <View style={[styles.sheetRowIcon, { backgroundColor: colors.cardElevated }]}>
+                        <View style={[styles.sheetRowIcon, { backgroundColor: C.surfaceLow }]}>
                           <Text style={{ fontSize: 20 }}>{CUISINE_EMOJIS[recipe.cuisine] ?? "🍽"}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={[styles.sheetRowName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
+                          <Text style={[styles.sheetRowName, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]} numberOfLines={1}>
                             {recipe.title}
                           </Text>
-                          <Text style={[styles.sheetRowMeta, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+                          <Text style={[styles.sheetRowMeta, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                             {recipe.ingredients.filter((i) => i.inPantry).length}/{recipe.ingredients.length} ingredients · {recipe.prepTime + recipe.cookTime} min
                           </Text>
                         </View>
                         <View style={[styles.sheetScore, { backgroundColor: score >= 80 ? "rgba(16,185,129,0.15)" : "rgba(245,158,11,0.15)" }]}>
-                          <Text style={[styles.sheetScoreText, { color: score >= 80 ? "#059669" : "#D97706", fontFamily: "Inter_600SemiBold" }]}>
+                          <Text style={[styles.sheetScoreText, { color: score >= 80 ? "#059669" : "#D97706", fontFamily: "Epilogue_700Bold" }]}>
                             ✓ {score}%
                           </Text>
                         </View>
-                        <Feather name="chevron-right" size={14} color={colors.textMuted} style={{ marginLeft: 4 }} />
+                        <Feather name="chevron-right" size={14} color={C.textMuted} style={{ marginLeft: 4 }} />
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -856,65 +875,65 @@ export default function PantryScreen() {
 
       {/* ── ADD ITEM MODAL ── */}
       <Modal visible={showAddModal} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowAddModal(false)}>
-        <View style={[styles.modal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-          <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Add Pantry Item</Text>
+        <View style={[styles.modal, { backgroundColor: C.background }]}>
+          <View style={[styles.modalHandle, { backgroundColor: C.surfaceHigh }]} />
+          <Text style={[styles.modalTitle, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Add Pantry Item</Text>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalForm}>
-            <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Ingredient name</Text>
+            <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Ingredient name</Text>
             <TextInput
-              style={[styles.modalInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, fontFamily: "Inter_400Regular" }]}
+              style={[styles.modalInput, { color: C.textPrimary, borderColor: C.surfaceHigh, backgroundColor: C.surface, fontFamily: "Epilogue_400Regular" }]}
               placeholder="e.g. Chicken Breast"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={C.textMuted}
               value={newItemName}
               onChangeText={setNewItemName}
               autoFocus
             />
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Quantity</Text>
+                <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Quantity</Text>
                 <TextInput
-                  style={[styles.modalInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, fontFamily: "Inter_400Regular" }]}
+                  style={[styles.modalInput, { color: C.textPrimary, borderColor: C.surfaceHigh, backgroundColor: C.surface, fontFamily: "Epilogue_400Regular" }]}
                   placeholder="1"
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={C.textMuted}
                   value={newItemQty}
                   onChangeText={setNewItemQty}
                   keyboardType="numeric"
                 />
               </View>
               <View style={{ flex: 1.4 }}>
-                <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Unit</Text>
+                <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Unit</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.unitScroll}>
                   {UNITS.map((u) => (
                     <TouchableOpacity
                       key={u}
-                      style={[styles.unitPill, { backgroundColor: newItemUnit === u ? colors.primary : colors.card, borderColor: newItemUnit === u ? colors.primary : colors.border }]}
+                      style={[styles.unitPill, { backgroundColor: newItemUnit === u ? C.primary : C.surfaceLow, borderColor: newItemUnit === u ? C.primary : C.surfaceHigh }]}
                       onPress={() => setNewItemUnit(u)}
                     >
-                      <Text style={[styles.unitPillText, { color: newItemUnit === u ? "#fff" : colors.foreground, fontFamily: "Inter_500Medium" }]}>{u}</Text>
+                      <Text style={[styles.unitPillText, { color: newItemUnit === u ? "#fff" : C.textPrimary, fontFamily: "Epilogue_400Regular" }]}>{u}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
               </View>
             </View>
-            <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Category</Text>
+            <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Category</Text>
             <View style={styles.categoryGrid}>
               {CATEGORY_ITEMS.map((cat) => (
                 <TouchableOpacity
                   key={cat}
-                  style={[styles.categoryPill, { backgroundColor: newItemCategory === cat ? colors.primary : colors.card, borderColor: newItemCategory === cat ? colors.primary : colors.border }]}
+                  style={[styles.categoryPill, { backgroundColor: newItemCategory === cat ? C.primary : C.surfaceLow, borderColor: newItemCategory === cat ? C.primary : C.surfaceHigh }]}
                   onPress={() => setNewItemCategory(cat)}
                 >
-                  <Text style={[styles.categoryPillText, { color: newItemCategory === cat ? "#fff" : colors.foreground, fontFamily: "Inter_500Medium" }]}>{cat}</Text>
+                  <Text style={[styles.categoryPillText, { color: newItemCategory === cat ? "#fff" : C.textPrimary, fontFamily: "Epilogue_400Regular" }]}>{cat}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           </ScrollView>
           <View style={styles.modalButtons}>
-            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.muted }]} onPress={() => setShowAddModal(false)}>
-              <Text style={[styles.modalBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Cancel</Text>
+            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: C.surfaceLow }]} onPress={() => setShowAddModal(false)}>
+              <Text style={[styles.modalBtnText, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.primary }]} onPress={handleAddItem}>
-              <Text style={[styles.modalBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>Add to Pantry</Text>
+            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: C.primary }]} onPress={handleAddItem}>
+              <Text style={[styles.modalBtnText, { color: "#fff", fontFamily: "Epilogue_700Bold" }]}>Add to Pantry</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -922,8 +941,8 @@ export default function PantryScreen() {
 
       {/* ── EXPIRY MODAL ── */}
       <Modal visible={showExpiryModal} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowExpiryModal(false)}>
-        <View style={[styles.modal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+        <View style={[styles.modal, { backgroundColor: C.background }]}>
+          <View style={[styles.modalHandle, { backgroundColor: C.surfaceHigh }]} />
 
           {/* ── Header ── */}
           <View style={[styles.expiryModalAccentBar, { backgroundColor: "#EF4444" }]} />
@@ -931,15 +950,15 @@ export default function PantryScreen() {
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
                 <View style={[styles.intelligenceEyebrowDot, { backgroundColor: "#EF4444" }]} />
-                <Text style={{ fontSize: 10, letterSpacing: 1, fontFamily: "Inter_600SemiBold", color: "#EF4444" }}>USE THESE FIRST</Text>
+                <Text style={{ fontSize: 10, letterSpacing: 1, fontFamily: "Epilogue_700Bold", color: "#EF4444" }}>USE THESE FIRST</Text>
               </View>
-              <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 0 }]}>
+              <Text style={[styles.modalTitle, { color: C.textPrimary, fontFamily: "Epilogue_700Bold", marginBottom: 0 }]}>
                 Expiring Soon
               </Text>
             </View>
             <View style={[styles.expiryCountPill, { backgroundColor: "#FEF2F2", borderColor: "#FECACA" }]}>
-              <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: "#DC2626" }}>{expiringItems.length}</Text>
-              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: "#EF4444" }}> item{expiringItems.length !== 1 ? "s" : ""}</Text>
+              <Text style={{ fontSize: 13, fontFamily: "Epilogue_700Bold", color: "#DC2626" }}>{expiringItems.length}</Text>
+              <Text style={{ fontSize: 11, fontFamily: "Epilogue_400Regular", color: "#EF4444" }}> item{expiringItems.length !== 1 ? "s" : ""}</Text>
             </View>
           </View>
 
@@ -960,24 +979,24 @@ export default function PantryScreen() {
                   {/* Left accent bar + card */}
                   <View style={{ flexDirection: "row", borderRadius: 16, overflow: "hidden" }}>
                     <View style={{ width: 4, backgroundColor: accentColor }} />
-                    <View style={[styles.expiryItemInner, { backgroundColor: colors.card, borderColor: isExpired ? colors.border : "#EF444430" }]}>
-                      <View style={[styles.expiryEmojiBox, { backgroundColor: isExpired ? colors.muted : "#FEF2F2" }]}>
+                    <View style={[styles.expiryItemInner, { backgroundColor: C.surface, borderColor: isExpired ? C.surfaceHigh : "#EF444330" }]}>
+                      <View style={[styles.expiryEmojiBox, { backgroundColor: isExpired ? C.surfaceLow : "#FEF2F2" }]}>
                         <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.itemName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{item.name}</Text>
-                        <Text style={[styles.itemDetail, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+                        <Text style={[styles.itemName, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>{item.name}</Text>
+                        <Text style={[styles.itemDetail, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                           {item.quantity} {item.unit} · {item.category}
                         </Text>
                         {daysLeft !== null && (
-                          <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", marginTop: 3, color: accentColor }}>
+                          <Text style={{ fontSize: 13, fontFamily: "Epilogue_700Bold", marginTop: 3, color: accentColor }}>
                             {formatCountdown(daysLeft)}
                           </Text>
                         )}
                       </View>
-                      <View style={[styles.statusBadge, { backgroundColor: isExpired ? colors.muted : "#FEF2F2" }]}>
+                      <View style={[styles.statusBadge, { backgroundColor: isExpired ? C.surfaceLow : "#FEF2F2" }]}>
                         <View style={[styles.statusDot, { backgroundColor: accentColor }]} />
-                        <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: isExpired ? colors.textMuted : "#DC2626" }}>
+                        <Text style={{ fontSize: 11, fontFamily: "Epilogue_700Bold", color: isExpired ? C.textMuted : "#DC2626" }}>
                           {isExpired ? "Expired" : "Expiring"}
                         </Text>
                       </View>
@@ -991,12 +1010,12 @@ export default function PantryScreen() {
             {liveRecipes.filter((r: import("@/data/mockData").Recipe) =>
               r.ingredients.some((ing: { name: string }) => expiringItems.some((e) => e.name.toLowerCase().includes(ing.name.toLowerCase().split(" ")[0])))
             ).slice(0, 3).length > 0 && (
-              <View style={[styles.expiryRecipeSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.expiryRecipeSection, { backgroundColor: C.surface, borderColor: C.surfaceHigh }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <View style={[styles.intelligenceIcon, { backgroundColor: colors.primary + "18" }]}>
-                    <Feather name="book-open" size={14} color={colors.primary} />
+                  <View style={[styles.intelligenceIcon, { backgroundColor: C.primary + "18" }]}>
+                    <Feather name="book-open" size={14} color={C.primary} />
                   </View>
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.primary, letterSpacing: 0.5 }}>
+                  <Text style={{ fontSize: 12, fontFamily: "Epilogue_700Bold", color: C.primary, letterSpacing: 0.5 }}>
                     RECIPES THAT USE THESE
                   </Text>
                 </View>
@@ -1005,20 +1024,20 @@ export default function PantryScreen() {
                 ).slice(0, 3).map((r: import("@/data/mockData").Recipe) => (
                   <TouchableOpacity
                     key={r.id}
-                    style={[styles.expiryRecipeRow, { borderColor: colors.border }]}
+                    style={[styles.expiryRecipeRow, { borderColor: C.surfaceHigh }]}
                     onPress={() => { setShowExpiryModal(false); router.push(`/recipe/${r.id}`); }}
                     activeOpacity={0.75}
                   >
-                    <View style={[styles.expiryRecipeIcon, { backgroundColor: colors.primary + "14" }]}>
+                    <View style={[styles.expiryRecipeIcon, { backgroundColor: C.primary + "14" }]}>
                       <Text style={{ fontSize: 18 }}>{CUISINE_EMOJIS[r.cuisine] ?? "🍽"}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.itemName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>{r.title}</Text>
-                      <Text style={[styles.itemDetail, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                      <Text style={[styles.itemName, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]} numberOfLines={1}>{r.title}</Text>
+                      <Text style={[styles.itemDetail, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                         {r.prepTime + r.cookTime} min · {r.calories} kcal
                       </Text>
                     </View>
-                    <Feather name="chevron-right" size={15} color={colors.textMuted} />
+                    <Feather name="chevron-right" size={15} color={C.textMuted} />
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1026,7 +1045,7 @@ export default function PantryScreen() {
           </ScrollView>
 
           <TouchableOpacity style={[styles.modalBtnFull, { backgroundColor: "#EF4444" }]} onPress={() => setShowExpiryModal(false)}>
-            <Text style={[styles.modalBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>Got it, I'll use these first ✓</Text>
+            <Text style={[styles.modalBtnText, { color: "#fff", fontFamily: "Epilogue_700Bold" }]}>Got it, I'll use these first ✓</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -1041,12 +1060,12 @@ export default function PantryScreen() {
           resetBarcodeModal();
         }}
       >
-        <View style={[styles.modal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+        <View style={[styles.modal, { backgroundColor: C.background }]}>
+          <View style={[styles.modalHandle, { backgroundColor: C.surfaceHigh }]} />
 
           {/* Header row */}
           <View style={styles.barcodeHeader}>
-            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", marginBottom: 0 }]}>
+            <Text style={[styles.modalTitle, { color: C.textPrimary, fontFamily: "Epilogue_700Bold", marginBottom: 0 }]}>
               {barcodePhase === "found" ? "Product Found 🎉" :
                barcodePhase === "not_found" ? "Product Not Found" :
                barcodePhase === "loading" ? "Looking Up Barcode" :
@@ -1056,18 +1075,18 @@ export default function PantryScreen() {
               onPress={() => { setShowBarcodeModal(false); resetBarcodeModal(); }}
               style={styles.barcodeCloseBtn}
             >
-              <Feather name="x" size={20} color={colors.textMuted} />
+              <Feather name="x" size={20} color={C.textMuted} />
             </TouchableOpacity>
           </View>
 
           {/* ── LOADING PHASE ── */}
           {barcodePhase === "loading" && (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: 20 }} />
-              <Text style={[styles.loadingStatus, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+              <ActivityIndicator size="large" color={C.primary} style={{ marginBottom: 20 }} />
+              <Text style={[styles.loadingStatus, { color: C.primary, fontFamily: "Epilogue_700Bold" }]}>
                 {barcodeStatusMsg}
               </Text>
-              <Text style={[styles.loadingBarcode, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+              <Text style={[styles.loadingBarcode, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                 {scannedBarcode}
               </Text>
             </View>
@@ -1080,98 +1099,98 @@ export default function PantryScreen() {
               {foundProduct.imageUrl ? (
                 <Image source={{ uri: foundProduct.imageUrl }} style={styles.productImage} resizeMode="cover" />
               ) : (
-                <View style={[styles.productImagePlaceholder, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={[styles.productImagePlaceholder, { backgroundColor: C.surfaceLow, borderColor: C.surfaceHigh }]}>
                   <Text style={{ fontSize: 48 }}>{categoryToEmoji(barcodeCategory)}</Text>
                 </View>
               )}
 
               {/* Source badge */}
               {foundProduct.source && (
-                <View style={[styles.sourceBadge, { backgroundColor: colors.primary + "15" }]}>
-                  <Feather name="database" size={12} color={colors.primary} />
-                  <Text style={[styles.sourceBadgeText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                <View style={[styles.sourceBadge, { backgroundColor: C.primary + "15" }]}>
+                  <Feather name="database" size={12} color={C.primary} />
+                  <Text style={[styles.sourceBadgeText, { color: C.primary, fontFamily: "Epilogue_400Regular" }]}>
                     {foundProduct.source}
                   </Text>
                 </View>
               )}
 
-              <Text style={[styles.foundProductName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.foundProductName, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>
                 {foundProduct.name}
               </Text>
               {foundProduct.brand && (
-                <Text style={[styles.foundProductBrand, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                <Text style={[styles.foundProductBrand, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                   {foundProduct.brand}
                 </Text>
               )}
 
               {/* Quantity row */}
-              <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold", marginTop: 16 }]}>Quantity</Text>
+              <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold", marginTop: 16 }]}>Quantity</Text>
               <View style={styles.qtyRow}>
                 <TouchableOpacity
-                  style={[styles.qtyBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  style={[styles.qtyBtn, { backgroundColor: C.surfaceLow, borderColor: C.surfaceHigh }]}
                   onPress={() => setBarcodeQty(q => String(Math.max(1, Number(q) - 1)))}
                 >
-                  <Feather name="minus" size={18} color={colors.primary} />
+                  <Feather name="minus" size={18} color={C.primary} />
                 </TouchableOpacity>
                 <TextInput
                   value={barcodeQty}
                   onChangeText={setBarcodeQty}
                   keyboardType="numeric"
-                  style={[styles.qtyInput, { color: colors.foreground, borderColor: colors.border, fontFamily: "Inter_700Bold" }]}
+                  style={[styles.qtyInput, { color: C.textPrimary, borderColor: C.surfaceHigh, fontFamily: "Epilogue_700Bold" }]}
                 />
                 <TouchableOpacity
-                  style={[styles.qtyBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  style={[styles.qtyBtn, { backgroundColor: C.surfaceLow, borderColor: C.surfaceHigh }]}
                   onPress={() => setBarcodeQty(q => String(Number(q) + 1))}
                 >
-                  <Feather name="plus" size={18} color={colors.primary} />
+                  <Feather name="plus" size={18} color={C.primary} />
                 </TouchableOpacity>
               </View>
 
               {/* Unit */}
-              <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Unit</Text>
+              <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Unit</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.unitScroll}>
                 {UNITS.map((u) => (
                   <TouchableOpacity
                     key={u}
-                    style={[styles.unitPill, { backgroundColor: barcodeUnit === u ? colors.primary : colors.card, borderColor: barcodeUnit === u ? colors.primary : colors.border }]}
+                    style={[styles.unitPill, { backgroundColor: barcodeUnit === u ? C.primary : C.surfaceLow, borderColor: barcodeUnit === u ? C.primary : C.surfaceHigh }]}
                     onPress={() => setBarcodeUnit(u)}
                   >
-                    <Text style={[styles.unitPillText, { color: barcodeUnit === u ? "#fff" : colors.foreground, fontFamily: "Inter_500Medium" }]}>{u}</Text>
+                    <Text style={[styles.unitPillText, { color: barcodeUnit === u ? "#fff" : C.textPrimary, fontFamily: "Epilogue_400Regular" }]}>{u}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
 
               {/* Category */}
-              <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Category</Text>
+              <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Category</Text>
               <View style={styles.categoryGrid}>
                 {CATEGORY_ITEMS.map((cat) => (
                   <TouchableOpacity
                     key={cat}
-                    style={[styles.categoryPill, { backgroundColor: barcodeCategory === cat ? colors.primary : colors.card, borderColor: barcodeCategory === cat ? colors.primary : colors.border }]}
+                    style={[styles.categoryPill, { backgroundColor: barcodeCategory === cat ? C.primary : C.surfaceLow, borderColor: barcodeCategory === cat ? C.primary : C.surfaceHigh }]}
                     onPress={() => setBarcodeCategory(cat)}
                   >
-                    <Text style={[styles.categoryPillText, { color: barcodeCategory === cat ? "#fff" : colors.foreground, fontFamily: "Inter_500Medium" }]}>{cat}</Text>
+                    <Text style={[styles.categoryPillText, { color: barcodeCategory === cat ? "#fff" : C.textPrimary, fontFamily: "Epilogue_400Regular" }]}>{cat}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
               {/* Expiry date */}
-              <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Expiry Date (optional)</Text>
+              <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Expiry Date (optional)</Text>
               <TextInput
-                style={[styles.modalInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, fontFamily: "Inter_400Regular" }]}
+                style={[styles.modalInput, { color: C.textPrimary, borderColor: C.surfaceHigh, backgroundColor: C.surface, fontFamily: "Epilogue_400Regular" }]}
                 placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={C.textMuted}
                 value={barcodeExpiry}
                 onChangeText={setBarcodeExpiry}
               />
 
               {/* Actions */}
               <View style={[styles.modalButtons, { marginTop: 8 }]}>
-                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.muted }]} onPress={resetBarcodeModal}>
-                  <Text style={[styles.modalBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Scan Again</Text>
+                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: C.surfaceLow }]} onPress={resetBarcodeModal}>
+                  <Text style={[styles.modalBtnText, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Scan Again</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.primary }]} onPress={handleAddFound}>
-                  <Text style={[styles.modalBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>Add to Pantry</Text>
+                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: C.primary }]} onPress={handleAddFound}>
+                  <Text style={[styles.modalBtnText, { color: "#fff", fontFamily: "Epilogue_700Bold" }]}>Add to Pantry</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -1180,72 +1199,72 @@ export default function PantryScreen() {
           {/* ── NOT FOUND PHASE — manual entry form ── */}
           {barcodePhase === "not_found" && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.foundContent}>
-              <View style={[styles.notFoundBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.notFoundBox, { backgroundColor: C.surfaceLow, borderColor: C.surfaceHigh }]}>
                 <Text style={{ fontSize: 36, marginBottom: 8 }}>🔍</Text>
-                <Text style={[styles.notFoundTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                <Text style={[styles.notFoundTitle, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>
                   No product found
                 </Text>
-                <Text style={[styles.notFoundSub, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+                <Text style={[styles.notFoundSub, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                   Barcode: {scannedBarcode}
                 </Text>
-                <Text style={[styles.notFoundSub, { color: colors.textSecondary, fontFamily: "Inter_400Regular", marginTop: 4 }]}>
+                <Text style={[styles.notFoundSub, { color: C.textMuted, fontFamily: "Epilogue_400Regular", marginTop: 4 }]}>
                   Not in Database, Open Food Facts, or UPCitemDB. Add it manually:
                 </Text>
               </View>
 
-              <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold", marginTop: 16 }]}>
+              <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold", marginTop: 16 }]}>
                 Product Name *
               </Text>
               <TextInput
-                style={[styles.modalInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, fontFamily: "Inter_400Regular" }]}
+                style={[styles.modalInput, { color: C.textPrimary, borderColor: C.surfaceHigh, backgroundColor: C.surface, fontFamily: "Epilogue_400Regular" }]}
                 placeholder="e.g. Organic Almond Milk"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={C.textMuted}
                 value={manualName}
                 onChangeText={setManualName}
                 autoFocus
               />
 
-              <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Brand</Text>
+              <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Brand</Text>
               <TextInput
-                style={[styles.modalInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, fontFamily: "Inter_400Regular" }]}
+                style={[styles.modalInput, { color: C.textPrimary, borderColor: C.surfaceHigh, backgroundColor: C.surface, fontFamily: "Epilogue_400Regular" }]}
                 placeholder="e.g. Oatly"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={C.textMuted}
                 value={manualBrand}
                 onChangeText={setManualBrand}
               />
 
-              <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Category</Text>
+              <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Category</Text>
               <View style={styles.categoryGrid}>
                 {CATEGORY_ITEMS.map((cat) => (
                   <TouchableOpacity
                     key={cat}
-                    style={[styles.categoryPill, { backgroundColor: manualCategory === cat ? colors.primary : colors.card, borderColor: manualCategory === cat ? colors.primary : colors.border }]}
+                    style={[styles.categoryPill, { backgroundColor: manualCategory === cat ? C.primary : C.surfaceLow, borderColor: manualCategory === cat ? C.primary : C.surfaceHigh }]}
                     onPress={() => setManualCategory(cat)}
                   >
-                    <Text style={[styles.categoryPillText, { color: manualCategory === cat ? "#fff" : colors.foreground, fontFamily: "Inter_500Medium" }]}>{cat}</Text>
+                    <Text style={[styles.categoryPillText, { color: manualCategory === cat ? "#fff" : C.textPrimary, fontFamily: "Epilogue_400Regular" }]}>{cat}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={[styles.inputLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Expiry Date (optional)</Text>
+              <Text style={[styles.inputLabel, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Expiry Date (optional)</Text>
               <TextInput
-                style={[styles.modalInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, fontFamily: "Inter_400Regular" }]}
+                style={[styles.modalInput, { color: C.textPrimary, borderColor: C.surfaceHigh, backgroundColor: C.surface, fontFamily: "Epilogue_400Regular" }]}
                 placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={C.textMuted}
                 value={manualExpiry}
                 onChangeText={setManualExpiry}
               />
 
               <View style={[styles.modalButtons, { marginTop: 8 }]}>
-                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.muted }]} onPress={resetBarcodeModal}>
-                  <Text style={[styles.modalBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Scan Again</Text>
+                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: C.surfaceLow }]} onPress={resetBarcodeModal}>
+                  <Text style={[styles.modalBtnText, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>Scan Again</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalBtn, { backgroundColor: manualName.trim() ? colors.primary : colors.muted }]}
+                  style={[styles.modalBtn, { backgroundColor: manualName.trim() ? C.primary : C.surfaceLow }]}
                   onPress={handleAddManual}
                   disabled={!manualName.trim()}
                 >
-                  <Text style={[styles.modalBtnText, { color: manualName.trim() ? "#fff" : colors.textMuted, fontFamily: "Inter_700Bold" }]}>
+                  <Text style={[styles.modalBtnText, { color: manualName.trim() ? "#fff" : C.textMuted, fontFamily: "Epilogue_700Bold" }]}>
                     Add to Pantry
                   </Text>
                 </TouchableOpacity>
@@ -1262,58 +1281,58 @@ export default function PantryScreen() {
                   <View style={[styles.viewfinder, { backgroundColor: "#0A0A0A" }]}>
                     <View style={styles.viewfinderCorners}>
                       {(["tl", "tr", "bl", "br"] as const).map((corner) => (
-                        <View key={corner} style={[styles.corner, styles[`corner_${corner}` as keyof typeof styles] as any, { borderColor: colors.primary }]} />
+                        <View key={corner} style={[styles.corner, styles[`corner_${corner}` as keyof typeof styles] as any, { borderColor: C.primary }]} />
                       ))}
                     </View>
-                    <Animated.View style={[styles.scanLine, { backgroundColor: colors.primary, top: scanLineY }]} />
-                    <Text style={[styles.viewfinderText, { color: "#aaa", fontFamily: "Inter_400Regular" }]}>
+                    <Animated.View style={[styles.scanLine, { backgroundColor: C.primary, top: scanLineY }]} />
+                    <Text style={[styles.viewfinderText, { color: "#aaa", fontFamily: "Epilogue_400Regular" }]}>
                       Use Expo Go on your phone to scan real barcodes
                     </Text>
                   </View>
-                  <Text style={[styles.scanHint, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                  <Text style={[styles.scanHint, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                     Tap below to demo a real Open Food Facts lookup.
                   </Text>
                   <TouchableOpacity
-                    style={[styles.scanStartBtn, { backgroundColor: colors.primary }]}
+                    style={[styles.scanStartBtn, { backgroundColor: C.primary }]}
                     onPress={handleDemoScan}
                   >
                     <Feather name="zap" size={18} color="#fff" />
-                    <Text style={[styles.scanStartText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                    <Text style={[styles.scanStartText, { color: "#fff", fontFamily: "Epilogue_700Bold" }]}>
                       Demo Scan (Coca-Cola)
                     </Text>
                   </TouchableOpacity>
                 </>
               ) : !cameraPermission ? (
                 <View style={styles.permissionBox}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={[styles.permissionText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                  <ActivityIndicator size="small" color={C.primary} />
+                  <Text style={[styles.permissionText, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                     Checking camera access…
                   </Text>
                 </View>
               ) : !cameraPermission.granted ? (
                 <View style={styles.permissionBox}>
-                  <View style={[styles.permissionIconWrap, { backgroundColor: colors.primary + "18" }]}>
-                    <Feather name="camera" size={36} color={colors.primary} />
+                  <View style={[styles.permissionIconWrap, { backgroundColor: C.primary + "18" }]}>
+                    <Feather name="camera" size={36} color={C.primary} />
                   </View>
-                  <Text style={[styles.permissionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                  <Text style={[styles.permissionTitle, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>
                     Camera Access Needed
                   </Text>
-                  <Text style={[styles.permissionText, { color: colors.textSecondary, fontFamily: "Inter_400Regular" }]}>
+                  <Text style={[styles.permissionText, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
                     Allow PantrySwipe to use your camera so you can scan barcodes to instantly add food items to your pantry.
                   </Text>
                   {cameraPermission.canAskAgain ? (
-                    <TouchableOpacity style={[styles.permissionBtn, { backgroundColor: colors.primary }]} onPress={requestCameraPermission}>
+                    <TouchableOpacity style={[styles.permissionBtn, { backgroundColor: C.primary }]} onPress={requestCameraPermission}>
                       <Feather name="camera" size={18} color="#fff" />
-                      <Text style={[styles.permissionBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>Allow Camera</Text>
+                      <Text style={[styles.permissionBtnText, { color: "#fff", fontFamily: "Epilogue_700Bold" }]}>Allow Camera</Text>
                     </TouchableOpacity>
                   ) : (
                     <>
-                      <Text style={[styles.permissionDenied, { color: "#EF4444", fontFamily: "Inter_500Medium" }]}>
+                      <Text style={[styles.permissionDenied, { color: "#EF4444", fontFamily: "Epilogue_400Regular" }]}>
                         Camera permission was denied. Open Settings to enable it.
                       </Text>
-                      <TouchableOpacity style={[styles.permissionBtn, { backgroundColor: colors.primary }]} onPress={() => { try { Linking.openSettings(); } catch {} }}>
+                      <TouchableOpacity style={[styles.permissionBtn, { backgroundColor: C.primary }]} onPress={() => { try { Linking.openSettings(); } catch {} }}>
                         <Feather name="settings" size={18} color="#fff" />
-                        <Text style={[styles.permissionBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>Open Settings</Text>
+                        <Text style={[styles.permissionBtnText, { color: "#fff", fontFamily: "Epilogue_700Bold" }]}>Open Settings</Text>
                       </TouchableOpacity>
                     </>
                   )}
@@ -1350,38 +1369,38 @@ export default function PantryScreen() {
       <Modal visible={showAddChoiceModal} animationType="slide" transparent onRequestClose={() => setShowAddChoiceModal(false)}>
         <View style={styles.sheetOverlay}>
           <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowAddChoiceModal(false)} activeOpacity={1} />
-          <View style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: 48, paddingHorizontal: 20, gap: 12 }]}>
-            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", paddingBottom: 8 }]}>Add to Pantry</Text>
+          <View style={[styles.sheet, { backgroundColor: C.background, paddingBottom: 48, paddingHorizontal: 20, gap: 12 }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: C.surfaceHigh }]} />
+            <Text style={[styles.sheetTitle, { color: C.textPrimary, fontFamily: "Epilogue_700Bold", paddingBottom: 8 }]}>Add to Pantry</Text>
 
             <TouchableOpacity
-              style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 16, backgroundColor: C.surface, borderWidth: 1, borderColor: C.surfaceHigh }}
               onPress={() => { setShowAddChoiceModal(false); setShowReceiptModal(true); }}
               activeOpacity={0.8}
             >
-              <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }}>
-                <Feather name="camera" size={22} color={colors.primary} />
+              <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.primary + "22", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="camera" size={22} color={C.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>Scan Receipt</Text>
-                <Text style={{ fontSize: 13, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }}>AI reads your grocery receipt automatically</Text>
+                <Text style={{ fontSize: 16, fontFamily: "Epilogue_700Bold", color: C.textPrimary }}>Scan Receipt</Text>
+                <Text style={{ fontSize: 13, color: C.textMuted, fontFamily: "Epilogue_400Regular", marginTop: 2 }}>AI reads your grocery receipt automatically</Text>
               </View>
-              <Feather name="chevron-right" size={18} color={colors.textMuted} />
+              <Feather name="chevron-right" size={18} color={C.textMuted} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 16, backgroundColor: C.surface, borderWidth: 1, borderColor: C.surfaceHigh }}
               onPress={() => { setShowAddChoiceModal(false); setShowAddModal(true); }}
               activeOpacity={0.8}
             >
-              <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: colors.saveBlue + "22", alignItems: "center", justifyContent: "center" }}>
-                <Feather name="edit-2" size={20} color={colors.saveBlue} />
+              <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.saveBlue + "22", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="edit-2" size={20} color={C.saveBlue} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>Add Manually</Text>
-                <Text style={{ fontSize: 13, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }}>Type in item name, quantity and category</Text>
+                <Text style={{ fontSize: 16, fontFamily: "Epilogue_700Bold", color: C.textPrimary }}>Add Manually</Text>
+                <Text style={{ fontSize: 13, color: C.textMuted, fontFamily: "Epilogue_400Regular", marginTop: 2 }}>Type in item name, quantity and category</Text>
               </View>
-              <Feather name="chevron-right" size={18} color={colors.textMuted} />
+              <Feather name="chevron-right" size={18} color={C.textMuted} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1419,25 +1438,25 @@ export default function PantryScreen() {
         }}
       >
         <View style={styles.sheetOverlay}>
-          <View style={[styles.sheet, { backgroundColor: colors.background, paddingHorizontal: 20, paddingBottom: 36, maxHeight: "85%" }]}>
-            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+          <View style={[styles.sheet, { backgroundColor: C.background, paddingHorizontal: 20, paddingBottom: 36, maxHeight: "85%" }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: C.surfaceHigh }]} />
 
             {/* Header row */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 4 }}>
               <View>
-                <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 22 }]}>
+                <Text style={[styles.sheetTitle, { color: C.textPrimary, fontFamily: "Epilogue_700Bold", fontSize: 22 }]}>
                   Shopping List 🛒
                 </Text>
-                <Text style={{ fontSize: 13, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }}>
+                <Text style={{ fontSize: 13, color: C.textMuted, fontFamily: "Epilogue_400Regular", marginTop: 2 }}>
                   {needRestockItems.filter((i) => !checkedItems.has(i.id)).length} item{needRestockItems.filter((i) => !checkedItems.has(i.id)).length !== 1 ? "s" : ""} left to grab
                 </Text>
               </View>
               {checkedItems.size > 0 && (
                 <TouchableOpacity
-                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, backgroundColor: colors.muted }}
+                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, backgroundColor: C.surfaceLow }}
                   onPress={() => { setCheckedItems(new Set()); setShowUncheckedWarning(false); }}
                 >
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.textSecondary }}>Uncheck all</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Epilogue_400Regular", color: C.textMuted }}>Uncheck all</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1458,7 +1477,7 @@ export default function PantryScreen() {
               )}
             </View>
 
-            <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 14 }} />
+            <View style={{ height: 1, backgroundColor: C.surfaceHigh, marginBottom: 14 }} />
 
             {/* Unchecked warning */}
             {showUncheckedWarning && (
@@ -1503,7 +1522,7 @@ export default function PantryScreen() {
                   >
                     {/* Left accent bar + row */}
                     <View style={{ flexDirection: "row", borderRadius: 16, overflow: "hidden", opacity: isChecked ? 0.55 : 1 }}>
-                      <View style={{ width: 4, backgroundColor: isChecked ? colors.border : accentColor }} />
+                      <View style={{ width: 4, backgroundColor: isChecked ? C.surfaceHigh : accentColor }} />
                       <TouchableOpacity
                         activeOpacity={0.7}
                         onPress={() => {
@@ -1519,26 +1538,26 @@ export default function PantryScreen() {
                         style={[
                           styles.shoppingRowInner,
                           {
-                            backgroundColor: isChecked ? colors.muted : colors.card,
-                            borderColor: colors.border,
+                            backgroundColor: isChecked ? C.surfaceLow : C.surface,
+                            borderColor: C.surfaceHigh,
                           },
                         ]}
                       >
-                        <View style={[styles.shoppingCheckbox, { backgroundColor: isChecked ? colors.secondary : "transparent", borderColor: isChecked ? colors.secondary : colors.border }]}>
+                        <View style={[styles.shoppingCheckbox, { backgroundColor: isChecked ? C.secondary : "transparent", borderColor: isChecked ? C.secondary : C.surfaceHigh }]}>
                           {isChecked && <Feather name="check" size={12} color="#fff" />}
                         </View>
                         <Text style={{ fontSize: 22, marginRight: 4 }}>{item.emoji}</Text>
                         <View style={{ flex: 1 }}>
-                          <Text style={[{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.foreground }, isChecked && { textDecorationLine: "line-through", color: colors.textMuted }]}>
+                          <Text style={[{ fontSize: 15, fontFamily: "Epilogue_700Bold", color: C.textPrimary }, isChecked && { textDecorationLine: "line-through", color: C.textMuted }]}>
                             {item.name}
                           </Text>
-                          <Text style={{ fontSize: 12, marginTop: 2, color: colors.textMuted, fontFamily: "Inter_400Regular" }}>
+                          <Text style={{ fontSize: 12, marginTop: 2, color: C.textMuted, fontFamily: "Epilogue_400Regular" }}>
                             {isRanOut ? "Out of stock" : `${item.quantity} ${item.unit} left`} · {item.category}
                           </Text>
                         </View>
                         {!isChecked && (
                           <View style={{ paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, backgroundColor: isRanOut ? "#FEF2F2" : "#FFFBEB", borderWidth: 1, borderColor: isRanOut ? "#FECACA" : "#FDE68A" }}>
-                            <Text style={{ fontSize: 11, color: isRanOut ? "#DC2626" : "#B45309", fontFamily: "Inter_700Bold" }}>
+                            <Text style={{ fontSize: 11, color: isRanOut ? "#DC2626" : "#B45309", fontFamily: "Epilogue_700Bold" }}>
                               {isRanOut ? "Out" : "Low"}
                             </Text>
                           </View>
@@ -1552,7 +1571,7 @@ export default function PantryScreen() {
 
             {/* Done button */}
             <TouchableOpacity
-              style={{ paddingVertical: 16, borderRadius: 14, alignItems: "center", backgroundColor: colors.primary, marginTop: 16 }}
+              style={{ paddingVertical: 16, borderRadius: 14, alignItems: "center", backgroundColor: C.primary, marginTop: 16 }}
               onPress={() => {
                 const uncheckedCount = needRestockItems.filter((i) => !checkedItems.has(i.id)).length;
                 if (checkedItems.size > 0 && uncheckedCount > 0) {
@@ -1565,7 +1584,7 @@ export default function PantryScreen() {
                 }
               }}
             >
-              <Text style={{ fontSize: 16, color: "#fff", fontFamily: "Inter_700Bold" }}>
+              <Text style={{ fontSize: 16, color: "#fff", fontFamily: "Epilogue_700Bold" }}>
                 {checkedItems.size > 0 ? `Done — ${checkedItems.size} item${checkedItems.size !== 1 ? "s" : ""} grabbed ✓` : "Done"}
               </Text>
             </TouchableOpacity>
