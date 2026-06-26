@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Korean Cuisine Detail - Social</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;600;700;800&amp;family=Work+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary": "#ffffff",
+                    "tertiary-fixed": "#d9e2ff",
+                    "tertiary-container": "#95b5ff",
+                    "primary-fixed": "#ffddb4",
+                    "tertiary-fixed-dim": "#afc6ff",
+                    "on-tertiary-container": "#00439a",
+                    "inverse-surface": "#372f26",
+                    "surface-container": "#faebdd",
+                    "background": "#fff8f4",
+                    "surface-bright": "#fff8f4",
+                    "inverse-on-surface": "#fdeee0",
+                    "surface-container-high": "#f4e6d8",
+                    "outline-variant": "#d7c3ae",
+                    "primary-fixed-dim": "#ffb955",
+                    "surface-dim": "#e6d8ca",
+                    "surface-tint": "#835500",
+                    "error": "#ba1a1a",
+                    "surface": "#fff8f4",
+                    "secondary-fixed": "#94f7b8",
+                    "on-secondary-container": "#007242",
+                    "secondary-container": "#91f4b5",
+                    "tertiary": "#1a5abe",
+                    "secondary-fixed-dim": "#78da9d",
+                    "primary-container": "#f5a623",
+                    "on-tertiary-fixed": "#001944",
+                    "on-primary": "#ffffff",
+                    "inverse-primary": "#ffb955",
+                    "on-primary-fixed-variant": "#633f00",
+                    "on-primary-container": "#644000",
+                    "surface-variant": "#eee0d2",
+                    "on-tertiary-fixed-variant": "#004299",
+                    "on-surface-variant": "#524534",
+                    "on-surface": "#211a12",
+                    "on-secondary": "#ffffff",
+                    "outline": "#857462",
+                    "on-secondary-fixed-variant": "#00522e",
+                    "on-background": "#211a12",
+                    "on-error-container": "#93000a",
+                    "secondary": "#006d3f",
+                    "surface-container-lowest": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "primary": "#835500",
+                    "on-primary-fixed": "#291800",
+                    "surface-container-low": "#fff1e4",
+                    "on-secondary-fixed": "#00210f",
+                    "on-error": "#ffffff",
+                    "surface-container-highest": "#eee0d2"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "md": "16px",
+                    "xxl": "48px",
+                    "unit": "4px",
+                    "sm": "8px",
+                    "xs": "4px",
+                    "xl": "32px",
+                    "lg": "24px",
+                    "safe-area-inset": "20px"
+            },
+            "fontFamily": {
+                    "display-lg": ["Epilogue"],
+                    "body-lg": ["Work Sans"],
+                    "label-sm": ["Work Sans"],
+                    "headline-md": ["Epilogue"],
+                    "headline-lg": ["Epilogue"],
+                    "headline-lg-mobile": ["Epilogue"],
+                    "body-md": ["Work Sans"],
+                    "label-md": ["Work Sans"]
+            },
+            "fontSize": {
+                    "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                    "headline-md": ["24px", {"lineHeight": "30px", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "34px", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .active-pill {
+            background-color: #f5a623;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(245, 166, 35, 0.3);
+        }
+        .editorial-shadow {
+            box-shadow: 0 8px 24px rgba(131, 85, 0, 0.08);
+        }
+        .glass-nav {
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .recipe-gradient {
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 60%);
+        }
+        body {
+            overscroll-behavior-y: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-md selection:bg-primary-container selection:text-on-primary-container">
+<!-- Top AppBar (Internal Navigation State: Hidden Shared Component logic, but using for header consistency) -->
+<header class="fixed top-0 left-0 w-full z-50 bg-background/80 glass-nav flex flex-col pt-safe px-lg transition-all">
+<div class="flex items-center justify-between h-16">
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-high text-primary hover:opacity-80 transition-opacity active:scale-95" onclick="window.history.back()">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="font-display-lg text-headline-lg-mobile font-extrabold text-on-surface dark:text-surface">Korean</h1>
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-high text-primary hover:opacity-80 transition-opacity active:scale-95">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">favorite</span>
+</button>
+</div>
+</header>
+<main class="pt-24 pb-32">
+<!-- Hero Section -->
+<section class="px-lg mb-xl">
+<div class="relative h-[280px] w-full rounded-xl overflow-hidden editorial-shadow group">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="A lush, high-resolution close-up of traditional Korean bibimbap served in a steaming black stone dolsot bowl. The dish features vibrant colors from julienned carrots, sautéed spinach, bean sprouts, and a perfectly fried sunny-side-up egg in the center. The lighting is warm and cinematic, emphasizing the steam and textures of the seasoned beef and gochujang sauce in a modern, professional food photography style." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAFV1iTsCp5HzuQ5Rn0FJT2qHoKPVIJ4uCQD9v_fo9MyAzksp0YXJAlsHoZdwguPp-JDOzGL64cATld5X662VttpvYoNSVuSEk2m80v2wLBz6Rvv2SDvbWxnt4SEfU_GxpRibbNbUQSilylZtcRF9EuwDo7RrH70yQ7HkjUHW--G3GvOR2NqJTfoXlOfdOF-iFGbIp4ujgnChB3pIsGuFeTvgeYcl0z9WOlAjNcn3GHPGtSzOflr-gkRTblzU4gP48i7bXEtVL1dV8')">
+</div>
+<div class="absolute inset-0 recipe-gradient flex flex-col justify-end p-lg">
+<div class="flex items-center gap-sm mb-xs">
+<span class="bg-primary-container text-on-primary-container px-3 py-1 rounded-full font-label-md text-label-md">Trending Cuisine</span>
+<span class="flex items-center gap-1 text-white font-label-md text-label-md">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+                            4.5k cooks today
+                        </span>
+</div>
+<h2 class="font-display-lg text-headline-lg text-white mb-xs">Korean Culinary Heritage</h2>
+<p class="text-white/80 font-body-md line-clamp-2 max-w-[80%]">
+                        Experience the bold, fermented flavors of the peninsula. From spicy jjigaes to the art of the perfect bowl.
+                    </p>
+</div>
+</div>
+</section>
+<!-- Filters/Category Pills -->
+<section class="px-lg mb-lg">
+<div class="flex overflow-x-auto pb-sm gap-sm no-scrollbar">
+<button class="active-pill whitespace-nowrap px-lg py-2 rounded-full font-label-md transition-all">All Recipes</button>
+<button class="bg-surface-container-high text-on-surface-variant whitespace-nowrap px-lg py-2 rounded-full font-label-md hover:opacity-80 transition-all">Classic Bibimbap</button>
+<button class="bg-surface-container-high text-on-surface-variant whitespace-nowrap px-lg py-2 rounded-full font-label-md hover:opacity-80 transition-all">Spicy Jjigae</button>
+<button class="bg-surface-container-high text-on-surface-variant whitespace-nowrap px-lg py-2 rounded-full font-label-md hover:opacity-80 transition-all">Street Food</button>
+<button class="bg-surface-container-high text-on-surface-variant whitespace-nowrap px-lg py-2 rounded-full font-label-md hover:opacity-80 transition-all">Banchan</button>
+</div>
+</section>
+<!-- Recipes Masonry/Grid -->
+<section class="px-lg">
+<div class="grid grid-cols-2 gap-md">
+<!-- Recipe Card 1 -->
+<div class="flex flex-col gap-sm group">
+<div class="relative aspect-[3/4] rounded-xl overflow-hidden editorial-shadow">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="Close-up of Kimchi Jjigae in a traditional clay pot, with bubbling red spicy broth, cubes of soft tofu, and fatty pork belly. The steam is visible, and the scene is lit by soft window light, giving it a cozy, authentic kitchen feeling with high-end editorial aesthetics." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQ0VA1596TkJeAiY-5_kVuCGV6p9zQILr7u9MzHcEYwJmDXgzwtw6s3hTB00lUwzDuD7MBiENoZPp7f87XBU7k6IFhIrPZ90UsRmk8NiS7uD6kD3IfVgYVbvs0fY-Omuo4WqLCJh7jNM_I7jxPQewwZDEQFe_VhBdGyGTbLSmwORAjkIDHZf8Cj3zz4kARBVpOxEWG8DyrVdiAi_S8gO-ITMK0vLVBouA1X7DmcheXPrHRC-YL0wSHJJzQYAq5UEZHO6ljrRyg-RM"/>
+<div class="absolute top-sm right-sm w-8 h-8 rounded-full bg-white/20 glass-nav flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-lg">bookmark</span>
+</div>
+</div>
+<div>
+<h3 class="font-headline-md text-on-surface line-clamp-1">Classic Kimchi Jjigae</h3>
+<div class="flex items-center justify-between mt-xs">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-md text-on-surface">4.9</span>
+<span class="text-on-surface-variant text-label-sm">(1.2k)</span>
+</div>
+<span class="text-on-surface-variant text-label-sm">35m</span>
+</div>
+</div>
+</div>
+<!-- Recipe Card 2 -->
+<div class="flex flex-col gap-sm group mt-lg">
+<div class="relative aspect-[3/4] rounded-xl overflow-hidden editorial-shadow">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A beautiful overhead shot of a Korean Bulgogi beef bowl. Thinly sliced marinated ribeye is charred and glistening, served over white rice with fresh scallions and sesame seeds. The layout is clean and minimalist, set against a dark textured stone background typical of luxury lifestyle cookbooks." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3QEQBWf4AAx4Zz6OSkB0Tfy5nc7Xs_Hu6bQwYMbJJwDZ0GcxEtnORj-n6ffzVN56gzssEDZQi7iEq5YRe6mgfRUUet7C_-RACmhjU8NC0yORGwTxG7bfCWlvgmXnTUwtOCEo6wqErFV-c9aj56QfHzf0e3tt4YO-oHvr2eeXyEChONlQ4AJJvRUe-lLARBiVY6QRPqg0_OcD7i_liOyzez6mW07NsAi56EdRVWPcgh2_ZdiJTpyB7JRfQ0cMhdNccew94VomLLWk"/>
+<div class="absolute top-sm right-sm w-8 h-8 rounded-full bg-white/20 glass-nav flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-lg">bookmark</span>
+</div>
+</div>
+<div>
+<h3 class="font-headline-md text-on-surface line-clamp-1">Marinated Bulgogi</h3>
+<div class="flex items-center justify-between mt-xs">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-md text-on-surface">4.8</span>
+<span class="text-on-surface-variant text-label-sm">(843)</span>
+</div>
+<span class="text-on-surface-variant text-label-sm">25m</span>
+</div>
+</div>
+</div>
+<!-- Recipe Card 3 -->
+<div class="flex flex-col gap-sm group">
+<div class="relative aspect-[3/4] rounded-xl overflow-hidden editorial-shadow">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="Gochujang Honey Chicken Wings stacked elegantly on a ceramic plate. The wings are coated in a vibrant, glossy red sauce and sprinkled with crushed peanuts and cilantro. High-key lighting makes the glaze pop, capturing a modern gastropub vibe with a clean, light-mode background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRagG_ckmiHY5z3SgEpV0U2ygJiUgzDO3h1TDZLDcIKi2FLEMsoalZN_tBaGyW9qnzZjWL-D0AMEF6vciIlqaOjbRKTUouhdX7Z9yS94Y5ofGQ_SSH50j7hAS-iVEdlKL7HQT5GsMj_9Wlpd7RcgAUPZX1jB_1pJmkybHEQRy7xfs2J6_mN7_xQT5jQDf18dcLrKtsi7J3GnK8nySCvAZW8djW9pOwQo5lluL1u6EzYQk4He-KY2FjkkqPkPv9YWrJRXgJSiUOw98"/>
+<div class="absolute top-sm right-sm w-8 h-8 rounded-full bg-white/20 glass-nav flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-lg">bookmark</span>
+</div>
+</div>
+<div>
+<h3 class="font-headline-md text-on-surface line-clamp-1">Korean Fried Wings</h3>
+<div class="flex items-center justify-between mt-xs">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-md text-on-surface">5.0</span>
+<span class="text-on-surface-variant text-label-sm">(2.1k)</span>
+</div>
+<span class="text-on-surface-variant text-label-sm">45m</span>
+</div>
+</div>
+</div>
+<!-- Recipe Card 4 -->
+<div class="flex flex-col gap-sm group mt-lg">
+<div class="relative aspect-[3/4] rounded-xl overflow-hidden editorial-shadow">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A refined presentation of Japchae, Korean sweet potato glass noodles stir-fried with colorful vegetables like bell peppers, shiitake mushrooms, and spinach. The noodles are translucent and shiny, arranged in a swirl. The photo uses a shallow depth of field to focus on the intricate textures, emphasizing a gourmet culinary experience." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDId9GStrcwnpNcegr8P-RnPD6JKfBnDs23nG55tjw4Nwf_4yv1fFdU4GkYqsdFcN-z8z92MBTKipTTkw2AF7JraXWQvV9mjMDuIB4JbpuG-rr3Yu5l3diuOpYW7sg2n1MoVeKEWPG9oWoAvVpc8s26pkPPxwNaInxyq0CD_988zk0OmFqTb34Shg4IuwvGX3sV9hR72pAusoVD8MBIfCdCf-F5Nos9RudjsgyglJ0lE-pO8ChgSnygsOd3KtscTg08P-WJzLbyh7Q"/>
+<div class="absolute top-sm right-sm w-8 h-8 rounded-full bg-white/20 glass-nav flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-lg">bookmark</span>
+</div>
+</div>
+<div>
+<h3 class="font-headline-md text-on-surface line-clamp-1">Vegetable Japchae</h3>
+<div class="flex items-center justify-between mt-xs">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-md text-on-surface">4.7</span>
+<span class="text-on-surface-variant text-label-sm">(512)</span>
+</div>
+<span class="text-on-surface-variant text-label-sm">30m</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Community Section -->
+<section class="mt-xxl px-lg">
+<h2 class="font-headline-lg mb-lg">Community Chefs</h2>
+<div class="flex gap-lg overflow-x-auto pb-lg no-scrollbar">
+<div class="flex-shrink-0 flex flex-col items-center gap-xs">
+<div class="w-20 h-20 rounded-full border-4 border-primary p-1">
+<img class="w-full h-full rounded-full object-cover" data-alt="Portrait of a friendly Korean chef in a modern minimalist kitchen, wearing a clean white apron. The lighting is soft and natural, emphasizing a professional yet approachable persona. High-quality editorial portrait style with a blurred background of kitchen herbs." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBD_Q4iuZoy2avvVaDveLgBqh2NwNcWNQExXvcXlXiFHjQm3MY8BBWbnTm3mQuu7iqK0BAzkLuSyFSdbWvw6HbkMh5joERwTaCrrLzz08lHDx2h1QQ_ZEqhTX2UhfvHZj-0S3-ioPT44LidMFR31PcstzJvLu2QBnGJTls_BG_6E3rTHb__kTGT40Bi4b_4ndr_k7FNxbnNDEol5uT3qvB4ZkjtFAoHfksTtvHobixjwGh3EpKwaz8SIIaC1o8cIbDIUkgUPq_QNnI"/>
+</div>
+<span class="font-label-md text-on-surface">Jin-Soo</span>
+</div>
+<div class="flex-shrink-0 flex flex-col items-center gap-xs">
+<div class="w-20 h-20 rounded-full border-4 border-outline-variant p-1">
+<img class="w-full h-full rounded-full object-cover" data-alt="Close up portrait of a young food blogger with glasses, smiling in a bright sunlit kitchen. The aesthetic is airy, light-mode, and very modern. The style reflects a lifestyle publication photography with soft focus and warm skin tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB8CWVhB2VYihnGaeitsFFadoztLCCKLr-2ju3z939Q1zpV9te9AMPkSQEgUIWM_FzzWwFVGVJ1YvRWqV8esXqk3U34t3UoNjHjqxUHW5NoJUeuhIsVm81og5R_GtyooRUvwPD2AydDekuPVZcGh7UCLo8AnmFHLNhRkmK2eRCp0jwJWHEG1XMvyHIZ0a4PbYlZKwfVsykfZU9X5kniAeXEjWvr6mF4visDaSU7lh-Vkjf2pawIPY2S-8vj7p-hxqI5K7kfky_9o9Y"/>
+</div>
+<span class="font-label-md text-on-surface">Somi Park</span>
+</div>
+<div class="flex-shrink-0 flex flex-col items-center gap-xs">
+<div class="w-20 h-20 rounded-full border-4 border-outline-variant p-1">
+<img class="w-full h-full rounded-full object-cover" data-alt="A portrait of an older woman, a traditional Korean mother figure, smiling warmly in a kitchen filled with jars of fermentation. The lighting is warm and golden, evoking a sense of home and generational wisdom. Fine art editorial style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA403UrBunKEzT-UY2RaROAc5Xn-WQjdkrokSGNDr3E--g6xxtj2G714DizaOYUtqyolzwGuAH-SVBMVXlRKFyD-zE6mgziJJZS9aYzE9UZi8_p_65CiWNeP53fim4Y3z5SJwhiQBS8dwNApQwGiUB2-PsysazQcw_AKJ_7Ke4QaXxHUM4o0FEOiRFKK4lRNvVAc4Odtth3NbnQ8K7MChUkBRREgEZwyy6lWReVJA4tRkB6EE0kcdx8kmTalV6sCjCfJE61eQvOWGU"/>
+</div>
+<span class="font-label-md text-on-surface">Umma's</span>
+</div>
+<div class="flex-shrink-0 flex flex-col items-center gap-xs">
+<div class="w-20 h-20 rounded-full border-4 border-outline-variant p-1">
+<img class="w-full h-full rounded-full object-cover" data-alt="Portrait of a modern fusion chef with a stylish haircut and a black chef's tunic. The background is a moody, high-end restaurant kitchen with copper pans. Cinematic lighting and sharp focus on the face." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAdDvmAddGybO_kjasdzEthBC3zHBwNfNhzU98vKOjIvRvoWxMtYf-1A_q88sGbTVBRXWaM4tCGxfAAV5gUXQ1RACs2YUmMLd7pngmizv842-Da0_vgr7EIx9wBpQlnrA4pmDQD3bKV91mr85TkChKfZFBSBR7jouVbs58xdwFcwPrk7ZkgO2meEVO-xN2i1OSb80GmjwgkDA0xCl-t-Wn_9nCefdbUF93yLrP1gtUpCFlkbkgtxmeWR0So0cWVBFM_bm6Uuz5y-oo"/>
+</div>
+<span class="font-label-md text-on-surface">Chef Leo</span>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar (Shared Component Implementation) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-md pb-safe h-20 bg-background/80 glass-nav shadow-lg rounded-t-xl border-t border-outline-variant/20">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-label-sm text-label-sm">Discover</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">local_mall</span>
+<span class="font-label-sm text-label-sm">Pantry</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="font-label-sm text-label-sm">Planner</span>
+</a>
+<!-- Active Tab: Social (Based on current context) -->
+<a class="flex flex-col items-center justify-center text-primary-container translate-y-0.5 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">favorite</span>
+<span class="font-label-sm text-label-sm">Social</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-sm text-label-sm">Profile</span>
+</a>
+</nav>
+<script>
+        // Micro-interaction for back button and recipe cards
+        document.addEventListener('DOMContentLoaded', () => {
+            const cards = document.querySelectorAll('.group');
+            cards.forEach(card => {
+                card.addEventListener('mousedown', () => {
+                    card.style.transform = 'scale(0.98)';
+                    card.style.transition = 'transform 0.1s ease-out';
+                });
+                card.addEventListener('mouseup', () => {
+                    card.style.transform = 'scale(1)';
+                });
+            });
+
+            // Navigation blur effect on scroll
+            const header = document.querySelector('header');
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 20) {
+                    header.classList.add('shadow-md');
+                } else {
+                    header.classList.remove('shadow-md');
+                }
+            });
+        });
+    </script>
+</body></html>
