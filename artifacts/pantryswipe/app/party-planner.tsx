@@ -737,6 +737,8 @@ export default function PartyPlannerScreen() {
             snapToInterval={WHEEL_ITEM_H}
             decelerationRate="fast"
             showsVerticalScrollIndicator={false}
+            scrollEventThrottle={WHEEL_ITEM_H}
+            onScroll={handleTimeScroll}
             onMomentumScrollEnd={handleTimeScroll}
             onScrollEndDrag={handleTimeScroll}
             contentContainerStyle={{ paddingVertical: WHEEL_ITEM_H * 2 }}
@@ -1128,16 +1130,6 @@ export default function PartyPlannerScreen() {
 
     return (
       <View>
-        {/* Back row */}
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={s.planBackRow}
-          onPress={() => { setAppState("wizard"); setWizardStep(1); }}
-        >
-          <Feather name="arrow-left" size={15} color={C.textMuted} />
-          <Text style={s.planBackText}>Edit preferences</Text>
-        </TouchableOpacity>
-
         {/* Party badge */}
         <View style={s.partyBadge}>
           <Feather name="star" size={14} color={C.primary} />
