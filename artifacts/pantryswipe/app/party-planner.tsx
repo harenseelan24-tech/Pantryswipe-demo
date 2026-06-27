@@ -48,7 +48,10 @@ const cardShadow = Platform.select({
 }) as object;
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CARD_WIDTH = (SCREEN_WIDTH - 16 * 3) / 2;
+const CARD_WIDTH    = (SCREEN_WIDTH - 16 * 3) / 2;
+const WHEEL_ITEM_H  = 56;
+const WHEEL_VISIBLE = 5;
+const WHEEL_H       = WHEEL_ITEM_H * WHEEL_VISIBLE;
 
 // ── API base ───────────────────────────────────────────────────────────────
 const API_BASE =
@@ -216,7 +219,8 @@ export default function PartyPlannerScreen() {
   const insets   = useSafeAreaInsets();
   const router   = useRouter();
   const { width } = useWindowDimensions();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef     = useRef<ScrollView>(null);
+  const timeWheelRef  = useRef<ScrollView>(null);
 
   // ── Wizard state ──────────────────────────────────────────────────────────
   const [appState,   setAppState]   = useState<AppState>("wizard");
@@ -258,6 +262,29 @@ export default function PartyPlannerScreen() {
       countScale.value = withSpring(1.0);
     });
   }, [form.guestCount]);
+
+  // Scroll wheel: jump to saved time when step 6 becomes active
+  useEffect(() => {
+    if (wizardStep === 6) {
+      const idx = TIME_SLOTS.findIndex((sl) => sl.value === form.arrivalTime);
+      const target = (idx >= 0 ? idx : 0) * WHEEL_ITEM_H;
+      setTimeout(() => {
+        timeWheelRef.current?.scrollTo({ y: target, animated: false });
+      }, 150);
+    }
+  }, [wizardStep]);
+
+  function handleTimeScroll(e: { nativeEvent: { contentOffset: { y: number } } }) {
+    const y   = e.nativeEvent.contentOffset.y;
+    const idx = Math.round(y / WHEEL_ITEM_H);
+    const clamped = Math.max(0, Math.min(idx, TIME_SLOTS.length - 1));
+    const slot = TIME_SLOTS[clamped];
+    if (slot && slot.value !== form.arrivalTime) {
+      setForm((f) => ({ ...f, arrivalTime: slot.value }));
+      setStepError("");
+      Haptics.selectionAsync();
+    }
+  }
 
   // ── Validation ────────────────────────────────────────────────────────────
   function validateStep(): boolean {
@@ -460,18 +487,24 @@ export default function PartyPlannerScreen() {
 
   // ── Step 2: Guest count ────────────────────────────────────────────────────
   function renderStep2() {
+    const cat = form.guestCount <= 5  ? { emoji: "🕯️", label: "Intimate",        accent: C.saveBlue  }
+              : form.guestCount <= 15 ? { emoji: "🎈", label: "Small Gathering",  accent: C.secondary }
+              : form.guestCount <= 30 ? { emoji: "🎉", label: "Medium Party",     accent: C.primary   }
+              :                         { emoji: "🎊", label: "Large Celebration", accent: C.danger    };
     return (
       <View>
         {renderStepLabel("Who's coming?")}
 
-        {/* Hero */}
-        <LinearGradient
-          colors={[C.surfaceHigh, C.surfaceLow]}
-          style={[s.heroPlaceholder, { height: 200, marginBottom: 32 }]}
-        >
-          <Feather name="users" size={48} color={C.primary} />
-          <Text style={s.heroPlaceholderText}>Guest count</Text>
-        </LinearGradient>
+        {/* Dynamic size-category card */}
+        <View style={[s.guestCatCard, { borderColor: cat.accent + "40", backgroundColor: cat.accent + "12" }]}>
+          <Text style={{ fontSize: 52 }}>{cat.emoji}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.guestCatLabel, { color: cat.accent }]}>{cat.label}</Text>
+            <Text style={s.guestCatSub}>
+              {form.guestCount} {form.guestCount === 1 ? "person" : "people"}
+            </Text>
+          </View>
+        </View>
 
         {/* Stepper */}
         <View style={s.counterRow}>
@@ -543,17 +576,15 @@ export default function PartyPlannerScreen() {
       <View>
         {renderStepLabel("What's your budget?")}
 
-        {/* Hero with guest chip */}
-        <View style={s.budgetHero}>
-          <LinearGradient colors={[C.surfaceHigh, C.surfaceLow]} style={StyleSheet.absoluteFillObject} />
-          <View style={s.budgetHeroChip}>
-            <Text style={s.budgetHeroChipText}>Planning for {form.guestCount} Guests</Text>
-          </View>
+        {/* Guest context chip */}
+        <View style={s.budgetGuestChip}>
+          <Feather name="users" size={14} color={C.primary} />
+          <Text style={s.budgetGuestChipText}>Planning for {form.guestCount} guests</Text>
         </View>
 
         {/* Input card with focus animation */}
         <Reanimated.View style={[s.budgetCard, budgetFocused && s.budgetCardFocused, cardShadow, inputAnimStyle]}>
-          <Text style={s.budgetInputLabel}>ENTER AMOUNT</Text>
+          <Text style={s.budgetInputLabel}>TOTAL BUDGET (SGD)</Text>
           <View style={s.budgetAmountRow}>
             <Text style={s.budgetCurrencyPrefix}>$</Text>
             <TextInput
@@ -574,15 +605,16 @@ export default function PartyPlannerScreen() {
           </View>
         </Reanimated.View>
 
-        {/* Preset chips */}
-        <View style={s.presetRow}>
+        {/* 2×2 preset grid */}
+        <View style={s.presetGrid}>
           {BUDGET_PRESETS.map((amt) => {
             const active = form.budget === amt;
+            const perG   = form.guestCount > 0 ? `~$${(amt / form.guestCount).toFixed(0)}/guest` : "";
             return (
               <TouchableOpacity
                 key={amt}
                 activeOpacity={0.75}
-                style={[s.presetChip, active ? s.presetChipActive : s.presetChipInactive]}
+                style={[s.presetGridCell, active ? s.presetGridCellActive : s.presetGridCellInactive, cardShadow]}
                 onPress={() => {
                   setBudgetText(String(amt));
                   setForm((f) => ({ ...f, budget: amt }));
@@ -590,7 +622,8 @@ export default function PartyPlannerScreen() {
                   Haptics.selectionAsync();
                 }}
               >
-                <Text style={[s.presetChipText, active && s.presetChipTextActive]}>${amt}</Text>
+                <Text style={[s.presetGridAmt, active && s.presetGridAmtActive]}>${amt}</Text>
+                <Text style={[s.presetGridPer, active && s.presetGridPerActive]}>{perG}</Text>
               </TouchableOpacity>
             );
           })}
@@ -681,29 +714,60 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // ── Step 6: Arrival time ───────────────────────────────────────────────────
+  // ── Step 6: Arrival time — drum-roll scroll wheel ─────────────────────────
   function renderStep6() {
+    const selectedLabel = TIME_SLOTS.find((sl) => sl.value === form.arrivalTime)?.label ?? "";
     return (
       <View>
         {renderStepLabel("When are guests arriving?")}
-        <Text style={s.stepSubHint}>Tap a time — used to build your prep timeline</Text>
-        <View style={s.timeGrid}>
-          {TIME_SLOTS.map((slot) => {
-            const selected = form.arrivalTime === slot.value;
-            return (
-              <TouchableOpacity
-                key={slot.value}
-                activeOpacity={0.75}
-                onPress={() => { setForm((f) => ({ ...f, arrivalTime: slot.value })); setStepError(""); Haptics.selectionAsync(); }}
-                style={[s.timeChip, selected ? s.timeChipActive : s.timeChipInactive]}
-              >
-                <Text style={[s.timeChipText, selected ? s.timeChipTextActive : s.timeChipTextInactive]}>
-                  {slot.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+        <Text style={s.stepSubHint}>Scroll the wheel to pick your arrival time</Text>
+
+        {/* Wheel picker */}
+        <View style={s.wheelOuter}>
+          {/* Amber selection band behind centre item */}
+          <View style={s.wheelHighlight} pointerEvents="none" />
+
+          {/* Top fade-out */}
+          <View style={s.wheelFadeTop} pointerEvents="none">
+            <LinearGradient colors={[C.background, "transparent"]} style={StyleSheet.absoluteFillObject} />
+          </View>
+          {/* Bottom fade-out */}
+          <View style={s.wheelFadeBottom} pointerEvents="none">
+            <LinearGradient colors={["transparent", C.background]} style={StyleSheet.absoluteFillObject} />
+          </View>
+
+          <ScrollView
+            ref={timeWheelRef}
+            style={s.wheelScroll}
+            snapToInterval={WHEEL_ITEM_H}
+            decelerationRate="fast"
+            showsVerticalScrollIndicator={false}
+            onMomentumScrollEnd={handleTimeScroll}
+            onScrollEndDrag={handleTimeScroll}
+            contentContainerStyle={{ paddingVertical: WHEEL_ITEM_H * 2 }}
+          >
+            {TIME_SLOTS.map((slot) => {
+              const sel = form.arrivalTime === slot.value;
+              return (
+                <View key={slot.value} style={s.wheelItem}>
+                  <Text style={[s.wheelItemText, sel && s.wheelItemSelected]}>
+                    {slot.label}
+                  </Text>
+                </View>
+              );
+            })}
+          </ScrollView>
         </View>
+
+        {/* Confirmation badge */}
+        {selectedLabel ? (
+          <View style={s.wheelSelectedBadge}>
+            <Feather name="clock" size={16} color={C.primary} />
+            <Text style={s.wheelSelectedText}>Guests arrive at {selectedLabel}</Text>
+          </View>
+        ) : (
+          <Text style={s.wheelHint}>Scroll up or down to choose a time</Text>
+        )}
       </View>
     );
   }
@@ -1078,15 +1142,34 @@ export default function PartyPlannerScreen() {
           {statGuests} guests · SGD ${statBudget} budget · {form.servingStyle || "Custom"} style
         </Text>
 
-        {/* Stats bento */}
+        {/* Gradient banner */}
+        <LinearGradient
+          colors={[C.surfaceHigh, C.surfaceLow]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={s.planHeroBanner}
+        >
+          <Text style={{ fontSize: 44 }}>🎊</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.planHeroBannerTitle}>Plan ready!</Text>
+            <Text style={s.planHeroBannerSub}>
+              {statOccasion || "Celebration"} · {statGuests} guests
+            </Text>
+          </View>
+        </LinearGradient>
+
+        {/* Stats bento — each cell gets its own accent colour */}
         <View style={s.statsBento}>
-          {STATS.map((stat) => (
-            <View key={stat.label} style={[s.statCell, cardShadow]}>
-              <Feather name={stat.icon} size={20} color={C.primary} style={{ marginBottom: 8 }} />
-              <Text style={s.statLabel}>{stat.label}</Text>
-              <Text style={s.statValue} numberOfLines={1}>{stat.value}</Text>
-            </View>
-          ))}
+          {STATS.map((stat, idx) => {
+            const STAT_COLORS = ["#5B8EF5", "#4CAF76", "#F5A623", "#EC407A"];
+            const accent = STAT_COLORS[idx] ?? C.primary;
+            return (
+              <View key={stat.label} style={[s.statCell, { backgroundColor: accent + "15", borderWidth: 1.5, borderColor: accent + "35" }, cardShadow]}>
+                <Feather name={stat.icon} size={20} color={accent} style={{ marginBottom: 8 }} />
+                <Text style={s.statLabel}>{stat.label}</Text>
+                <Text style={[s.statValue, { color: accent }]} numberOfLines={1}>{stat.value}</Text>
+              </View>
+            );
+          })}
         </View>
 
         {/* Warning */}
@@ -1292,6 +1375,11 @@ const s = StyleSheet.create({
   occasionLabelActive:  { color: "#141210" },
 
   // ── Guest counter ───────────────────────────────────────────────────────
+  // ── Guest category vibe card ─────────────────────────────────────────────
+  guestCatCard:  { flexDirection: "row", alignItems: "center", gap: 20, padding: 20, borderRadius: 20, borderWidth: 1.5, marginBottom: 28 },
+  guestCatLabel: { fontFamily: "Epilogue_700Bold", fontSize: 18, marginBottom: 2 },
+  guestCatSub:   { fontFamily: "Epilogue_400Regular", fontSize: 14, color: "#7A7570" },
+
   counterRow:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 32, marginBottom: 24 },
   counterCenter:  { alignItems: "center" },
   counterNum:     { fontFamily: "Epilogue_700Bold", fontSize: 56, color: "#F5A623", lineHeight: 64 },
@@ -1313,6 +1401,17 @@ const s = StyleSheet.create({
   capacityNoteText: { flex: 1, fontSize: 13, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
 
   // ── Budget ──────────────────────────────────────────────────────────────
+  budgetGuestChip:     { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", backgroundColor: "rgba(245,166,35,0.12)", borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, marginBottom: 20 },
+  budgetGuestChipText: { fontFamily: "Epilogue_700Bold", fontSize: 13, color: "#F5A623" },
+  presetGrid:          { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 24 },
+  presetGridCell:      { width: "47%", borderRadius: 16, borderWidth: 2, padding: 20, alignItems: "center", gap: 4, minHeight: 80, justifyContent: "center" },
+  presetGridCellActive:   { backgroundColor: "#F4E6D8", borderColor: "#F5A623" },
+  presetGridCellInactive: { backgroundColor: "#FFF1E4", borderColor: "transparent" },
+  presetGridAmt:       { fontFamily: "Epilogue_700Bold", fontSize: 22, color: "#7A7570" },
+  presetGridAmtActive: { color: "#F5A623" },
+  presetGridPer:       { fontFamily: "Epilogue_400Regular", fontSize: 12, color: "#7A7570" },
+  presetGridPerActive: { fontFamily: "Epilogue_700Bold", color: "#644000" },
+
   budgetHero: {
     height: 180, borderRadius: 16, overflow: "hidden",
     alignItems: "flex-start", justifyContent: "flex-end",
@@ -1348,7 +1447,7 @@ const s = StyleSheet.create({
 
   // ── Serving style ───────────────────────────────────────────────────────
   servingGrid:         { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  servingCard:         { width: CARD_WIDTH, borderRadius: 16, borderWidth: 2, padding: 20, gap: 8, minHeight: 44 },
+  servingCard:         { width: "47%", borderRadius: 16, borderWidth: 2, padding: 20, gap: 8, minHeight: 44 },
   servingCardActive:   { backgroundColor: "#FAEBDD", borderColor: "#141210" },
   servingCardInactive: { backgroundColor: "#FFF1E4", borderColor: "transparent" },
   servingIconSquare:   { width: 48, height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", marginBottom: 4 },
@@ -1371,14 +1470,30 @@ const s = StyleSheet.create({
   },
   proTipText: { flex: 1, fontSize: 13, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
 
-  // ── Time chips ──────────────────────────────────────────────────────────
-  timeGrid:           { flexDirection: "row", flexWrap: "wrap", gap: 9 },
-  timeChip:           { borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 11, minWidth: "22%", alignItems: "center", minHeight: 44, justifyContent: "center" },
-  timeChipActive:     { backgroundColor: "#F5A623", borderColor: "#F5A623" },
-  timeChipInactive:   { backgroundColor: "#FFF1E4", borderColor: "#D7C3AE" },
-  timeChipText:       { fontSize: 13, fontFamily: "Epilogue_700Bold", textAlign: "center" },
-  timeChipTextActive: { color: "#FFFFFF" },
-  timeChipTextInactive:{ color: "#141210" },
+  // ── Time wheel ──────────────────────────────────────────────────────────
+  wheelOuter: {
+    borderRadius: 20, overflow: "hidden", backgroundColor: "#FFF1E4",
+    marginTop: 8, marginBottom: 4, position: "relative",
+  },
+  wheelScroll: { height: WHEEL_H },
+  wheelHighlight: {
+    position: "absolute", left: 20, right: 20,
+    top: WHEEL_ITEM_H * 2, height: WHEEL_ITEM_H,
+    backgroundColor: "#F4E6D8", borderRadius: 14, zIndex: 1,
+    borderWidth: 1.5, borderColor: "#F5A623",
+  },
+  wheelFadeTop:    { position: "absolute", top: 0,    left: 0, right: 0, height: WHEEL_ITEM_H * 2.1, zIndex: 2 },
+  wheelFadeBottom: { position: "absolute", bottom: 0, left: 0, right: 0, height: WHEEL_ITEM_H * 2.1, zIndex: 2 },
+  wheelItem:        { height: WHEEL_ITEM_H, alignItems: "center", justifyContent: "center" },
+  wheelItemText:    { fontFamily: "Epilogue_400Regular", fontSize: 17, color: "#7A7570" },
+  wheelItemSelected:{ fontFamily: "Epilogue_700Bold",   fontSize: 22, color: "#F5A623" },
+  wheelSelectedBadge: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: "#FFF1E4", borderRadius: 14, padding: 14, marginTop: 16,
+    borderWidth: 1, borderColor: "#D7C3AE",
+  },
+  wheelSelectedText: { fontFamily: "Epilogue_700Bold", fontSize: 15, color: "#141210" },
+  wheelHint:         { fontFamily: "Epilogue_400Regular", fontSize: 13, color: "#7A7570", textAlign: "center", marginTop: 12 },
 
   // ── Preferences ─────────────────────────────────────────────────────────
   prefInput: {
@@ -1411,6 +1526,14 @@ const s = StyleSheet.create({
   planBackText: { fontFamily: "Epilogue_400Regular", fontSize: 14, color: "#7A7570" },
 
   // ── Plan hero ────────────────────────────────────────────────────────────
+  planHeroBanner: {
+    flexDirection: "row", alignItems: "center", gap: 18,
+    borderRadius: 20, padding: 20, marginBottom: 20,
+    overflow: "hidden",
+  },
+  planHeroBannerTitle: { fontFamily: "Epilogue_700Bold", fontSize: 18, color: "#141210", marginBottom: 2 },
+  planHeroBannerSub:   { fontFamily: "Epilogue_400Regular", fontSize: 13, color: "#7A7570" },
+
   partyBadge: {
     flexDirection: "row", alignItems: "center", gap: 8,
     backgroundColor: "rgba(245,166,35,0.12)", borderRadius: 999,
