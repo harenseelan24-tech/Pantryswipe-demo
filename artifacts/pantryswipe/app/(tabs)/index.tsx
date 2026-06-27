@@ -117,9 +117,11 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { userProfile, getPantryMatchScore, saveRecipe, pantryItems, liveRecipes, getPersonalizedRecipes, trackSwipe } = useApp();
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
-  const HEADER_TOTAL = topPadding + 14 + HEADER_CONTENT_H;
-  const deckHeight = Math.max(300, SCREEN_HEIGHT - HEADER_TOTAL - SEARCH_H - MOOD_H - TAB_BAR_H - 12);
+  const topPadding   = Platform.OS === "web" ? 67 : insets.top;
+  const HEADER_TOTAL  = topPadding + 2 + HEADER_CONTENT_H + 10; // 2px gap under DI + paddingBottom:10
+  const MEAL_SEG_H   = 54; // mealTypeSegment with its marginBottom
+  const SWIPE_INST_H = 28; // swipe instruction row
+  const deckHeight = Math.max(280, SCREEN_HEIGHT - HEADER_TOTAL - SEARCH_H - MOOD_H - MEAL_SEG_H - SWIPE_INST_H - TAB_BAR_H - 4);
 
   // ── Reanimated pulse for swipe instruction ──────────────────────────────────
   const pulseOpacity = useSharedValue(0.4);
@@ -156,6 +158,7 @@ export default function HomeScreen() {
   const [customServingInput, setCustomServingInput] = useState("");
   const [programmaticSwipe, setProgrammaticSwipe] = useState<"left" | "right" | "up" | null>(null);
   const [focusKey, setFocusKey] = useState(0);
+  const [deckH, setDeckH] = useState(0);
 
   // ── Tutorial state ──────────────────────────────────────────────────────────
   const [showTutorial, setShowTutorial] = useState(false);
@@ -364,7 +367,7 @@ export default function HomeScreen() {
     <View style={[styles.container, { backgroundColor: C.background }]}>
 
       {/* ── HEADER ── */}
-      <View style={[styles.header, { paddingTop: topPadding + 6 }]}>
+      <View style={[styles.header, { paddingTop: topPadding + 2 }]}>
         <View>
           <Text style={styles.greeting}>
             {greeting}, {userProfile.name} 👋
@@ -474,7 +477,10 @@ export default function HomeScreen() {
       </View>
 
       {/* ── SWIPE DECK ── */}
-      <View style={styles.deckWrapper}>
+      <View
+        style={styles.deckWrapper}
+        onLayout={(e) => { const h = e.nativeEvent.layout.height; if (h > 50) setDeckH(h); }}
+      >
         {noMoreCards ? (
           <View style={styles.emptyState}>
             <Text style={{ fontSize: 48 }}>🍽</Text>
@@ -487,7 +493,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={[styles.cardStack, { width: CARD_WIDTH, height: deckHeight }]}>
+          <View style={[styles.cardStack, { width: CARD_WIDTH, height: deckH || deckHeight }]}>
             {visibleRecipes.map((recipe, i) => (
               <SwipeCard
                 key={recipe.id}
@@ -498,7 +504,7 @@ export default function HomeScreen() {
                 onSwipeUp={handleSwipeUp}
                 isTop={i === 0}
                 index={i}
-                containerHeight={deckHeight + 8}
+                containerHeight={(deckH || deckHeight) + 8}
                 programmaticSwipe={i === 0 ? programmaticSwipe : null}
               />
             )).reverse()}
