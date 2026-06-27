@@ -410,14 +410,20 @@ export default function PartyPlannerScreen() {
       <View>
         {renderStepLabel("What's the occasion?")}
 
-        {/* Hero placeholder */}
-        <LinearGradient
-          colors={[C.surfaceHigh, C.surfaceHighest]}
-          style={s.heroPlaceholder}
-        >
-          <Feather name="star" size={48} color={C.primary} />
-          <Text style={s.heroPlaceholderText}>Choose your celebration</Text>
-        </LinearGradient>
+        {/* Compact occasion strip */}
+        <View style={s.occasionStrip}>
+          <View>
+            <Text style={s.occasionStripCount}>8 occasions</Text>
+            <Text style={s.occasionStripSub}>Tap one to get started</Text>
+          </View>
+          <View style={s.occasionStripEmojis}>
+            {["🎂","🍽️","☀️","🎬"].map((e, i) => (
+              <View key={i} style={s.occasionStripBubble}>
+                <Text style={{ fontSize: 18 }}>{e}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
 
         <View style={s.occasionGrid}>
           {OCCASIONS.map((o, index) => {
@@ -1262,9 +1268,20 @@ const s = StyleSheet.create({
   },
   heroPlaceholderText: { fontFamily: "Epilogue_700Bold", fontSize: 16, color: "#141210" },
 
+  // ── Occasion strip ──────────────────────────────────────────────────────
+  occasionStrip: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: "#FFF1E4", borderRadius: 16, paddingHorizontal: 18, paddingVertical: 14,
+    marginBottom: 20,
+  },
+  occasionStripCount: { fontFamily: "Epilogue_700Bold", fontSize: 18, color: "#141210" },
+  occasionStripSub:   { fontFamily: "Epilogue_400Regular", fontSize: 13, color: "#7A7570", marginTop: 2 },
+  occasionStripEmojis:{ flexDirection: "row", gap: 6 },
+  occasionStripBubble:{ width: 38, height: 38, borderRadius: 19, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+
   // ── Occasion grid ───────────────────────────────────────────────────────
   occasionGrid:         { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  occasionCardWrap:     { width: CARD_WIDTH, borderRadius: 16, overflow: "hidden" },
+  occasionCardWrap:     { width: "47%", borderRadius: 16 },
   occasionCard:         { width: "100%", borderRadius: 16, borderWidth: 2, padding: 20, alignItems: "center", gap: 12, minHeight: 44 },
   occasionCardActive:   { backgroundColor: "#F4E6D8", borderColor: "#F5A623" },
   occasionCardInactive: { backgroundColor: "#FFF1E4", borderColor: "transparent" },
@@ -1407,7 +1424,7 @@ const s = StyleSheet.create({
   // Stats bento
   statsBento: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 20 },
   statCell: {
-    width: CARD_WIDTH, height: 112, borderRadius: 16,
+    width: "47%", height: 112, borderRadius: 16,
     backgroundColor: "#FFF1E4", padding: 16, justifyContent: "center",
   },
   statLabel: { fontFamily: "Epilogue_700Bold", fontSize: 10, letterSpacing: 1.5, color: "#7A7570", textTransform: "uppercase", marginBottom: 4 },
