@@ -379,6 +379,12 @@ export default function HomeScreen() {
             direction="top"
             style={{ fontSize: 26, letterSpacing: -0.5, color: C.textPrimary, fontFamily: "Epilogue_700Bold" }}
           />
+          {matchCount > 0 && (
+            <View style={styles.pantryMatchLine}>
+              <Feather name="check-circle" size={11} color={C.secondary} />
+              <Text style={styles.pantryMatchText}>{matchCount} match your pantry</Text>
+            </View>
+          )}
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.aiChefBtn} onPress={() => router.push("/ai-chef")}>
@@ -414,6 +420,19 @@ export default function HomeScreen() {
           <Feather name="sliders" size={18} color="#FFFFFF" />
         </View>
       </TouchableOpacity>
+
+      {/* ── ACTIVE FILTER BREADCRUMB ── */}
+      {(activeMood || activeMealType || activeIngredient) && (
+        <TouchableOpacity style={styles.activeFilterPill} onPress={resetCards} activeOpacity={0.8}>
+          <Feather name="filter" size={11} color={C.primary} />
+          <Text style={styles.activeFilterText} numberOfLines={1}>
+            {activeMood ?? activeMealType ?? activeIngredient}
+          </Text>
+          <View style={styles.activeFilterX}>
+            <Feather name="x" size={11} color={C.textMuted} />
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* ── OCCASION CHIPS ── */}
       <ScrollView
@@ -525,9 +544,20 @@ export default function HomeScreen() {
       {/* ── SWIPE INSTRUCTION ── */}
       {!noMoreCards && (
         <Reanimated.View style={[styles.swipeInstruction, pulseStyle]}>
-          <Text style={styles.swipeInstructionText}>
-            SWIPE RIGHT TO COOK  •  SWIPE LEFT TO SKIP  •  SWIPE UP TO SAVE
-          </Text>
+          <View style={styles.swipeHintRow}>
+            <View style={[styles.swipeHintChip, { backgroundColor: "rgba(232,64,64,0.10)" }]}>
+              <Text style={[styles.swipeHintArrow, { color: C.danger }]}>←</Text>
+              <Text style={[styles.swipeHintLabel, { color: C.danger }]}>Skip</Text>
+            </View>
+            <View style={[styles.swipeHintChip, { backgroundColor: "rgba(76,175,118,0.10)" }]}>
+              <Text style={[styles.swipeHintArrow, { color: C.secondary }]}>→</Text>
+              <Text style={[styles.swipeHintLabel, { color: C.secondary }]}>Cook</Text>
+            </View>
+            <View style={[styles.swipeHintChip, { backgroundColor: "rgba(91,142,245,0.10)" }]}>
+              <Text style={[styles.swipeHintArrow, { color: C.saveBlue }]}>↑</Text>
+              <Text style={[styles.swipeHintLabel, { color: C.saveBlue }]}>Save</Text>
+            </View>
+          </View>
         </Reanimated.View>
       )}
 
@@ -767,9 +797,35 @@ const styles = StyleSheet.create({
   emptyBtnText:{ color: "#fff", fontSize: 15, fontFamily: "Epilogue_700Bold" },
   particle:    { position: "absolute", fontSize: 22, zIndex: 999 },
 
-  // Swipe instruction pulse
-  swipeInstruction: { paddingHorizontal: 16, paddingVertical: 8, alignItems: "center" },
-  swipeInstructionText: { fontSize: 11, fontFamily: "Epilogue_700Bold", letterSpacing: 1.5, textTransform: "uppercase", color: C.textMuted, textAlign: "center" },
+  // Pantry match context
+  pantryMatchLine: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },
+  pantryMatchText: { fontSize: 12, color: C.secondary, fontFamily: "Epilogue_700Bold" },
+
+  // Active filter breadcrumb pill
+  activeFilterPill: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    marginHorizontal: 16, marginBottom: 6,
+    paddingHorizontal: 12, paddingVertical: 7,
+    backgroundColor: C.surfaceLow, borderRadius: 100,
+    borderWidth: 1, borderColor: C.primary + "44",
+    alignSelf: "flex-start",
+  },
+  activeFilterText: {
+    fontSize: 13, fontFamily: "Epilogue_700Bold",
+    color: C.primary, maxWidth: 220,
+  },
+  activeFilterX: {
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: C.surfaceHighest,
+    alignItems: "center", justifyContent: "center",
+  },
+
+  // Swipe instruction chips
+  swipeInstruction: { paddingHorizontal: 16, paddingVertical: 6, alignItems: "center" },
+  swipeHintRow:  { flexDirection: "row", gap: 8, alignItems: "center" },
+  swipeHintChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 100 },
+  swipeHintArrow: { fontSize: 15, fontFamily: "Epilogue_700Bold" },
+  swipeHintLabel: { fontSize: 12, fontFamily: "Epilogue_700Bold" },
 
   // Save toast
   saveToast:     { position: "absolute", top: Platform.OS === "web" ? 80 : 90, alignSelf: "center", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 100, zIndex: 9999, backgroundColor: C.primary },
