@@ -1081,17 +1081,23 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // ── Host tips ──────────────────────────────────────────────────────────────
+  // ── Host tips — numbered amber cards ──────────────────────────────────────
   function renderTipsCard(text: string) {
+    const tips = text.split("\n")
+      .filter(Boolean)
+      .map((l) => l.replace(/^[-•*\d.)]+\s*/, "").trim())
+      .filter((t) => t.length > 2);
     return planCard("HOST TIPS", "💡", "Host Tips",
-      <>
-        {text.split("\n").filter(Boolean).map((line, i) => (
-          <View key={i} style={s.tipRow}>
-            <View style={s.tipBullet} />
-            <Text style={s.tipText}>{line.replace(/^[-•*]\s*/, "")}</Text>
+      <View style={{ gap: 10 }}>
+        {tips.map((tip, i) => (
+          <View key={i} style={s.tipCard}>
+            <View style={s.tipNumBadge}>
+              <Text style={s.tipNum}>{i + 1}</Text>
+            </View>
+            <Text style={s.tipCardText}>{tip}</Text>
           </View>
         ))}
-      </>
+      </View>
     );
   }
 
@@ -1128,31 +1134,51 @@ export default function PartyPlannerScreen() {
       { icon: "heart" as const,       label: "DIETARY",      value: statDietary               },
     ];
 
+    // Occasion → emoji
+    const OCCASION_EMOJIS: Record<string, string> = {
+      "Birthday Party": "🎂", "Wedding": "💍", "Baby Shower": "🍼",
+      "Anniversary": "🥂", "Graduation": "🎓", "Christmas": "🎄",
+      "New Year": "🥳", "Dinner Party": "🍽️", "Pool Party": "🏊",
+      "Movie Night": "🎬",
+    };
+    const heroEmoji = OCCASION_EMOJIS[statOccasion] ?? "🎊";
+
     return (
       <View>
-        {/* Party badge */}
-        <View style={s.partyBadge}>
-          <Feather name="star" size={14} color={C.primary} />
-          <Text style={s.partyBadgeText}>{statOccasion.toUpperCase() || "YOUR PARTY"}</Text>
-        </View>
-
-        <Text style={s.planHeadline}>Your Curated Celebration Plan</Text>
-        <Text style={s.planSubtitle}>
-          {statGuests} guests · SGD ${statBudget} budget · {form.servingStyle || "Custom"} style
-        </Text>
-
-        {/* Gradient banner */}
+        {/* ── Premium plan hero — consolidated from 4 elements into 1 ── */}
         <LinearGradient
-          colors={[C.surfaceHigh, C.surfaceLow]}
+          colors={["#EEE0D2", "#FFF1E4"]}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={s.planHeroBanner}
+          style={s.planHero}
         >
-          <Text style={{ fontSize: 44 }}>🎊</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={s.planHeroBannerTitle}>Plan ready!</Text>
-            <Text style={s.planHeroBannerSub}>
-              {statOccasion || "Celebration"} · {statGuests} guests
+          <View style={s.planHeroTopRow}>
+            <View style={s.planHeroOccasionPill}>
+              <Feather name="star" size={11} color={C.primary} />
+              <Text style={s.planHeroOccasionText}>
+                {(statOccasion || "CELEBRATION").toUpperCase()}
+              </Text>
+            </View>
+            {generatedAt ? (
+              <Text style={s.planHeroTimestamp}>{generatedAt}</Text>
+            ) : null}
+          </View>
+          <View style={s.planHeroEmojiRow}>
+            <Text style={{ fontSize: 52, lineHeight: 60 }}>{heroEmoji}</Text>
+            <Text style={s.planHeroHeadline}>
+              Your{"\n"}{statOccasion || "Celebration"}{"\n"}Plan ✨
             </Text>
+          </View>
+          <View style={s.planHeroChips}>
+            {[
+              { icon: "users"       as const, text: `${statGuests} guests`        },
+              { icon: "credit-card" as const, text: `SGD $${statBudget}`          },
+              { icon: "coffee"      as const, text: form.servingStyle || "Custom" },
+            ].map(({ icon, text }) => (
+              <View key={text} style={s.planHeroChip}>
+                <Feather name={icon} size={11} color={C.onPrimaryContainer} />
+                <Text style={s.planHeroChipText}>{text}</Text>
+              </View>
+            ))}
           </View>
         </LinearGradient>
 
@@ -1163,9 +1189,9 @@ export default function PartyPlannerScreen() {
             const accent = STAT_COLORS[idx] ?? C.primary;
             return (
               <View key={stat.label} style={[s.statCell, { backgroundColor: accent + "15", borderWidth: 1.5, borderColor: accent + "35" }, cardShadow]}>
-                <Feather name={stat.icon} size={20} color={accent} style={{ marginBottom: 8 }} />
+                <Feather name={stat.icon} size={18} color={accent} style={{ marginBottom: 6 }} />
                 <Text style={s.statLabel}>{stat.label}</Text>
-                <Text style={[s.statValue, { color: accent }]} numberOfLines={1}>{stat.value}</Text>
+                <Text style={[s.statValue, { color: accent }]} numberOfLines={2}>{stat.value}</Text>
               </View>
             );
           })}
@@ -1209,8 +1235,8 @@ export default function PartyPlannerScreen() {
             style={s.secondaryBtn}
             onPress={() => { setAppState("wizard"); setWizardStep(1); }}
           >
-            <Feather name="edit-2" size={15} color={C.textPrimary} />
-            <Text style={s.secondaryBtnText}>Edit Preferences</Text>
+            <Feather name="arrow-left" size={15} color={C.textPrimary} />
+            <Text style={s.secondaryBtnText}>Start Over</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1524,33 +1550,43 @@ const s = StyleSheet.create({
   },
   planBackText: { fontFamily: "Epilogue_400Regular", fontSize: 14, color: "#7A7570" },
 
-  // ── Plan hero ────────────────────────────────────────────────────────────
-  planHeroBanner: {
-    flexDirection: "row", alignItems: "center", gap: 18,
-    borderRadius: 20, padding: 20, marginBottom: 20,
-    overflow: "hidden",
+  // ── Plan hero (consolidated) ──────────────────────────────────────────────
+  planHero: {
+    borderRadius: 24, padding: 22, marginBottom: 16, overflow: "hidden",
   },
-  planHeroBannerTitle: { fontFamily: "Epilogue_700Bold", fontSize: 18, color: "#141210", marginBottom: 2 },
-  planHeroBannerSub:   { fontFamily: "Epilogue_400Regular", fontSize: 13, color: "#7A7570" },
-
-  partyBadge: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "rgba(245,166,35,0.12)", borderRadius: 999,
-    paddingHorizontal: 14, paddingVertical: 8, alignSelf: "flex-start",
-    marginBottom: 8,
+  planHeroTopRow: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between", marginBottom: 16,
   },
-  partyBadgeText: { fontFamily: "Epilogue_700Bold", fontSize: 11, letterSpacing: 1.5, color: "#F5A623" },
-  planHeadline:   { fontFamily: "Epilogue_700Bold", fontSize: 28, color: "#141210", letterSpacing: -0.5, marginBottom: 6 },
-  planSubtitle:   { fontFamily: "Epilogue_400Regular", fontSize: 15, color: "#7A7570", marginBottom: 20 },
+  planHeroOccasionPill: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: "rgba(245,166,35,0.18)", borderRadius: 999,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  planHeroOccasionText: { fontFamily: "Epilogue_700Bold", fontSize: 11, letterSpacing: 1.5, color: "#F5A623" },
+  planHeroTimestamp:    { fontFamily: "Epilogue_400Regular", fontSize: 12, color: "#7A7570" },
+  planHeroEmojiRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, marginBottom: 16 },
+  planHeroHeadline: {
+    fontFamily: "Epilogue_700Bold", fontSize: 24, color: "#141210",
+    letterSpacing: -0.5, lineHeight: 30, flex: 1,
+  },
+  planHeroChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  planHeroChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: "rgba(255,255,255,0.65)", borderRadius: 999,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderWidth: 1, borderColor: "rgba(215,195,174,0.6)",
+  },
+  planHeroChipText: { fontFamily: "Epilogue_700Bold", fontSize: 12, color: "#644000" },
 
   // Stats bento
   statsBento: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 20 },
   statCell: {
-    width: "47%", height: 112, borderRadius: 16,
-    backgroundColor: "#FFF1E4", padding: 16, justifyContent: "center",
+    width: "47%", minHeight: 96, borderRadius: 16,
+    backgroundColor: "#FFF1E4", padding: 14, justifyContent: "center",
   },
   statLabel: { fontFamily: "Epilogue_700Bold", fontSize: 10, letterSpacing: 1.5, color: "#7A7570", textTransform: "uppercase", marginBottom: 4 },
-  statValue: { fontFamily: "Epilogue_700Bold", fontSize: 16, color: "#141210" },
+  statValue: { fontFamily: "Epilogue_700Bold", fontSize: 15, color: "#141210" },
 
   // ── Plan card shell ──────────────────────────────────────────────────────
   planCard:          { borderRadius: 18, overflow: "hidden", marginBottom: 16 },
@@ -1608,10 +1644,11 @@ const s = StyleSheet.create({
   timelineTime:    { fontFamily: "Epilogue_700Bold", fontSize: 14 },
   timelineAction:  { fontFamily: "Epilogue_400Regular", fontSize: 14, color: "#141210", lineHeight: 20 },
 
-  // ── Host tips ─────────────────────────────────────────────────────────────
-  tipRow:    { flexDirection: "row", gap: 12, paddingVertical: 6, alignItems: "flex-start" },
-  tipBullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7, backgroundColor: "#FFA726" },
-  tipText:   { flex: 1, fontFamily: "Epilogue_400Regular", fontSize: 14, lineHeight: 21, color: "#141210" },
+  // ── Host tips — numbered amber cards ─────────────────────────────────────
+  tipCard:     { flexDirection: "row", gap: 12, backgroundColor: "#FFF1E4", borderRadius: 14, padding: 14, alignItems: "flex-start" },
+  tipNumBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#F5A623", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 },
+  tipNum:      { fontFamily: "Epilogue_700Bold", fontSize: 13, color: "#FFFFFF" },
+  tipCardText: { flex: 1, fontFamily: "Epilogue_400Regular", fontSize: 14, lineHeight: 21, color: "#141210" },
 
   // ── Validation checklist ──────────────────────────────────────────────────
   checklistRow:  { flexDirection: "row", gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "#D7C3AE", alignItems: "flex-start" },
