@@ -1486,7 +1486,7 @@ const s = StyleSheet.create({
   wheelFadeBottom: { position: "absolute", bottom: 0, left: 0, right: 0, height: WHEEL_ITEM_H * 2.1, zIndex: 2 },
   wheelItem:        { height: WHEEL_ITEM_H, alignItems: "center", justifyContent: "center" },
   wheelItemText:    { fontFamily: "Epilogue_400Regular", fontSize: 17, color: "#7A7570" },
-  wheelItemSelected:{ fontFamily: "Epilogue_700Bold",   fontSize: 22, color: "#F5A623" },
+  wheelItemSelected:{ fontFamily: "Epilogue_700Bold",   fontSize: 22, color: "#644000" },
   wheelSelectedBadge: {
     flexDirection: "row", alignItems: "center", gap: 10,
     backgroundColor: "#FFF1E4", borderRadius: 14, padding: 14, marginTop: 16,
