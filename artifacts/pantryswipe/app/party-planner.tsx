@@ -263,14 +263,21 @@ export default function PartyPlannerScreen() {
     });
   }, [form.guestCount]);
 
-  // Scroll wheel: jump to saved time when step 6 becomes active
+  // Scroll wheel: jump to saved time (or default 6 PM) when step 6 becomes active
   useEffect(() => {
     if (wizardStep === 6) {
-      const idx = TIME_SLOTS.findIndex((sl) => sl.value === form.arrivalTime);
-      const target = (idx >= 0 ? idx : 0) * WHEEL_ITEM_H;
+      let idx = TIME_SLOTS.findIndex((sl) => sl.value === form.arrivalTime);
+      if (idx < 0) {
+        // Default to 6:00 PM — reasonable party start time
+        idx = TIME_SLOTS.findIndex((sl) => sl.value === "18:00");
+        if (idx < 0) idx = 0;
+        const defaultSlot = TIME_SLOTS[idx];
+        if (defaultSlot) setForm((f) => ({ ...f, arrivalTime: defaultSlot.value }));
+      }
+      const target = Math.max(0, idx) * WHEEL_ITEM_H;
       setTimeout(() => {
         timeWheelRef.current?.scrollTo({ y: target, animated: false });
-      }, 150);
+      }, 200);
     }
   }, [wizardStep]);
 
@@ -722,20 +729,8 @@ export default function PartyPlannerScreen() {
         {renderStepLabel("When are guests arriving?")}
         <Text style={s.stepSubHint}>Scroll the wheel to pick your arrival time</Text>
 
-        {/* Wheel picker */}
+        {/* Wheel picker — ScrollView first so it renders above the overlay layers */}
         <View style={s.wheelOuter}>
-          {/* Amber selection band behind centre item */}
-          <View style={s.wheelHighlight} pointerEvents="none" />
-
-          {/* Top fade-out */}
-          <View style={s.wheelFadeTop} pointerEvents="none">
-            <LinearGradient colors={[C.background, "transparent"]} style={StyleSheet.absoluteFillObject} />
-          </View>
-          {/* Bottom fade-out */}
-          <View style={s.wheelFadeBottom} pointerEvents="none">
-            <LinearGradient colors={["transparent", C.background]} style={StyleSheet.absoluteFillObject} />
-          </View>
-
           <ScrollView
             ref={timeWheelRef}
             style={s.wheelScroll}
@@ -757,6 +752,18 @@ export default function PartyPlannerScreen() {
               );
             })}
           </ScrollView>
+
+          {/* Amber border band — transparent fill so text shows through */}
+          <View style={s.wheelHighlight} pointerEvents="none" />
+
+          {/* Top fade-out — renders above scroll */}
+          <View style={s.wheelFadeTop} pointerEvents="none">
+            <LinearGradient colors={[C.background, "transparent"]} style={StyleSheet.absoluteFillObject} />
+          </View>
+          {/* Bottom fade-out */}
+          <View style={s.wheelFadeBottom} pointerEvents="none">
+            <LinearGradient colors={["transparent", C.background]} style={StyleSheet.absoluteFillObject} />
+          </View>
         </View>
 
         {/* Confirmation badge */}
@@ -1479,8 +1486,8 @@ const s = StyleSheet.create({
   wheelHighlight: {
     position: "absolute", left: 20, right: 20,
     top: WHEEL_ITEM_H * 2, height: WHEEL_ITEM_H,
-    backgroundColor: "#F4E6D8", borderRadius: 14, zIndex: 1,
-    borderWidth: 1.5, borderColor: "#F5A623",
+    backgroundColor: "transparent", borderRadius: 14,
+    borderWidth: 2, borderColor: "#F5A623",
   },
   wheelFadeTop:    { position: "absolute", top: 0,    left: 0, right: 0, height: WHEEL_ITEM_H * 2.1, zIndex: 2 },
   wheelFadeBottom: { position: "absolute", bottom: 0, left: 0, right: 0, height: WHEEL_ITEM_H * 2.1, zIndex: 2 },
