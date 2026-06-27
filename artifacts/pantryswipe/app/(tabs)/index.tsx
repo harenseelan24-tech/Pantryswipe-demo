@@ -118,7 +118,7 @@ export default function HomeScreen() {
   const { userProfile, getPantryMatchScore, saveRecipe, pantryItems, liveRecipes, getPersonalizedRecipes, trackSwipe } = useApp();
 
   const topPadding   = Platform.OS === "web" ? 67 : insets.top;
-  const HEADER_TOTAL  = topPadding + 2 + HEADER_CONTENT_H + 10; // 2px gap under DI + paddingBottom:10
+  const HEADER_TOTAL  = topPadding - 8 + HEADER_CONTENT_H + 10; // sit closer to DI safe boundary
   const MEAL_SEG_H   = 54; // mealTypeSegment with its marginBottom
   const SWIPE_INST_H = 28; // swipe instruction row
   const deckHeight = Math.max(280, SCREEN_HEIGHT - HEADER_TOTAL - SEARCH_H - MOOD_H - MEAL_SEG_H - SWIPE_INST_H - TAB_BAR_H - 4);
@@ -367,7 +367,7 @@ export default function HomeScreen() {
     <View style={[styles.container, { backgroundColor: C.background }]}>
 
       {/* ── HEADER ── */}
-      <View style={[styles.header, { paddingTop: topPadding + 2 }]}>
+      <View style={[styles.header, { paddingTop: topPadding - 8 }]}>
         <View>
           <Text style={styles.greeting}>
             {greeting}, {userProfile.name} 👋
