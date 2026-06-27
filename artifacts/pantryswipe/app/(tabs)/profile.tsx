@@ -40,19 +40,22 @@ const CUISINE_EMOJIS: Record<string, string> = {
   French: "🥐", Mediterranean: "🫒", Vietnamese: "🍜", International: "🍽",
 };
 
-// ── Brand colours (inline so this file has no external color dependency) ──────
+// ── Brand colours — exact match to all other tabs ─────────────────────────────
 const C = {
-  primary:     "#F5A623",
-  secondary:   "#4CAF76",
-  textPrimary: "#141210",
-  textMuted:   "#7A7570",
-  surface:     "#FFFFFF",
-  background:  "#FAFAF8",
-  surfaceLow:  "#F5F3EF",
-  surfaceHigh: "#E8E4DE",
-  danger:      "#E84040",
-  saveBlue:    "#5B8EF5",
-};
+  primary:            "#F5A623",
+  secondary:          "#4CAF76",
+  textPrimary:        "#141210",
+  textMuted:          "#7A7570",
+  surface:            "#FFFFFF",
+  background:         "#FAFAF8",
+  surfaceLow:         "#FFF1E4",
+  surfaceHigh:        "#F4E6D8",
+  surfaceHighest:     "#EEE0D2",
+  onPrimaryContainer: "#644000",
+  outlineVariant:     "#D7C3AE",
+  danger:             "#E84040",
+  saveBlue:           "#5B8EF5",
+} as const;
 
 // ── Cross-platform shadow helpers ─────────────────────────────────────────────
 const cardShadow = Platform.select({
@@ -260,58 +263,61 @@ export default function ProfileScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
       >
 
-        {/* ── HERO (320px, parallax bg) ─────────────────────────────────── */}
-        <View style={styles.heroContainer}>
+        {/* ── HERO — warm cream, consistent with all other tabs ───────────── */}
+        <View style={[styles.heroContainer, { height: insets.top + 320 }]}>
 
-          {/* Parallax background layer */}
+          {/* Parallax bg — cream gradient */}
           <Animated.View
             style={[styles.heroBg, { transform: [{ translateY: heroTranslate }] }]}
           >
             <LinearGradient
-              colors={[C.primary + "EE", "#3B1F00"]}
-              start={{ x: 0.1, y: 0 }}
-              end={{ x: 0.9, y: 1 }}
+              colors={[C.surfaceHighest, C.surfaceLow]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFillObject}
             />
-            {/* Subtle bokeh circles for texture */}
             <View style={styles.bokeh0} />
             <View style={styles.bokeh1} />
           </Animated.View>
 
-          {/* Dark gradient overlay (bottom fade to background) */}
-          <View pointerEvents="none" style={styles.heroOverlayWrap}>
-            <LinearGradient
-              colors={["transparent", "rgba(20,18,16,0.55)", C.background]}
-              locations={[0, 0.6, 1]}
-              style={StyleSheet.absoluteFillObject}
-            />
-          </View>
+          {/* Hero content — top-aligned */}
+          <View style={[styles.heroContent, { paddingTop: insets.top + 8 }]}>
 
-          {/* Hero content — avatar, name, tagline, actions */}
-          <View style={[styles.heroContent, { paddingTop: insets.top + 64 }]}>
+            {/* Top row: settings icon right-aligned */}
+            <View style={styles.heroTopRow}>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity
+                style={styles.settingsBtn}
+                onPress={() => router.push("/settings")}
+                activeOpacity={0.8}
+              >
+                <Feather name="settings" size={21} color={C.textMuted} />
+              </TouchableOpacity>
+            </View>
 
-            {/* Avatar */}
-            <TouchableOpacity onPress={handlePickPhoto} activeOpacity={0.85}>
-              <View style={styles.avatarWrap}>
-                {userProfile.photoUri ? (
-                  <Image
-                    source={{ uri: userProfile.photoUri }}
-                    style={styles.avatarImg}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.avatarFallback}>
-                    <Text style={styles.avatarInitials}>{initials}</Text>
-                  </View>
-                )}
-
-                {/* Pro badge — bottom-right of avatar */}
-                {isSubscribed && (
-                  <View style={styles.proBadge}>
-                    <Feather name="star" size={12} color="#FFFFFF" />
-                  </View>
-                )}
+            {/* Avatar — tappable for photo change */}
+            <TouchableOpacity onPress={handlePickPhoto} activeOpacity={0.85} style={styles.avatarWrap}>
+              {userProfile.photoUri ? (
+                <Image
+                  source={{ uri: userProfile.photoUri }}
+                  style={styles.avatarImg}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarInitials}>{initials}</Text>
+                </View>
+              )}
+              {/* Camera badge */}
+              <View style={styles.avatarCamBtn}>
+                <Feather name="camera" size={12} color={C.textPrimary} />
               </View>
+              {/* Pro badge */}
+              {isSubscribed && (
+                <View style={styles.proBadge}>
+                  <Feather name="star" size={11} color="#FFFFFF" />
+                </View>
+              )}
             </TouchableOpacity>
 
             {/* Name */}
@@ -319,14 +325,27 @@ export default function ProfileScreen() {
               {userProfile.name}
             </Text>
 
-            {/* Tagline */}
+            {/* Bio / handle */}
             <Text style={styles.heroTagline} numberOfLines={2}>
               {userProfile.bio
                 ? userProfile.bio
                 : `@${userProfile.name.toLowerCase().replace(/\s+/g, "_")}`}
             </Text>
 
-            {/* Action buttons row */}
+            {/* Skill + goal meta chips */}
+            <View style={styles.heroMeta}>
+              <View style={styles.heroMetaChip}>
+                <Feather name="zap" size={10} color={C.primary} />
+                <Text style={styles.heroMetaText}>{userProfile.skillLevel}</Text>
+              </View>
+              <View style={styles.heroMetaDot} />
+              <View style={styles.heroMetaChip}>
+                <Feather name="target" size={10} color={C.secondary} />
+                <Text style={styles.heroMetaText}>{userProfile.goal}</Text>
+              </View>
+            </View>
+
+            {/* Action buttons */}
             <View style={styles.heroActions}>
               <TouchableOpacity
                 style={styles.heroEditBtn}
@@ -349,39 +368,46 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* ── XP PROGRESS CARD (overlaps hero by -32px) ───────────────────── */}
+        {/* ── XP PROGRESS CARD ────────────────────────────────────────────── */}
         <View style={styles.xpCardWrap}>
           <View style={[styles.xpCard, cardShadow as object]}>
             <View style={styles.xpTopRow}>
-              <Text style={styles.xpLevelLabel}>LEVEL {level}</Text>
-              <Text style={styles.xpCountText}>
-                {xp} / {nextXp} XP to Level {level + 1}
-              </Text>
+              <View style={styles.xpLevelPill}>
+                <Text style={styles.xpLevelLabel}>LEVEL {level}</Text>
+              </View>
+              <Text style={styles.xpCountText}>{xp.toLocaleString()} / {nextXp.toLocaleString()} XP</Text>
             </View>
             <View style={styles.xpTrack}>
               <Animated.View style={[styles.xpFill, xpFillStyle]} />
             </View>
+            <View style={styles.xpBottomRow}>
+              <Text style={styles.xpNextText}>{(nextXp - xp).toLocaleString()} XP to Level {level + 1}</Text>
+              <Text style={styles.xpPctText}>{Math.round(xpPercent)}% there</Text>
+            </View>
           </View>
         </View>
 
-        {/* ── STATS ROW (3 chips — all from AppContext) ───────────────────── */}
-        <View style={styles.statsRow}>
-          <View style={styles.statChip}>
-            {/* recipes cooked = cookedRecipes.length from AppContext */}
-            <Text style={styles.statNumber}>{cookedRecipes.length}</Text>
-            <Text style={styles.statLabel}>Recipes Cooked</Text>
+        {/* ── STATS BENTO ─────────────────────────────────────────────────── */}
+        <View style={styles.statsBento}>
+          {/* Large left cell — cooking streak */}
+          <View style={[styles.statCellLarge, cardShadow as object]}>
+            <Text style={styles.statStreakNum}>{stats.streak ?? 0} 🔥</Text>
+            <Text style={styles.statCellLabel}>Day Streak</Text>
+            {(stats.streak ?? 0) > 0 && (
+              <Text style={styles.statCellSub}>Keep it up!</Text>
+            )}
           </View>
 
-          <View style={styles.statChip}>
-            {/* cookingStreak = stats.streak from AppContext */}
-            <Text style={styles.statNumber}>{stats.streak ?? 0} 🔥</Text>
-            <Text style={styles.statLabel}>Day Streak</Text>
-          </View>
-
-          <View style={styles.statChip}>
-            {/* gourmetLevel = stats.level from AppContext */}
-            <Text style={styles.statNumber}>{level}</Text>
-            <Text style={styles.statLabel}>Gourmet Level</Text>
+          {/* Right column — 2 smaller cells */}
+          <View style={styles.statsBentoRight}>
+            <View style={[styles.statCellSmall, { backgroundColor: "#4CAF7612", borderColor: "#4CAF7630" }]}>
+              <Text style={[styles.statCellNum, { color: C.secondary }]}>{cookedRecipes.length}</Text>
+              <Text style={styles.statCellLabel}>Cooked</Text>
+            </View>
+            <View style={[styles.statCellSmall, { backgroundColor: "#5B8EF512", borderColor: "#5B8EF530" }]}>
+              <Text style={[styles.statCellNum, { color: C.saveBlue }]}>{savedRecipes.length}</Text>
+              <Text style={styles.statCellLabel}>Saved</Text>
+            </View>
           </View>
         </View>
 
@@ -409,7 +435,14 @@ export default function ProfileScreen() {
 
         {/* ── ACHIEVEMENTS (maps over BADGES from mockData) ───────────────── */}
         <View style={styles.achievementsSection}>
-          <Text style={styles.sectionTitle}>Achievements</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Achievements</Text>
+            <View style={styles.achievementCountPill}>
+              <Text style={styles.achievementCountText}>
+                {BADGES.filter((b) => b.earned).length} / {BADGES.length}
+              </Text>
+            </View>
+          </View>
           <View style={styles.achievementsGrid}>
             {BADGES.map((badge) => (
               <AchievementCard key={badge.id} badge={badge} />
@@ -436,7 +469,9 @@ export default function ProfileScreen() {
                       isActive ? styles.tabBtnTextActive : styles.tabBtnTextInactive,
                     ]}
                   >
-                    {tab === "saved" ? "Saved" : "Cooked"}
+                    {tab === "saved"
+                    ? `Saved (${savedRecipesList.length})`
+                    : `Cooked (${cookedRecipesList.length})`}
                   </Text>
                 </TouchableOpacity>
               );
@@ -506,33 +541,6 @@ export default function ProfileScreen() {
         </View>
       </Animated.ScrollView>
 
-      {/* ── HEADER BAR (absolute, always on top) ────────────────────────────── */}
-      <View style={[styles.headerBarWrap, { height: insets.top + 56 }]}>
-        {Platform.OS === "ios" ? (
-          <BlurView
-            tint="light"
-            intensity={80}
-            style={StyleSheet.absoluteFillObject}
-          />
-        ) : (
-          <View style={[StyleSheet.absoluteFillObject, styles.headerBarBg]} />
-        )}
-        <View style={[styles.headerBarRow, { paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => router.back()}
-          >
-            <Feather name="arrow-left" size={24} color={C.textPrimary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => router.push("/settings")}
-          >
-            <Feather name="settings" size={24} color={C.textMuted} />
-          </TouchableOpacity>
-        </View>
-      </View>
 
       {/* ── EDIT PROFILE MODAL (preserved exactly) ──────────────────────────── */}
       <Modal
@@ -688,78 +696,97 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.background },
 
-  // ── Header bar ────────────────────────────────────────────────────────────
-  headerBarWrap: {
-    position: "absolute", top: 0, left: 0, right: 0, zIndex: 50,
-    overflow: "hidden",
-  },
-  headerBarBg: { backgroundColor: "rgba(250,250,248,0.92)" },
-  headerBarRow: {
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    paddingHorizontal: 24,
-  },
-  iconBtn: {
-    padding: 8, borderRadius: 20,
-    minHeight: 44, minWidth: 44,
-    alignItems: "center", justifyContent: "center",
-  },
-
   // ── Hero ──────────────────────────────────────────────────────────────────
-  heroContainer: { height: 320, overflow: "hidden" },
+  heroContainer: { overflow: "hidden" }, // height set inline (insets.top + 320)
   heroBg: {
     position: "absolute", top: -40, left: -20, right: -20, bottom: -40,
   },
   bokeh0: {
-    position: "absolute", width: 180, height: 180, borderRadius: 90,
-    backgroundColor: "rgba(255,255,255,0.06)", top: -20, right: -30,
+    position: "absolute", width: 200, height: 200, borderRadius: 100,
+    backgroundColor: "rgba(245,166,35,0.10)", top: -30, right: -40,
   },
   bokeh1: {
-    position: "absolute", width: 120, height: 120, borderRadius: 60,
-    backgroundColor: "rgba(255,255,255,0.05)", bottom: 10, left: 20,
-  },
-  heroOverlayWrap: {
-    position: "absolute", left: 0, right: 0, bottom: 0, height: 220,
+    position: "absolute", width: 140, height: 140, borderRadius: 70,
+    backgroundColor: "rgba(76,175,118,0.07)", bottom: 20, left: -20,
   },
   heroContent: {
-    flex: 1, alignItems: "center", justifyContent: "flex-end",
-    paddingBottom: 24, paddingHorizontal: 24,
+    flex: 1, alignItems: "center", justifyContent: "flex-start",
+    paddingHorizontal: 24,
+  },
+  heroTopRow: {
+    flexDirection: "row", alignItems: "center",
+    width: "100%", marginBottom: 6, height: 40,
+  },
+  settingsBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(122,117,112,0.10)",
   },
 
   // Avatar
-  avatarWrap: { marginBottom: 12, position: "relative" },
+  avatarWrap: {
+    marginBottom: 10, position: "relative",
+    alignItems: "center",
+  },
   avatarImg: {
-    width: 96, height: 96, borderRadius: 48,
-    borderWidth: 4, borderColor: C.surface,
+    width: 88, height: 88, borderRadius: 44,
+    borderWidth: 3, borderColor: C.surface,
   },
   avatarFallback: {
-    width: 96, height: 96, borderRadius: 48,
-    borderWidth: 4, borderColor: C.surface,
+    width: 88, height: 88, borderRadius: 44,
+    borderWidth: 3, borderColor: C.surface,
     backgroundColor: C.primary,
     alignItems: "center", justifyContent: "center",
   },
   avatarInitials: {
-    fontSize: 32, fontFamily: "Epilogue_700Bold", color: "#FFFFFF",
+    fontSize: 28, fontFamily: "Epilogue_700Bold", color: "#FFFFFF",
+  },
+  avatarCamBtn: {
+    position: "absolute", bottom: 0, right: -2,
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: C.surfaceHighest,
+    borderWidth: 2, borderColor: C.surface,
+    alignItems: "center", justifyContent: "center",
   },
   proBadge: {
-    position: "absolute", bottom: -4, right: -4,
-    width: 26, height: 26, borderRadius: 13,
+    position: "absolute", top: 0, right: -2,
+    width: 24, height: 24, borderRadius: 12,
     backgroundColor: C.secondary, borderWidth: 2, borderColor: C.surface,
     alignItems: "center", justifyContent: "center",
   },
 
   heroName: {
-    fontFamily: "Epilogue_700Bold", fontSize: 28, color: C.surface,
+    fontFamily: "Epilogue_700Bold", fontSize: 26, color: C.textPrimary,
     textAlign: "center",
   },
   heroTagline: {
-    fontSize: 16, color: "rgba(255,255,255,0.75)",
-    textAlign: "center", marginTop: 4, marginBottom: 16,
+    fontSize: 14, color: C.textMuted, fontFamily: "Epilogue_400Regular",
+    textAlign: "center", marginTop: 4, marginBottom: 10,
+    lineHeight: 20,
   },
-  heroActions: { flexDirection: "row", gap: 12 },
+  heroMeta: {
+    flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 14,
+  },
+  heroMetaChip: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: C.surface,
+    borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 0.5, borderColor: C.outlineVariant,
+  },
+  heroMetaText: {
+    fontSize: 11, fontFamily: "Epilogue_700Bold",
+    color: C.textPrimary, letterSpacing: 0.2,
+  },
+  heroMetaDot: {
+    width: 4, height: 4, borderRadius: 2,
+    backgroundColor: C.outlineVariant,
+  },
+  heroActions: { flexDirection: "row", gap: 10 },
   heroEditBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     backgroundColor: C.surface, borderRadius: 20,
     paddingHorizontal: 16, paddingVertical: 10,
+    borderWidth: 0.5, borderColor: C.outlineVariant,
     minHeight: 44,
   },
   heroEditBtnText: {
@@ -767,7 +794,7 @@ const styles = StyleSheet.create({
   },
   heroPartyBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: C.primary + "22",
+    backgroundColor: C.surfaceLow,
     borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10,
     borderWidth: 1, borderColor: C.primary + "55", minHeight: 44,
   },
@@ -776,42 +803,70 @@ const styles = StyleSheet.create({
   },
 
   // ── XP Progress Card ──────────────────────────────────────────────────────
-  xpCardWrap: { marginTop: -32, zIndex: 20, paddingHorizontal: 16 },
-  xpCard: { backgroundColor: C.surface, borderRadius: 16, padding: 16 },
+  xpCardWrap: { marginTop: 16, paddingHorizontal: 16 },
+  xpCard: { backgroundColor: C.surface, borderRadius: 20, padding: 16 },
   xpTopRow: {
     flexDirection: "row", justifyContent: "space-between",
     alignItems: "center", marginBottom: 12,
   },
+  xpLevelPill: {
+    backgroundColor: C.surfaceLow, borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderWidth: 1, borderColor: C.primary + "50",
+  },
   xpLevelLabel: {
-    fontSize: 12, fontFamily: "Epilogue_700Bold",
-    letterSpacing: 1.5, color: C.primary,
+    fontSize: 11, fontFamily: "Epilogue_700Bold",
+    letterSpacing: 1.2, color: C.primary,
   },
   xpCountText: {
-    fontSize: 11, color: C.textMuted, fontFamily: "Epilogue_400Regular",
+    fontSize: 12, color: C.textMuted, fontFamily: "Epilogue_400Regular",
   },
   xpTrack: {
-    height: 12, borderRadius: 6,
+    height: 10, borderRadius: 5,
     backgroundColor: C.surfaceHigh, overflow: "hidden",
   },
   xpFill: {
-    height: "100%" as any, borderRadius: 6, backgroundColor: C.primary,
+    height: "100%" as any, borderRadius: 5, backgroundColor: C.primary,
+  },
+  xpBottomRow: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginTop: 8,
+  },
+  xpNextText: {
+    fontSize: 11, color: C.textMuted, fontFamily: "Epilogue_400Regular",
+  },
+  xpPctText: {
+    fontSize: 11, color: C.primary, fontFamily: "Epilogue_700Bold",
   },
 
-  // ── Stats Row ─────────────────────────────────────────────────────────────
-  statsRow: {
-    flexDirection: "row", marginTop: 24, paddingHorizontal: 16, gap: 12,
+  // ── Stats Bento ───────────────────────────────────────────────────────────
+  statsBento: {
+    flexDirection: "row", marginTop: 16, paddingHorizontal: 16, gap: 10,
   },
-  statChip: {
-    flex: 1, backgroundColor: C.surfaceLow,
-    borderRadius: 16, padding: 16, alignItems: "center",
-    borderWidth: 0.5, borderColor: "rgba(215,195,174,0.3)",
+  statCellLarge: {
+    flex: 1.2, backgroundColor: C.surfaceLow,
+    borderRadius: 20, padding: 18,
+    borderWidth: 1, borderColor: C.primary + "30",
+    justifyContent: "center",
   },
-  statNumber: {
-    fontSize: 24, fontFamily: "Epilogue_700Bold", color: C.primary,
+  statsBentoRight: { flex: 1, gap: 10 },
+  statCellSmall: {
+    flex: 1, borderRadius: 20, padding: 14,
+    borderWidth: 1, alignItems: "center", justifyContent: "center",
   },
-  statLabel: {
-    fontSize: 12, color: C.textMuted, textAlign: "center", marginTop: 4,
+  statStreakNum: {
+    fontSize: 30, fontFamily: "Epilogue_700Bold", color: C.primary,
+  },
+  statCellNum: {
+    fontSize: 24, fontFamily: "Epilogue_700Bold",
+  },
+  statCellLabel: {
+    fontSize: 11, color: C.textMuted, marginTop: 4,
     fontFamily: "Epilogue_400Regular",
+  },
+  statCellSub: {
+    fontSize: 10, color: C.primary, marginTop: 2,
+    fontFamily: "Epilogue_700Bold", letterSpacing: 0.3,
   },
 
   // ── Upgrade card ──────────────────────────────────────────────────────────
@@ -841,9 +896,20 @@ const styles = StyleSheet.create({
 
   // ── Achievements ──────────────────────────────────────────────────────────
   achievementsSection: { marginTop: 32, paddingHorizontal: 16 },
+  sectionHeader: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between", marginBottom: 20,
+  },
   sectionTitle: {
-    fontSize: 24, fontFamily: "Epilogue_700Bold",
-    color: C.textPrimary, marginBottom: 24,
+    fontSize: 22, fontFamily: "Epilogue_700Bold", color: C.textPrimary,
+  },
+  achievementCountPill: {
+    backgroundColor: C.surfaceLow, borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderWidth: 1, borderColor: C.outlineVariant,
+  },
+  achievementCountText: {
+    fontSize: 12, fontFamily: "Epilogue_700Bold", color: C.textMuted,
   },
   achievementsGrid: { flexDirection: "row", flexWrap: "wrap" },
   achievementItem: {
