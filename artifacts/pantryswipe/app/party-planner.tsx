@@ -1,6 +1,8 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
+  Animated,
   ActivityIndicator,
+  Dimensions,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,19 +12,51 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  FadeInDown,
+} from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { useColors } from "@/hooks/useColors";
 
-// ── API base ──────────────────────────────────────────────────────────────────
+// ── C palette (inline) ─────────────────────────────────────────────────────
+const C = {
+  primary:            "#F5A623",
+  secondary:          "#4CAF76",
+  textPrimary:        "#141210",
+  textMuted:          "#7A7570",
+  surface:            "#FFFFFF",
+  background:         "#FAFAF8",
+  surfaceLow:         "#FFF1E4",
+  surfaceHigh:        "#F4E6D8",
+  surfaceHighest:     "#EEE0D2",
+  onPrimaryContainer: "#644000",
+  outlineVariant:     "#D7C3AE",
+  saveBlue:           "#5B8EF5",
+  danger:             "#E84040",
+} as const;
+
+const cardShadow = Platform.select({
+  ios:     { shadowColor: "rgba(131,85,0,1)", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16 },
+  android: { elevation: 4 },
+  web:     { boxShadow: "0 4px 16px rgba(131,85,0,0.08)" },
+}) as object;
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const CARD_WIDTH = (SCREEN_WIDTH - 16 * 3) / 2;
+
+// ── API base ───────────────────────────────────────────────────────────────
 const API_BASE =
   Platform.OS !== "web"
     ? `https://${process.env.EXPO_PUBLIC_DOMAIN ?? process.env.EXPO_PUBLIC_API_DOMAIN ?? "793ecd86-87bd-45bf-a997-455057de1a61-00-14m4lfwa4iiar.pike.replit.dev"}`
     : "";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
 interface PartyPlanForm {
   occasion: string;
   guestCount: number;
@@ -42,7 +76,7 @@ interface PlanMeta {
 
 type AppState = "wizard" | "loading" | "error" | "plan";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────
 const OCCASIONS = [
   { label: "BBQ",              icon: "sun"    as const },
   { label: "Birthday Party",   icon: "gift"   as const },
@@ -60,6 +94,13 @@ const SERVING_STYLES = [
   { label: "Plated",       icon: "circle"   as const, desc: "Individual portions, formal feel"    },
   { label: "Family Style", icon: "share-2"  as const, desc: "Shared platters at the table"        },
 ];
+
+const SERVING_STYLE_META: Record<string, { bg: string; iconColor: string; feather: "coffee" | "grid" | "scissors" | "users" }> = {
+  Buffet:         { bg: C.primary,                   iconColor: "#FFFFFF",  feather: "coffee"   },
+  "Finger Food":  { bg: C.secondary,                 iconColor: "#FFFFFF",  feather: "grid"     },
+  Plated:         { bg: C.saveBlue,                  iconColor: "#FFFFFF",  feather: "scissors" },
+  "Family Style": { bg: "rgba(245,166,35,0.2)",      iconColor: C.primary,  feather: "users"    },
+};
 
 const RESTRICTIONS = [
   "None","Halal","No Pork","No Beef","No Shellfish",
@@ -108,15 +149,15 @@ const INITIAL_FORM: PartyPlanForm = {
   servingStyle: "", restrictions: [], arrivalTime: "", additionalPreferences: "",
 };
 
-// ── Time slots ────────────────────────────────────────────────────────────────
+// ── Time slots ─────────────────────────────────────────────────────────────
 function generateTimeSlots(): { label: string; value: string }[] {
   const slots: { label: string; value: string }[] = [];
   for (let h = 10; h <= 23; h++) {
     for (const m of [0, 30]) {
-      const period = h < 12 ? "AM" : "PM";
+      const period  = h < 12 ? "AM" : "PM";
       const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h;
-      const label = `${displayH}:${m === 0 ? "00" : "30"} ${period}`;
-      const value = `${String(h).padStart(2, "0")}:${m === 0 ? "00" : "30"}`;
+      const label   = `${displayH}:${m === 0 ? "00" : "30"} ${period}`;
+      const value   = `${String(h).padStart(2, "0")}:${m === 0 ? "00" : "30"}`;
       slots.push({ label, value });
     }
   }
@@ -124,7 +165,7 @@ function generateTimeSlots(): { label: string; value: string }[] {
 }
 const TIME_SLOTS = generateTimeSlots();
 
-// ── Plan parser ───────────────────────────────────────────────────────────────
+// ── Plan parser ────────────────────────────────────────────────────────────
 function parsePlan(text: string): Record<string, string> {
   const parts = text.split(/^##\s+/m);
   const sections: Record<string, string> = {};
@@ -144,7 +185,7 @@ function parsePlan(text: string): Record<string, string> {
   return sections;
 }
 
-// ── Restriction audit ─────────────────────────────────────────────────────────
+// ── Restriction audit ──────────────────────────────────────────────────────
 const RESTRICTION_BLOCKLIST: Record<string, string[]> = {
   "No Pork":    ["pork","bacon","ham","lard","prosciutto"],
   Halal:        ["pork","bacon","ham","lard","prosciutto"],
@@ -172,12 +213,12 @@ function auditRestrictions(planText: string, restrictions: string[]): boolean {
 // Component
 // ══════════════════════════════════════════════════════════════════════════════
 export default function PartyPlannerScreen() {
-  const colors  = useColors();
-  const insets  = useSafeAreaInsets();
-  const router  = useRouter();
+  const insets   = useSafeAreaInsets();
+  const router   = useRouter();
   const { width } = useWindowDimensions();
-  const scrollRef  = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
+  // ── Wizard state ──────────────────────────────────────────────────────────
   const [appState,   setAppState]   = useState<AppState>("wizard");
   const [wizardStep, setWizardStep] = useState(1);
   const [form,       setForm]       = useState<PartyPlanForm>(INITIAL_FORM);
@@ -192,16 +233,38 @@ export default function PartyPlannerScreen() {
   const [checkedItems,       setCheckedItems]       = useState<Record<string, boolean>>({});
   const [generatedAt,        setGeneratedAt]        = useState<string | null>(null);
   const [regenLoading,       setRegenLoading]       = useState(false);
+  const [budgetFocused,      setBudgetFocused]      = useState(false);
 
   const totalSteps = 7;
   const isWide     = width > 600;
 
-  // ── Validation ──────────────────────────────────────────────────────────────
+  // ── Animation refs ────────────────────────────────────────────────────────
+  const progressAnim  = useRef(new Animated.Value((1 / totalSteps) * 100)).current;
+  const inputScale    = useSharedValue(1);
+  const countScale    = useSharedValue(1);
+  const inputAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: inputScale.value }] }));
+  const countAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: countScale.value }] }));
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: (wizardStep / totalSteps) * 100,
+      duration: 700,
+      useNativeDriver: false,
+    }).start();
+  }, [wizardStep]);
+
+  useEffect(() => {
+    countScale.value = withSpring(1.18, { damping: 5 }, () => {
+      countScale.value = withSpring(1.0);
+    });
+  }, [form.guestCount]);
+
+  // ── Validation ────────────────────────────────────────────────────────────
   function validateStep(): boolean {
     setStepError("");
     switch (wizardStep) {
       case 1: if (!form.occasion)                              { setStepError("Please select an occasion.");                       return false; } break;
-      case 2: if (form.guestCount < 1 || form.guestCount > 99)  { setStepError("Guest count must be between 1 and 99.");          return false; } break;
+      case 2: if (form.guestCount < 1 || form.guestCount > 99) { setStepError("Guest count must be between 1 and 99.");           return false; } break;
       case 3: if (!form.budget || form.budget <= 0)            { setStepError("Please enter a budget greater than SGD $0.");      return false; } break;
       case 4: if (!form.servingStyle)                          { setStepError("Please select a serving style.");                  return false; } break;
       case 6: if (!form.arrivalTime.trim())                    { setStepError("Please select a guest arrival time.");             return false; } break;
@@ -223,7 +286,7 @@ export default function PartyPlannerScreen() {
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   }
 
-  // ── API call ────────────────────────────────────────────────────────────────
+  // ── API call ──────────────────────────────────────────────────────────────
   async function submitPlan(regen = false) {
     if (!validateStep() && wizardStep === totalSteps) return;
     regen ? setRegenLoading(true) : setAppState("loading");
@@ -271,12 +334,13 @@ export default function PartyPlannerScreen() {
     setCheckedItems((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // WIZARD: inline top bar (replaces the old header)
-  // ────────────────────────────────────────────────────────────────────────────
+  // ── Progress percent ───────────────────────────────────────────────────────
+  const pct = Math.round((wizardStep / totalSteps) * 100);
+
+  // ── Wizard top bar ─────────────────────────────────────────────────────────
   function renderWizardTopBar() {
     return (
-      <View style={[s.wizTopBar, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <View style={[s.wizTopBar, { paddingTop: insets.top + 10, backgroundColor: C.background }]}>
         <TouchableOpacity
           activeOpacity={0.7}
           style={s.wizTopBtn}
@@ -284,51 +348,49 @@ export default function PartyPlannerScreen() {
         >
           <Feather
             name={wizardStep > 1 ? "arrow-left" : "x"}
-            size={20}
-            color={colors.foreground}
+            size={22}
+            color={C.textMuted}
           />
         </TouchableOpacity>
 
-        {/* Progress dots */}
-        <View style={s.wizTopDots}>
-          {Array.from({ length: totalSteps }, (_, i) => {
-            const step   = i + 1;
-            const done   = step < wizardStep;
-            const active = step === wizardStep;
-            return (
-              <View
-                key={step}
-                style={[
-                  s.dot,
-                  done   && { backgroundColor: colors.primary,         width: 8,  height: 8  },
-                  active && { backgroundColor: colors.primary,         width: 22, height: 8, borderRadius: 4 },
-                  !done && !active && { backgroundColor: colors.muted, width: 8,  height: 8  },
-                ]}
-              />
-            );
-          })}
+        {/* Animated progress bar */}
+        <View style={s.progressTrack}>
+          <Animated.View
+            style={[
+              s.progressFill,
+              {
+                width: progressAnim.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: ["0%", "100%"],
+                }),
+              },
+            ]}
+          />
         </View>
 
-        {/* Right spacer keeps dots centred */}
+        {/* Spacer keeps bar centred */}
         <View style={{ width: 44 }} />
       </View>
     );
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // WIZARD: step label (emoji + question)
-  // ────────────────────────────────────────────────────────────────────────────
+  // ── Step label ─────────────────────────────────────────────────────────────
   function renderStepLabel(label: string) {
-    const meta = STEP_META[wizardStep - 1];
     return (
       <View style={s.stepLabelWrap}>
-        <Text style={s.stepEmoji}>{meta?.emoji ?? "✨"}</Text>
-        <Text style={[s.stepTitle, { color: colors.foreground }]}>{label}</Text>
+        <View style={s.stepMetaRow}>
+          <Text style={s.stepCounter}>STEP {wizardStep} OF {totalSteps}</Text>
+          <Text style={s.stepPercent}>{pct}% COMPLETE</Text>
+        </View>
+        <Text style={s.stepTitle}>{label}</Text>
+        {STEP_META[wizardStep - 1]?.hint ? (
+          <Text style={s.stepHint}>{STEP_META[wizardStep - 1]?.hint}</Text>
+        ) : null}
       </View>
     );
   }
 
-  // ── Step routers ─────────────────────────────────────────────────────────────
+  // ── Step router ────────────────────────────────────────────────────────────
   function renderStep() {
     switch (wizardStep) {
       case 1: return renderStep1();
@@ -342,32 +404,47 @@ export default function PartyPlannerScreen() {
     }
   }
 
-  // Step 1 – Occasion
+  // ── Step 1: Occasion ───────────────────────────────────────────────────────
   function renderStep1() {
     return (
       <View>
         {renderStepLabel("What's the occasion?")}
+
+        {/* Hero placeholder */}
+        <LinearGradient
+          colors={[C.surfaceHigh, C.surfaceHighest]}
+          style={s.heroPlaceholder}
+        >
+          <Feather name="star" size={48} color={C.primary} />
+          <Text style={s.heroPlaceholderText}>Choose your celebration</Text>
+        </LinearGradient>
+
         <View style={s.occasionGrid}>
-          {OCCASIONS.map((o) => {
+          {OCCASIONS.map((o, index) => {
             const active = form.occasion === o.label;
             return (
-              <TouchableOpacity
+              <Reanimated.View
                 key={o.label}
-                activeOpacity={0.75}
-                style={[s.occasionCard, {
-                  backgroundColor: active ? colors.primary : colors.card,
-                  borderColor:     active ? colors.primary : colors.border,
-                  shadowColor:     active ? colors.primary : "transparent",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: active ? 0.35 : 0,
-                  shadowRadius:  8,
-                  elevation: active ? 6 : 0,
-                }]}
-                onPress={() => { setForm((f) => ({ ...f, occasion: o.label })); setStepError(""); Haptics.selectionAsync(); }}
+                entering={FadeInDown.delay(index * 80).springify()}
+                style={[s.occasionCardWrap, cardShadow]}
               >
-                <Feather name={o.icon} size={26} color={active ? "#fff" : colors.mutedForeground} />
-                <Text style={[s.occasionLabel, { color: active ? "#fff" : colors.foreground }]}>{o.label}</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={[s.occasionCard, active ? s.occasionCardActive : s.occasionCardInactive]}
+                  onPress={() => {
+                    setForm((f) => ({ ...f, occasion: o.label }));
+                    setStepError("");
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <View style={[s.occasionIconCircle, active ? s.occasionIconActive : s.occasionIconInactive]}>
+                    <Feather name={o.icon} size={28} color={active ? "#FFFFFF" : "#633F00"} />
+                  </View>
+                  <Text style={[s.occasionLabel, active && s.occasionLabelActive]} numberOfLines={2}>
+                    {o.label}
+                  </Text>
+                </TouchableOpacity>
+              </Reanimated.View>
             );
           })}
         </View>
@@ -375,94 +452,160 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // Step 2 – Guest count
+  // ── Step 2: Guest count ────────────────────────────────────────────────────
   function renderStep2() {
     return (
       <View>
-        {renderStepLabel("How many guests?")}
-        <View style={[s.counterCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[s.counterBtn, { backgroundColor: form.guestCount <= 1 ? colors.muted : colors.primary }]}
-            onPress={() => form.guestCount > 1 && setForm((f) => ({ ...f, guestCount: f.guestCount - 1 }))}
+        {renderStepLabel("Who's coming?")}
 
-          >
-            <Feather name="minus" size={22} color={form.guestCount <= 1 ? colors.mutedForeground : "#fff"} />
-          </TouchableOpacity>
-          <View style={s.counterNumWrap}>
-            <Text style={[s.counterNum, { color: colors.foreground }]}>{form.guestCount}</Text>
-            <Text style={[s.counterNumLabel, { color: colors.mutedForeground }]}>guests</Text>
-          </View>
+        {/* Hero */}
+        <LinearGradient
+          colors={[C.surfaceHigh, C.surfaceLow]}
+          style={[s.heroPlaceholder, { height: 200, marginBottom: 32 }]}
+        >
+          <Feather name="users" size={48} color={C.primary} />
+          <Text style={s.heroPlaceholderText}>Guest count</Text>
+        </LinearGradient>
+
+        {/* Stepper */}
+        <View style={s.counterRow}>
           <TouchableOpacity
             activeOpacity={0.8}
-            style={[s.counterBtn, { backgroundColor: form.guestCount >= 99 ? colors.muted : colors.primary }]}
+            style={[s.counterRoundBtn, s.counterBtnMinus, form.guestCount <= 1 && s.counterBtnDisabled]}
+            onPress={() => form.guestCount > 1 && setForm((f) => ({ ...f, guestCount: f.guestCount - 1 }))}
+          >
+            <Feather name="minus" size={28} color={form.guestCount <= 1 ? C.textMuted : C.primary} />
+          </TouchableOpacity>
+
+          <View style={s.counterCenter}>
+            <Reanimated.View style={countAnimStyle}>
+              <Text style={s.counterNum}>{form.guestCount}</Text>
+            </Reanimated.View>
+            <Text style={s.counterNumLabel}>GUESTS</Text>
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[s.counterRoundBtn, s.counterBtnPlus, form.guestCount >= 99 && s.counterBtnDisabled]}
             onPress={() => form.guestCount < 99 && setForm((f) => ({ ...f, guestCount: f.guestCount + 1 }))}
           >
-            <Feather name="plus" size={22} color={form.guestCount >= 99 ? colors.mutedForeground : "#fff"} />
+            <Feather name="plus" size={28} color={form.guestCount >= 99 ? C.textMuted : "#FFFFFF"} />
           </TouchableOpacity>
         </View>
+
+        {/* Quick add chips */}
         <View style={s.quickAddRow}>
           {GUEST_QUICK_ADD.map((n) => (
-            <TouchableOpacity key={n} activeOpacity={0.75}
-              style={[s.quickAddBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+            <TouchableOpacity
+              key={n}
+              activeOpacity={0.75}
+              style={s.quickAddBtn}
               onPress={() => { setForm((f) => ({ ...f, guestCount: Math.min(f.guestCount + n, 99) })); Haptics.selectionAsync(); }}
             >
-              <Text style={[s.quickAddText, { color: colors.primary }]}>+{n}</Text>
+              <Text style={s.quickAddText}>+{n}</Text>
             </TouchableOpacity>
           ))}
-          <TouchableOpacity activeOpacity={0.75}
-            style={[s.quickAddBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={s.quickAddBtn}
             onPress={() => { setForm((f) => ({ ...f, guestCount: 10 })); Haptics.selectionAsync(); }}
           >
-            <Text style={[s.quickAddText, { color: colors.mutedForeground }]}>Reset</Text>
+            <Text style={[s.quickAddText, { color: C.textMuted }]}>Reset</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Capacity note */}
+        {form.guestCount > 8 && (
+          <View style={s.capacityNote}>
+            <Feather name="info" size={18} color={C.secondary} />
+            <Text style={s.capacityNoteText}>
+              For {form.guestCount}+ guests, consider a buffet or family-style setup for easier service.
+            </Text>
+          </View>
+        )}
       </View>
     );
   }
 
-  // Step 3 – Budget
+  // ── Step 3: Budget ─────────────────────────────────────────────────────────
   function renderStep3() {
+    const perGuest = form.guestCount > 0 && form.budget > 0
+      ? (form.budget / form.guestCount).toFixed(2)
+      : "0.00";
+
     return (
       <View>
         {renderStepLabel("What's your budget?")}
-        <View style={[s.budgetInputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[s.budgetPrefix, { color: colors.primary }]}>SGD $</Text>
-          <TextInput
-            style={[s.budgetInput, { color: colors.foreground }]}
-            value={budgetText}
-            onChangeText={(v) => {
-              setBudgetText(v);
-              const n = parseFloat(v);
-              if (!isNaN(n) && n > 0) { setForm((f) => ({ ...f, budget: n })); setStepError(""); }
-              else setForm((f) => ({ ...f, budget: 0 }));
-            }}
-            placeholder="e.g. 300"
-            placeholderTextColor={colors.mutedForeground}
-            keyboardType="decimal-pad"
-          />
+
+        {/* Hero with guest chip */}
+        <View style={s.budgetHero}>
+          <LinearGradient colors={[C.surfaceHigh, C.surfaceLow]} style={StyleSheet.absoluteFillObject} />
+          <View style={s.budgetHeroChip}>
+            <Text style={s.budgetHeroChipText}>Planning for {form.guestCount} Guests</Text>
+          </View>
         </View>
+
+        {/* Input card with focus animation */}
+        <Reanimated.View style={[s.budgetCard, budgetFocused && s.budgetCardFocused, cardShadow, inputAnimStyle]}>
+          <Text style={s.budgetInputLabel}>ENTER AMOUNT</Text>
+          <View style={s.budgetAmountRow}>
+            <Text style={s.budgetCurrencyPrefix}>$</Text>
+            <TextInput
+              style={s.budgetInput}
+              value={budgetText}
+              onChangeText={(v) => {
+                setBudgetText(v);
+                const n = parseFloat(v);
+                if (!isNaN(n) && n > 0) { setForm((f) => ({ ...f, budget: n })); setStepError(""); }
+                else setForm((f) => ({ ...f, budget: 0 }));
+              }}
+              placeholder="500"
+              placeholderTextColor={C.outlineVariant}
+              keyboardType="decimal-pad"
+              onFocus={() => { setBudgetFocused(true); inputScale.value = withSpring(1.02); }}
+              onBlur={() => { setBudgetFocused(false); inputScale.value = withSpring(1.0); }}
+            />
+          </View>
+        </Reanimated.View>
+
+        {/* Preset chips */}
         <View style={s.presetRow}>
           {BUDGET_PRESETS.map((amt) => {
             const active = form.budget === amt;
             return (
-              <TouchableOpacity key={amt} activeOpacity={0.75}
-                style={[s.presetBtn, {
-                  borderColor:     active ? colors.primary : colors.border,
-                  backgroundColor: active ? colors.primary + "18" : colors.card,
-                }]}
-                onPress={() => { setBudgetText(String(amt)); setForm((f) => ({ ...f, budget: amt })); setStepError(""); Haptics.selectionAsync(); }}
+              <TouchableOpacity
+                key={amt}
+                activeOpacity={0.75}
+                style={[s.presetChip, active ? s.presetChipActive : s.presetChipInactive]}
+                onPress={() => {
+                  setBudgetText(String(amt));
+                  setForm((f) => ({ ...f, budget: amt }));
+                  setStepError("");
+                  Haptics.selectionAsync();
+                }}
               >
-                <Text style={[s.presetText, { color: active ? colors.primary : colors.foreground }]}>${amt}</Text>
+                <Text style={[s.presetChipText, active && s.presetChipTextActive]}>${amt}</Text>
               </TouchableOpacity>
             );
           })}
+        </View>
+
+        {/* Per-guest summary */}
+        <View style={s.perGuestRow}>
+          <View>
+            <Text style={s.perGuestLabel}>ESTIMATED PER GUEST</Text>
+            <Text style={s.perGuestValue}>${perGuest}</Text>
+          </View>
+          <TouchableOpacity style={s.perGuestNextBtn} onPress={goNext} activeOpacity={0.8}>
+            <Text style={s.perGuestNextText}>Next Step</Text>
+            <Feather name="arrow-right" size={14} color={C.primary} />
+          </TouchableOpacity>
         </View>
       </View>
     );
   }
 
-  // Step 4 – Serving style
+  // ── Step 4: Serving style ──────────────────────────────────────────────────
   function renderStep4() {
     return (
       <View>
@@ -470,22 +613,23 @@ export default function PartyPlannerScreen() {
         <View style={s.servingGrid}>
           {SERVING_STYLES.map((style) => {
             const active = form.servingStyle === style.label;
+            const meta   = SERVING_STYLE_META[style.label];
             return (
-              <TouchableOpacity key={style.label} activeOpacity={0.75}
-                style={[s.servingCard, {
-                  backgroundColor: active ? colors.primary : colors.card,
-                  borderColor:     active ? colors.primary : colors.border,
-                  shadowColor:     active ? colors.primary : "transparent",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: active ? 0.3 : 0,
-                  shadowRadius:  8,
-                  elevation: active ? 6 : 0,
-                }]}
-                onPress={() => { setForm((f) => ({ ...f, servingStyle: style.label })); setStepError(""); Haptics.selectionAsync(); }}
+              <TouchableOpacity
+                key={style.label}
+                activeOpacity={0.8}
+                style={[s.servingCard, active ? s.servingCardActive : s.servingCardInactive, cardShadow]}
+                onPress={() => {
+                  setForm((f) => ({ ...f, servingStyle: style.label }));
+                  setStepError("");
+                  Haptics.selectionAsync();
+                }}
               >
-                <Feather name={style.icon} size={26} color={active ? "#fff" : colors.mutedForeground} />
-                <Text style={[s.servingLabel, { color: active ? "#fff" : colors.foreground }]}>{style.label}</Text>
-                <Text style={[s.servingDesc, { color: active ? "rgba(255,255,255,0.8)" : colors.mutedForeground }]}>{style.desc}</Text>
+                <View style={[s.servingIconSquare, { backgroundColor: meta?.bg ?? C.primary }]}>
+                  <Feather name={meta?.feather ?? style.icon} size={22} color={meta?.iconColor ?? "#FFFFFF"} />
+                </View>
+                <Text style={[s.servingLabel, active && s.servingLabelActive]}>{style.label}</Text>
+                <Text style={s.servingDesc}>{style.desc}</Text>
               </TouchableOpacity>
             );
           })}
@@ -494,63 +638,62 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // Step 5 – Dietary restrictions
+  // ── Step 5: Dietary restrictions ───────────────────────────────────────────
   function renderStep5() {
     return (
       <View>
         {renderStepLabel("Any dietary restrictions?")}
-        <Text style={[s.stepHint, { color: colors.mutedForeground }]}>Select all that apply</Text>
+        <Text style={s.stepSubHint}>Select all that apply</Text>
         <View style={s.restrictionList}>
           {RESTRICTIONS.map((tag) => {
             const active = form.restrictions.includes(tag);
             return (
-              <TouchableOpacity key={tag} activeOpacity={0.75}
-                style={[s.restrictionRow, {
-                  backgroundColor: active ? colors.primary + "14" : colors.card,
-                  borderColor:     active ? colors.primary : colors.border,
-                }]}
+              <TouchableOpacity
+                key={tag}
+                activeOpacity={0.75}
+                style={[s.restrictionRow, active ? s.restrictionRowActive : s.restrictionRowInactive]}
                 onPress={() => { toggleRestriction(tag); Haptics.selectionAsync(); }}
               >
-                <View style={[s.checkbox, {
-                  backgroundColor: active ? colors.primary : "transparent",
-                  borderColor:     active ? colors.primary : colors.border,
-                }]}>
-                  {active && <Feather name="check" size={12} color="#fff" />}
+                <View style={[s.restrictionIconCircle]}>
+                  <Feather name="check" size={16} color={active ? C.secondary : C.outlineVariant} />
                 </View>
-                <Text style={[s.restrictionLabel, { color: colors.foreground }]}>{tag}</Text>
+                <Text style={[s.restrictionLabel, active && s.restrictionLabelActive]}>{tag}</Text>
+                {active && <Feather name="check-circle" size={20} color={C.secondary} />}
               </TouchableOpacity>
             );
           })}
+        </View>
+
+        {/* Pro tip */}
+        <View style={s.proTipCard}>
+          <Feather name="info" size={18} color={C.secondary} />
+          <Text style={s.proTipText}>
+            Tip: Select "None" if your guests have no dietary requirements. The AI will plan a varied menu.
+          </Text>
         </View>
       </View>
     );
   }
 
-  // Step 6 – Arrival time
+  // ── Step 6: Arrival time ───────────────────────────────────────────────────
   function renderStep6() {
     return (
       <View>
         {renderStepLabel("When are guests arriving?")}
-        <Text style={[s.stepHint, { color: colors.mutedForeground, marginBottom: 16 }]}>
-          Tap a time — used to build your prep timeline
-        </Text>
+        <Text style={s.stepSubHint}>Tap a time — used to build your prep timeline</Text>
         <View style={s.timeGrid}>
           {TIME_SLOTS.map((slot) => {
             const selected = form.arrivalTime === slot.value;
             return (
-              <TouchableOpacity key={slot.value} activeOpacity={0.75}
+              <TouchableOpacity
+                key={slot.value}
+                activeOpacity={0.75}
                 onPress={() => { setForm((f) => ({ ...f, arrivalTime: slot.value })); setStepError(""); Haptics.selectionAsync(); }}
-                style={[s.timeChip, {
-                  backgroundColor: selected ? colors.primary : colors.card,
-                  borderColor:     selected ? colors.primary : colors.border,
-                  shadowColor:     selected ? colors.primary : "transparent",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: selected ? 0.3 : 0,
-                  shadowRadius:  4,
-                  elevation: selected ? 3 : 0,
-                }]}
+                style={[s.timeChip, selected ? s.timeChipActive : s.timeChipInactive]}
               >
-                <Text style={[s.timeChipText, { color: selected ? "#fff" : colors.foreground }]}>{slot.label}</Text>
+                <Text style={[s.timeChipText, selected ? s.timeChipTextActive : s.timeChipTextInactive]}>
+                  {slot.label}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -559,20 +702,18 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // Step 7 – Additional preferences
+  // ── Step 7: Additional preferences ────────────────────────────────────────
   function renderStep7() {
     return (
       <View>
         {renderStepLabel("Anything else to know?")}
-        <Text style={[s.stepHint, { color: colors.mutedForeground }]}>
-          Optional — kids attending, favourite dishes, spice level…
-        </Text>
+        <Text style={s.stepSubHint}>Optional — kids attending, favourite dishes, spice level…</Text>
         <TextInput
-          style={[s.prefInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+          style={s.prefInput}
           value={form.additionalPreferences}
           onChangeText={(v) => setForm((f) => ({ ...f, additionalPreferences: v }))}
           placeholder="e.g. Kids attending, guests love spicy food, thinking of a cheese platter"
-          placeholderTextColor={colors.mutedForeground}
+          placeholderTextColor={C.textMuted}
           multiline
           numberOfLines={4}
         />
@@ -580,54 +721,51 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // LOADING
-  // ────────────────────────────────────────────────────────────────────────────
+  // ── Loading ────────────────────────────────────────────────────────────────
   function renderLoading() {
     return (
       <View style={s.loadingWrap}>
-        <Text style={s.loadingEmoji}>🎉</Text>
-        <Text style={[s.loadingAppName, { color: colors.primary }]}>PartySwipe AI</Text>
-        <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 20 }} />
-        <Text style={[s.loadingTitle, { color: colors.foreground }]}>Crafting your perfect party plan…</Text>
-        <Text style={[s.loadingSub,   { color: colors.mutedForeground }]}>Personalised just for you ✨</Text>
+        <LinearGradient
+          colors={[C.surfaceHigh, C.surfaceLow]}
+          style={s.loadingHero}
+        >
+          <Text style={s.loadingEmoji}>🎉</Text>
+        </LinearGradient>
+        <Text style={s.loadingAppName}>PantrySwipe AI</Text>
+        <ActivityIndicator size="large" color={C.primary} style={{ marginVertical: 20 }} />
+        <Text style={s.loadingTitle}>Crafting your perfect party plan…</Text>
+        <Text style={s.loadingSub}>Personalised just for you ✨</Text>
       </View>
     );
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // ERROR
-  // ────────────────────────────────────────────────────────────────────────────
+  // ── Error ──────────────────────────────────────────────────────────────────
   function renderError() {
     return (
-      <View style={[s.errorWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Feather name="alert-circle" size={48} color={colors.danger} />
-        <Text style={[s.errorTitle, { color: colors.foreground }]}>Something went wrong.</Text>
-        <Text style={[s.errorMsg, { color: colors.mutedForeground }]}>{errorMessage}</Text>
-        <TouchableOpacity activeOpacity={0.8}
-          style={[s.primaryBtn, { backgroundColor: colors.primary }]}
-          onPress={() => submitPlan()}
-        >
+      <View style={s.errorWrap}>
+        <Feather name="alert-circle" size={48} color={C.danger} />
+        <Text style={s.errorTitle}>Something went wrong.</Text>
+        <Text style={s.errorMsg}>{errorMessage}</Text>
+        <TouchableOpacity activeOpacity={0.8} style={s.primaryBtn} onPress={() => submitPlan()}>
           <Text style={s.primaryBtnText}>Try Again</Text>
         </TouchableOpacity>
-        <TouchableOpacity activeOpacity={0.8}
-          style={[s.secondaryBtn, { borderColor: colors.border }]}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={s.secondaryBtn}
           onPress={() => { setAppState("wizard"); setWizardStep(1); }}
         >
-          <Feather name="edit-2" size={15} color={colors.foreground} />
-          <Text style={[s.secondaryBtnText, { color: colors.foreground }]}>Edit Preferences</Text>
+          <Feather name="edit-2" size={15} color={C.textPrimary} />
+          <Text style={s.secondaryBtnText}>Edit Preferences</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // PLAN CARDS
-  // ────────────────────────────────────────────────────────────────────────────
+  // ── Plan card shell ────────────────────────────────────────────────────────
   function planCard(sectionKey: string, emoji: string, title: string, children: React.ReactNode) {
-    const accent = SECTION_ACCENT[sectionKey] ?? colors.primary;
+    const accent = SECTION_ACCENT[sectionKey] ?? C.primary;
     return (
-      <View style={[s.planCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[s.planCard, cardShadow]}>
         <View style={[s.planCardHeader, { backgroundColor: accent }]}>
           <Text style={s.planCardHeaderEmoji}>{emoji}</Text>
           <Text style={s.planCardHeaderTitle}>{title}</Text>
@@ -637,7 +775,7 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // Party Overview
+  // ── Party Overview ─────────────────────────────────────────────────────────
   function renderOverviewCard(text: string) {
     const rows = text.split("\n").filter(Boolean);
     const allRows = generatedAt ? [...rows, `Generated At: ${generatedAt}`] : rows;
@@ -648,9 +786,9 @@ export default function PartyPlannerScreen() {
           const value = rest.join(":").trim();
           if (!value) return null;
           return (
-            <View key={i} style={[s.overviewCell, { borderBottomColor: colors.border }]}>
-              <Text style={[s.overviewKey, { color: colors.mutedForeground }]}>{key?.trim()}</Text>
-              <Text style={[s.overviewVal, { color: colors.foreground }]}>{value}</Text>
+            <View key={i} style={s.overviewCell}>
+              <Text style={s.overviewKey}>{key?.trim()}</Text>
+              <Text style={s.overviewVal}>{value}</Text>
             </View>
           );
         })}
@@ -658,11 +796,11 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // Menu (tabbed)
+  // ── Menu (tabbed) ──────────────────────────────────────────────────────────
   function renderMenuCard(sections: Record<string, string>) {
     const availableTabs = MENU_TABS.filter((t) => sections[t]);
     const activeText    = sections[menuTab] ?? "";
-    const tabAccent     = SECTION_ACCENT[menuTab] ?? colors.primary;
+    const tabAccent     = SECTION_ACCENT[menuTab] ?? C.primary;
 
     function renderMenuItems(text: string) {
       return text.split("\n").filter(Boolean).map((line, i) => {
@@ -675,11 +813,11 @@ export default function PartyPlannerScreen() {
           const costMatch = rawCost.match(/SGD\s*\$?([\d.,]+)/i);
           const cost      = costMatch ? `SGD $${costMatch[1]}` : rawCost.replace(/Estimated Cost:\s*/i, "");
           return (
-            <View key={i} style={[s.menuRow, { borderBottomColor: colors.border, borderLeftColor: tabAccent }]}>
-              <Text style={[s.menuName,   { color: colors.foreground }]}>{name}</Text>
-              {reason ? <Text style={[s.menuReason, { color: colors.mutedForeground }]}>{reason}</Text> : null}
+            <View key={i} style={[s.menuRow, { borderLeftColor: tabAccent }]}>
+              <Text style={s.menuName}>{name}</Text>
+              {reason ? <Text style={s.menuReason}>{reason}</Text> : null}
               <View style={s.menuMeta}>
-                {qty  ? <Text style={[s.menuQty, { color: colors.mutedForeground }]}>{qty}</Text> : null}
+                {qty  ? <Text style={s.menuQty}>{qty}</Text> : null}
                 {cost ? (
                   <View style={[s.menuCostBadge, { backgroundColor: tabAccent + "18" }]}>
                     <Text style={[s.menuCost, { color: tabAccent }]}>{cost}</Text>
@@ -689,7 +827,7 @@ export default function PartyPlannerScreen() {
             </View>
           );
         }
-        return <Text key={i} style={[s.menuPlain, { color: colors.foreground }]}>{line}</Text>;
+        return <Text key={i} style={s.menuPlain}>{line}</Text>;
       });
     }
 
@@ -698,16 +836,15 @@ export default function PartyPlannerScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabScroll}>
           {availableTabs.map((tab) => {
             const tabActive = menuTab === tab;
-            const accent    = SECTION_ACCENT[tab] ?? colors.primary;
+            const accent    = SECTION_ACCENT[tab] ?? C.primary;
             return (
-              <TouchableOpacity key={tab} activeOpacity={0.75}
-                style={[s.tab, {
-                  backgroundColor: tabActive ? accent : colors.muted,
-                  borderColor:     tabActive ? accent : "transparent",
-                }]}
+              <TouchableOpacity
+                key={tab}
+                activeOpacity={0.75}
+                style={[s.tab, { backgroundColor: tabActive ? accent : C.surfaceHighest, borderColor: tabActive ? accent : "transparent" }]}
                 onPress={() => { setMenuTab(tab); Haptics.selectionAsync(); }}
               >
-                <Text style={[s.tabText, { color: tabActive ? "#fff" : colors.mutedForeground }]}>
+                <Text style={[s.tabText, { color: tabActive ? "#fff" : C.textMuted }]}>
                   {tab.charAt(0) + tab.slice(1).toLowerCase()}
                 </Text>
               </TouchableOpacity>
@@ -719,7 +856,7 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // Shopping List
+  // ── Shopping list ──────────────────────────────────────────────────────────
   function renderShoppingCard(text: string) {
     const CATEGORIES = ["Produce","Protein","Bakery","Dairy","Frozen","Beverages","Miscellaneous"];
     const lines = text.split("\n").filter(Boolean);
@@ -746,25 +883,21 @@ export default function PartyPlannerScreen() {
           const allChecked = items.every((item) => checkedItems[`${cat}:${item}`]);
           return (
             <View key={cat} style={s.shopCat}>
-              <View style={[s.shopCatHeader, { borderBottomColor: colors.border }]}>
-                <Text style={[s.shopCatTitle, { color: allChecked ? colors.secondary : colors.foreground }]}>{cat}</Text>
-                {allChecked && <Feather name="check-circle" size={14} color={colors.secondary} />}
+              <View style={s.shopCatHeader}>
+                <Text style={[s.shopCatTitle, { color: allChecked ? C.secondary : C.textPrimary }]}>{cat}</Text>
+                {allChecked && <Feather name="check-circle" size={14} color={C.secondary} />}
               </View>
               {items.map((item) => {
                 const key     = `${cat}:${item}`;
                 const checked = !!checkedItems[key];
                 return (
                   <TouchableOpacity key={key} style={s.shopRow} onPress={() => toggleCheck(key)} activeOpacity={0.7}>
-                    <View style={[s.shopCheck, {
-                      backgroundColor: checked ? colors.secondary : "transparent",
-                      borderColor:     checked ? colors.secondary : colors.border,
-                    }]}>
-                      {checked && <Feather name="check" size={11} color="#fff" />}
-                    </View>
-                    <Text style={[s.shopItem, {
-                      color: checked ? colors.mutedForeground : colors.foreground,
-                      textDecorationLine: checked ? "line-through" : "none",
-                    }]}>{item}</Text>
+                    <Feather
+                      name={checked ? "check-square" : "square"}
+                      size={22}
+                      color={checked ? C.secondary : C.outlineVariant}
+                    />
+                    <Text style={[s.shopItem, checked && s.shopItemChecked]}>{item}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -775,7 +908,7 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // Budget Breakdown
+  // ── Budget breakdown ───────────────────────────────────────────────────────
   function renderBudgetCard(text: string, meta: PlanMeta) {
     const lines        = text.split("\n").filter(Boolean);
     const budgetCeiling = meta.budget;
@@ -796,37 +929,37 @@ export default function PartyPlannerScreen() {
       const m = line.match(/SGD\s*\$?([\d.,]+)/i);
       return m ? parseFloat(m[1].replace(",", "")) : 0;
     }
-    const total     = parseAmt(totalLine);
-    const remaining = parseAmt(remainingLine);
+    const total      = parseAmt(totalLine);
+    const remaining  = parseAmt(remainingLine);
     const overBudget = remaining < 0;
     return planCard("BUDGET BREAKDOWN", "💰", "Budget Breakdown",
       <>
         {rows.map(({ label, amount }) => {
-          const pct      = Math.min((amount / budgetCeiling) * 100, 100);
-          const barColor = BUDGET_BAR_COLORS[label] ?? colors.primary;
+          const pct2     = Math.min((amount / budgetCeiling) * 100, 100);
+          const barColor = BUDGET_BAR_COLORS[label] ?? C.primary;
           return (
             <View key={label} style={s.budgetBarRow}>
               <View style={s.budgetLabelRow}>
                 <View style={[s.budgetDot, { backgroundColor: barColor }]} />
-                <Text style={[s.budgetLabel, { color: colors.foreground }]}>{label}</Text>
-                <Text style={[s.budgetAmt,   { color: barColor }]}>SGD ${amount.toFixed(2)}</Text>
+                <Text style={s.budgetLabel}>{label}</Text>
+                <Text style={[s.budgetAmt, { color: barColor }]}>SGD ${amount.toFixed(2)}</Text>
               </View>
-              <View style={[s.budgetBarBg, { backgroundColor: colors.muted }]}>
-                <View style={[s.budgetBarFill, { width: `${pct}%` as any, backgroundColor: barColor }]} />
+              <View style={s.budgetBarBg}>
+                <View style={[s.budgetBarFill, { width: `${pct2}%` as `${number}%`, backgroundColor: barColor }]} />
               </View>
             </View>
           );
         })}
-        <View style={[s.budgetSummary, { borderTopColor: colors.border }]}>
+        <View style={s.budgetSummary}>
           <View style={s.budgetSumRow}>
-            <Text style={[s.budgetSumLabel, { color: colors.foreground }]}>Total Estimated Spend</Text>
-            <Text style={[s.budgetSumAmt,   { color: colors.foreground, fontWeight: "700" }]}>SGD ${total.toFixed(2)}</Text>
+            <Text style={s.budgetSumLabel}>Total Estimated Spend</Text>
+            <Text style={[s.budgetSumAmt, { fontFamily: "Epilogue_700Bold" }]}>SGD ${total.toFixed(2)}</Text>
           </View>
           <View style={s.budgetSumRow}>
-            <Text style={[s.budgetSumLabel, { color: overBudget ? colors.danger : colors.secondary }]}>
+            <Text style={[s.budgetSumLabel, { color: overBudget ? C.danger : C.secondary }]}>
               {overBudget ? "Over Budget" : "Remaining Budget"}
             </Text>
-            <Text style={[s.budgetSumAmt, { color: overBudget ? colors.danger : colors.secondary, fontWeight: "700" }]}>
+            <Text style={[s.budgetSumAmt, { color: overBudget ? C.danger : C.secondary, fontFamily: "Epilogue_700Bold" }]}>
               SGD ${Math.abs(remaining).toFixed(2)}
             </Text>
           </View>
@@ -835,7 +968,7 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // Preparation Timeline
+  // ── Preparation timeline ───────────────────────────────────────────────────
   function renderTimelineCard(text: string) {
     const lines = text.split("\n").filter((l) => l.trim() && l.match(/\d{1,2}:\d{2}/));
     return planCard("PREPARATION TIMELINE", "⏰", "Preparation Timeline",
@@ -851,17 +984,16 @@ export default function PartyPlannerScreen() {
                 <View style={[
                   s.timelineDot,
                   isLast
-                    ? { backgroundColor: colors.secondary, width: 14, height: 14, borderRadius: 7 }
+                    ? { backgroundColor: C.secondary, width: 14, height: 14, borderRadius: 7 }
                     : { backgroundColor: SECTION_ACCENT["PREPARATION TIMELINE"] },
                 ]} />
-                {!isLast && <View style={[s.timelineLine, { backgroundColor: colors.border }]} />}
+                {!isLast && <View style={s.timelineLine} />}
               </View>
               <View style={s.timelineContent}>
                 {time ? <Text style={[s.timelineTime, { color: SECTION_ACCENT["PREPARATION TIMELINE"] }]}>{time}</Text> : null}
-                <Text style={[s.timelineAction, {
-                  color:      isLast ? colors.secondary : colors.foreground,
-                  fontWeight: isLast ? "700" : "400",
-                }]}>{action}</Text>
+                <Text style={[s.timelineAction, isLast && { color: C.secondary, fontFamily: "Epilogue_700Bold" }]}>
+                  {action}
+                </Text>
               </View>
             </View>
           );
@@ -870,29 +1002,28 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // Host Tips
+  // ── Host tips ──────────────────────────────────────────────────────────────
   function renderTipsCard(text: string) {
-    const accent = SECTION_ACCENT["HOST TIPS"] ?? colors.primary;
     return planCard("HOST TIPS", "💡", "Host Tips",
       <>
         {text.split("\n").filter(Boolean).map((line, i) => (
           <View key={i} style={s.tipRow}>
-            <View style={[s.tipBullet, { backgroundColor: accent }]} />
-            <Text style={[s.tipText, { color: colors.foreground }]}>{line.replace(/^[-•*]\s*/, "")}</Text>
+            <View style={s.tipBullet} />
+            <Text style={s.tipText}>{line.replace(/^[-•*]\s*/, "")}</Text>
           </View>
         ))}
       </>
     );
   }
 
-  // Validation Checklist
+  // ── Validation checklist ───────────────────────────────────────────────────
   function renderChecklistCard(text: string) {
     return planCard("VALIDATION CHECKLIST", "✅", "Dietary Validation",
       <>
         {text.split("\n").filter(Boolean).map((line, i) => (
-          <View key={i} style={[s.checklistRow, { borderBottomColor: colors.border }]}>
-            <Feather name="check-circle" size={16} color={colors.secondary} />
-            <Text style={[s.checklistText, { color: colors.foreground }]}>
+          <View key={i} style={s.checklistRow}>
+            <Feather name="check-circle" size={16} color={C.secondary} />
+            <Text style={s.checklistText}>
               {line.replace(/^✓\s*/, "").replace(/\*\*/g, "")}
             </Text>
           </View>
@@ -901,22 +1032,60 @@ export default function PartyPlannerScreen() {
     );
   }
 
-  // Full plan
+  // ── Full plan ──────────────────────────────────────────────────────────────
   function renderPlan() {
     if (!planSections) return null;
+
+    // Stats bento — values from form/planMeta (never hardcoded)
+    const statOccasion   = planMeta?.occasion   ?? form.occasion;
+    const statGuests     = planMeta?.guestCount ?? form.guestCount;
+    const statBudget     = planMeta?.budget     ?? form.budget;
+    const statDietary    = (planMeta?.restrictions ?? form.restrictions).filter((r) => r !== "None").join(", ") || "None";
+
+    const STATS = [
+      { icon: "star" as const,        label: "EVENT TYPE",   value: statOccasion || "—"      },
+      { icon: "users" as const,       label: "GUESTS",       value: String(statGuests)        },
+      { icon: "credit-card" as const, label: "BUDGET",       value: `SGD $${statBudget}`      },
+      { icon: "heart" as const,       label: "DIETARY",      value: statDietary               },
+    ];
+
     return (
       <View>
-        {/* Inline back row — replaces the removed header on plan screen */}
+        {/* Back row */}
         <TouchableOpacity
           activeOpacity={0.7}
-          style={[s.planBackRow, { borderBottomColor: colors.border }]}
+          style={s.planBackRow}
           onPress={() => { setAppState("wizard"); setWizardStep(1); }}
         >
-          <Feather name="arrow-left" size={15} color={colors.mutedForeground} />
+          <Feather name="arrow-left" size={15} color={C.textMuted} />
+          <Text style={s.planBackText}>Edit preferences</Text>
         </TouchableOpacity>
 
+        {/* Party badge */}
+        <View style={s.partyBadge}>
+          <Feather name="star" size={14} color={C.primary} />
+          <Text style={s.partyBadgeText}>{statOccasion.toUpperCase() || "YOUR PARTY"}</Text>
+        </View>
+
+        <Text style={s.planHeadline}>Your Curated Celebration Plan</Text>
+        <Text style={s.planSubtitle}>
+          {statGuests} guests · SGD ${statBudget} budget · {form.servingStyle || "Custom"} style
+        </Text>
+
+        {/* Stats bento */}
+        <View style={s.statsBento}>
+          {STATS.map((stat) => (
+            <View key={stat.label} style={[s.statCell, cardShadow]}>
+              <Feather name={stat.icon} size={20} color={C.primary} style={{ marginBottom: 8 }} />
+              <Text style={s.statLabel}>{stat.label}</Text>
+              <Text style={s.statValue} numberOfLines={1}>{stat.value}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Warning */}
         {restrictionWarning && (
-          <View style={[s.warnBanner, { backgroundColor: "#FFF8E1", borderColor: "#F9A825" }]}>
+          <View style={s.warnBanner}>
             <Feather name="alert-triangle" size={16} color="#F9A825" />
             <Text style={s.warnText}>
               Some items may need review. Please check the Dietary Validation section below.
@@ -924,53 +1093,56 @@ export default function PartyPlannerScreen() {
           </View>
         )}
 
-        {planSections["PARTY OVERVIEW"]      ? renderOverviewCard(planSections["PARTY OVERVIEW"])           : null}
+        {/* Plan section cards */}
+        {planSections["PARTY OVERVIEW"]       ? renderOverviewCard(planSections["PARTY OVERVIEW"])                  : null}
         {renderMenuCard(planSections)}
-        {planSections["SHOPPING LIST"]       ? renderShoppingCard(planSections["SHOPPING LIST"])            : null}
+        {planSections["SHOPPING LIST"]        ? renderShoppingCard(planSections["SHOPPING LIST"])                    : null}
         {planSections["BUDGET BREAKDOWN"] && planMeta
-          ? renderBudgetCard(planSections["BUDGET BREAKDOWN"], planMeta) : null}
-        {planSections["PREPARATION TIMELINE"]? renderTimelineCard(planSections["PREPARATION TIMELINE"])    : null}
-        {planSections["HOST TIPS"]           ? renderTipsCard(planSections["HOST TIPS"])                    : null}
-        {planSections["VALIDATION CHECKLIST"]? renderChecklistCard(planSections["VALIDATION CHECKLIST"])   : null}
+          ? renderBudgetCard(planSections["BUDGET BREAKDOWN"], planMeta)                                              : null}
+        {planSections["PREPARATION TIMELINE"] ? renderTimelineCard(planSections["PREPARATION TIMELINE"])             : null}
+        {planSections["HOST TIPS"]            ? renderTipsCard(planSections["HOST TIPS"])                             : null}
+        {planSections["VALIDATION CHECKLIST"] ? renderChecklistCard(planSections["VALIDATION CHECKLIST"])            : null}
 
+        {/* CTA buttons */}
         <View style={s.planActions}>
-          <TouchableOpacity activeOpacity={0.8}
-            style={[s.primaryBtn, { backgroundColor: colors.primary, opacity: regenLoading ? 0.7 : 1 }]}
-            onPress={() => submitPlan(true)} disabled={regenLoading}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[s.primaryBtn, { opacity: regenLoading ? 0.7 : 1 }]}
+            onPress={() => submitPlan(true)}
+            disabled={regenLoading}
           >
             {regenLoading
               ? <ActivityIndicator size="small" color="#fff" />
               : <Feather name="refresh-cw" size={16} color="#fff" />}
             <Text style={s.primaryBtnText}>{regenLoading ? "Regenerating…" : "Regenerate Plan"}</Text>
           </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.8}
-            style={[s.secondaryBtn, { borderColor: colors.border }]}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={s.secondaryBtn}
             onPress={() => { setAppState("wizard"); setWizardStep(1); }}
           >
-            <Feather name="edit-2" size={15} color={colors.foreground} />
-            <Text style={[s.secondaryBtnText, { color: colors.foreground }]}>Edit Preferences</Text>
+            <Feather name="edit-2" size={15} color={C.textPrimary} />
+            <Text style={s.secondaryBtnText}>Edit Preferences</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // MAIN RENDER — headerless layout
-  // ────────────────────────────────────────────────────────────────────────────
+  // ── Main render ────────────────────────────────────────────────────────────
   const contentMaxWidth = isWide ? (appState === "plan" ? 800 : 600) : undefined;
   const cwStyle = contentMaxWidth ? { maxWidth: contentMaxWidth, alignSelf: "center" as const, width: "100%" as const } : {};
 
   return (
-    <View style={[s.root, { backgroundColor: colors.background }]}>
+    <View style={[s.root, { backgroundColor: C.background }]}>
 
-      {/* ── Wizard: inline top bar with safe-area padding baked in ── */}
+      {/* Wizard top bar (inline, safe-area baked in) */}
       {appState === "wizard" && renderWizardTopBar()}
 
-      {/* ── Non-wizard: just consume the safe-area space ── */}
+      {/* Non-wizard: consume safe-area space */}
       {appState !== "wizard" && <View style={{ height: insets.top }} />}
 
-      {/* ── Single shared scroll view ── */}
+      {/* Shared scroll */}
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
@@ -989,208 +1161,352 @@ export default function PartyPlannerScreen() {
         </View>
       </ScrollView>
 
-      {/* ── Wizard: sticky footer with error + forward CTA ── */}
+      {/* Wizard sticky footer */}
       {appState === "wizard" && (
-        <View style={[s.wizFooter, {
-          backgroundColor: colors.background,
-          borderTopColor:  colors.border,
-          paddingBottom:   Math.max(insets.bottom, 20),
-        }]}>
+        <View style={[s.wizFooter, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: C.background }]}>
           {stepError ? (
-            <Text style={[s.stepError, { color: colors.danger }]}>{stepError}</Text>
+            <Text style={s.stepError}>{stepError}</Text>
           ) : null}
-          {wizardStep < totalSteps ? (
-            <TouchableOpacity activeOpacity={0.8}
-              style={[s.primaryBtn, { backgroundColor: colors.primary }]}
-              onPress={goNext}
-            >
-              <Text style={s.primaryBtnText}>Continue</Text>
-              <Feather name="arrow-right" size={16} color="#fff" />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity activeOpacity={0.8}
-              style={[s.primaryBtn, { backgroundColor: colors.primary }]}
-              onPress={() => submitPlan()}
-            >
-              <Text style={s.primaryBtnText}>Generate My Plan</Text>
-              <Text style={{ fontSize: 18 }}>🎉</Text>
-            </TouchableOpacity>
-          )}
+
+          <View style={s.footerBtnRow}>
+            {wizardStep > 1 && (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={s.backBtn}
+                onPress={goBack}
+              >
+                <Text style={s.backBtnText}>Back</Text>
+              </TouchableOpacity>
+            )}
+
+            {wizardStep < totalSteps ? (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[s.primaryBtn, { flex: 1 }, !form.occasion && wizardStep === 1 && s.primaryBtnDisabled]}
+                onPress={goNext}
+              >
+                <Text style={s.primaryBtnText}>Continue</Text>
+                <Feather name="arrow-right" size={16} color="#fff" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[s.primaryBtn, { flex: 1 }]}
+                onPress={() => submitPlan()}
+              >
+                <Text style={s.primaryBtnText}>Generate My Plan</Text>
+                <Text style={{ fontSize: 18 }}>🎉</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <Text style={s.stepIndicatorText}>Step {wizardStep} of {totalSteps}</Text>
         </View>
       )}
     </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// ── Styles ─────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root: { flex: 1 },
-
-  // ── Wizard top bar (replaces header) ──────────────────────────────────────
-  wizTopBar: {
-    flexDirection: "row", alignItems: "flex-end",
-    paddingHorizontal: 16, paddingBottom: 12,
-  },
-  wizTopBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  wizTopDots: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 44 },
-  dot: { borderRadius: 4 },
-
-  // ── Wizard sticky footer ────────────────────────────────────────────────
-  wizFooter: {
-    paddingHorizontal: 20, paddingTop: 14,
-    borderTopWidth: 1, gap: 8,
-  },
-
-  // ── Scroll areas ─────────────────────────────────────────────────────────
-  wizardScrollContent: { paddingHorizontal: 20, paddingTop: 8,  paddingBottom: 16 },
-  planScrollContent:   { paddingHorizontal: 16, paddingTop: 4,  paddingBottom: 32 },
+  root:   { flex: 1 },
   centerWrap: { gap: 16 },
 
-  // ── Step label ───────────────────────────────────────────────────────────
+  // ── Wizard top bar ──────────────────────────────────────────────────────
+  wizTopBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 12,
+  },
+  wizTopBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+
+  // Progress bar
+  progressTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#EEE0D2",
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: "#F5A623",
+    ...Platform.select({
+      ios:     { shadowColor: "#F5A623", shadowOpacity: 0.35, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } },
+      android: { elevation: 2 },
+    }),
+  },
+
+  // ── Scroll areas ────────────────────────────────────────────────────────
+  wizardScrollContent: { paddingHorizontal: 20, paddingTop: 8,  paddingBottom: 16 },
+  planScrollContent:   { paddingHorizontal: 16, paddingTop: 4,  paddingBottom: 32 },
+
+  // ── Step label ──────────────────────────────────────────────────────────
   stepLabelWrap: { marginBottom: 24, gap: 6 },
-  stepEmoji: { fontSize: 44, marginBottom: 4 },
-  stepTitle: { fontSize: 26, fontWeight: "800", lineHeight: 32 },
-  stepHint:  { fontSize: 14, lineHeight: 20, marginTop: -16, marginBottom: 12 },
-  stepError: { fontSize: 13, fontWeight: "600" },
+  stepMetaRow:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  stepCounter:   { fontSize: 12, fontFamily: "Epilogue_700Bold", letterSpacing: 1.5, color: "#F5A623", textTransform: "uppercase" },
+  stepPercent:   { fontSize: 12, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+  stepTitle:     { fontSize: 28, fontFamily: "Epilogue_700Bold", color: "#141210", lineHeight: 34 },
+  stepHint:      { fontSize: 16, fontFamily: "Epilogue_400Regular", color: "#7A7570", lineHeight: 24 },
+  stepSubHint:   { fontSize: 14, fontFamily: "Epilogue_400Regular", color: "#7A7570", lineHeight: 20, marginTop: -16, marginBottom: 12 },
+  stepError:     { fontSize: 13, fontFamily: "Epilogue_700Bold", color: "#E84040" },
 
-  // ── Occasion grid ────────────────────────────────────────────────────────
-  occasionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  occasionCard: { width: "47%", aspectRatio: 1.2, alignItems: "center", justifyContent: "center", borderRadius: 16, borderWidth: 1.5, gap: 10, minHeight: 44 },
-  occasionLabel: { fontSize: 13, fontWeight: "700", textAlign: "center" },
+  // ── Hero placeholders ───────────────────────────────────────────────────
+  heroPlaceholder: {
+    height: 160, borderRadius: 16, overflow: "hidden",
+    alignItems: "center", justifyContent: "center",
+    marginTop: 24, marginBottom: 24, gap: 10,
+  },
+  heroPlaceholderText: { fontFamily: "Epilogue_700Bold", fontSize: 16, color: "#141210" },
 
-  // ── Guest counter ────────────────────────────────────────────────────────
-  counterCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 16, borderWidth: 1.5, padding: 20 },
-  counterBtn: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
-  counterNumWrap: { alignItems: "center" },
-  counterNum: { fontSize: 52, fontWeight: "800", lineHeight: 56, minWidth: 80, textAlign: "center" },
-  counterNumLabel: { fontSize: 13, fontWeight: "500", marginTop: -4 },
-  quickAddRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
-  quickAddBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 100, borderWidth: 1.5, minHeight: 40 },
-  quickAddText: { fontSize: 14, fontWeight: "700" },
+  // ── Occasion grid ───────────────────────────────────────────────────────
+  occasionGrid:         { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  occasionCardWrap:     { width: CARD_WIDTH, borderRadius: 16, overflow: "hidden" },
+  occasionCard:         { width: "100%", borderRadius: 16, borderWidth: 2, padding: 20, alignItems: "center", gap: 12, minHeight: 44 },
+  occasionCardActive:   { backgroundColor: "#F4E6D8", borderColor: "#F5A623" },
+  occasionCardInactive: { backgroundColor: "#FFF1E4", borderColor: "transparent" },
+  occasionIconCircle:   { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center" },
+  occasionIconActive:   { backgroundColor: "#F5A623" },
+  occasionIconInactive: { backgroundColor: "#FFDDB4" },
+  occasionLabel:        { fontFamily: "Epilogue_700Bold", fontSize: 14, color: "#141210", textAlign: "center" },
+  occasionLabelActive:  { color: "#141210" },
 
-  // ── Budget ───────────────────────────────────────────────────────────────
-  budgetInputRow: { flexDirection: "row", alignItems: "center", borderRadius: 16, borderWidth: 1.5, paddingHorizontal: 18, paddingVertical: 16, gap: 4 },
-  budgetPrefix: { fontSize: 22, fontWeight: "700" },
-  budgetInput: { flex: 1, fontSize: 22, fontWeight: "600" },
-  presetRow: { flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" },
-  presetBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 100, borderWidth: 1.5, minHeight: 40 },
-  presetText: { fontSize: 14, fontWeight: "700" },
+  // ── Guest counter ───────────────────────────────────────────────────────
+  counterRow:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 32, marginBottom: 24 },
+  counterCenter:  { alignItems: "center" },
+  counterNum:     { fontFamily: "Epilogue_700Bold", fontSize: 56, color: "#F5A623", lineHeight: 64 },
+  counterNumLabel:{ fontFamily: "Epilogue_700Bold", fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: "#7A7570", marginTop: 4 },
+  counterRoundBtn:{ width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center" },
+  counterBtnMinus:{ backgroundColor: "#F4E6D8" },
+  counterBtnPlus: {
+    backgroundColor: "#F5A623",
+    ...Platform.select({
+      ios:     { shadowColor: "#F5A623", shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+      android: { elevation: 4 },
+    }),
+  },
+  counterBtnDisabled: { opacity: 0.4 },
+  quickAddRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
+  quickAddBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 100, borderWidth: 1.5, borderColor: "#D7C3AE", backgroundColor: "#FFF1E4", minHeight: 44, justifyContent: "center" },
+  quickAddText:{ fontSize: 14, fontFamily: "Epilogue_700Bold", color: "#F5A623" },
+  capacityNote:{ flexDirection: "row", gap: 12, backgroundColor: "#FFF1E4", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#D7C3AE", marginTop: 8, alignItems: "flex-start" },
+  capacityNoteText: { flex: 1, fontSize: 13, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
 
-  // ── Serving style ────────────────────────────────────────────────────────
-  servingGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  servingCard: { width: "47%", alignItems: "center", paddingVertical: 22, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1.5, gap: 8, minHeight: 44 },
-  servingLabel: { fontSize: 15, fontWeight: "700", textAlign: "center" },
-  servingDesc:  { fontSize: 12, textAlign: "center", lineHeight: 16 },
+  // ── Budget ──────────────────────────────────────────────────────────────
+  budgetHero: {
+    height: 180, borderRadius: 16, overflow: "hidden",
+    alignItems: "flex-start", justifyContent: "flex-end",
+    padding: 16, marginBottom: 20,
+  },
+  budgetHeroChip: {
+    backgroundColor: "#F5A623", borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6,
+  },
+  budgetHeroChipText: { fontFamily: "Epilogue_700Bold", fontSize: 12, color: "#644000" },
+  budgetCard: {
+    backgroundColor: "#FFFFFF", borderRadius: 16, padding: 24,
+    borderWidth: 2, borderColor: "#D7C3AE", marginBottom: 24,
+  },
+  budgetCardFocused: { borderColor: "#F5A623" },
+  budgetInputLabel:  { fontSize: 11, fontFamily: "Epilogue_700Bold", letterSpacing: 2, color: "#7A7570", textTransform: "uppercase", marginBottom: 12 },
+  budgetAmountRow:   { flexDirection: "row", alignItems: "center" },
+  budgetCurrencyPrefix: { fontFamily: "Epilogue_700Bold", fontSize: 40, color: "#F5A623", marginRight: 8 },
+  budgetInput:       { flex: 1, fontSize: 40, fontFamily: "Epilogue_700Bold", color: "#141210", backgroundColor: "transparent" },
+  presetRow:         { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 24 },
+  presetChip:        { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 999, minHeight: 44, justifyContent: "center" },
+  presetChipActive:  { backgroundColor: "#F5A623" },
+  presetChipInactive:{ backgroundColor: "#EEE0D2", borderWidth: 1, borderColor: "#D7C3AE" },
+  presetChipText:    { fontSize: 15, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
+  presetChipTextActive: { fontFamily: "Epilogue_700Bold", color: "#644000" },
+  perGuestRow: {
+    backgroundColor: "#FFF1E4", borderRadius: 16, padding: 16,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+  },
+  perGuestLabel: { fontSize: 11, fontFamily: "Epilogue_700Bold", letterSpacing: 1.5, color: "#7A7570", textTransform: "uppercase", marginBottom: 4 },
+  perGuestValue: { fontFamily: "Epilogue_700Bold", fontSize: 24, color: "#4CAF76" },
+  perGuestNextBtn:{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, minHeight: 44 },
+  perGuestNextText: { fontFamily: "Epilogue_700Bold", fontSize: 13, color: "#F5A623" },
 
-  // ── Restrictions ─────────────────────────────────────────────────────────
-  restrictionList: { gap: 8 },
-  restrictionRow: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: 12, borderWidth: 1.5, gap: 12, minHeight: 52 },
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  restrictionLabel: { fontSize: 15, fontWeight: "600", flex: 1 },
+  // ── Serving style ───────────────────────────────────────────────────────
+  servingGrid:         { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  servingCard:         { width: CARD_WIDTH, borderRadius: 16, borderWidth: 2, padding: 20, gap: 8, minHeight: 44 },
+  servingCardActive:   { backgroundColor: "#FAEBDD", borderColor: "#141210" },
+  servingCardInactive: { backgroundColor: "#FFF1E4", borderColor: "transparent" },
+  servingIconSquare:   { width: 48, height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  servingLabel:        { fontFamily: "Epilogue_700Bold", fontSize: 16, color: "#141210" },
+  servingLabelActive:  { color: "#141210" },
+  servingDesc:         { fontFamily: "Epilogue_400Regular", fontSize: 13, color: "#7A7570", lineHeight: 18 },
 
-  // ── Time chips ───────────────────────────────────────────────────────────
-  timeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
-  timeChip: { borderRadius: 10, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 11, minWidth: "22%" },
-  timeChipText: { fontSize: 13, fontWeight: "600", textAlign: "center" },
+  // ── Dietary restrictions ────────────────────────────────────────────────
+  restrictionList:        { gap: 8, marginBottom: 16 },
+  restrictionRow:         { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: 16, borderWidth: 2, gap: 12, minHeight: 52 },
+  restrictionRowActive:   { backgroundColor: "rgba(76,175,118,0.12)", borderColor: "#4CAF76" },
+  restrictionRowInactive: { backgroundColor: "#FFF1E4", borderColor: "transparent" },
+  restrictionIconCircle:  { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.5)", alignItems: "center", justifyContent: "center" },
+  restrictionLabel:       { flex: 1, fontFamily: "Epilogue_700Bold", fontSize: 14, color: "#141210" },
+  restrictionLabelActive: { color: "#141210" },
+  proTipCard: {
+    flexDirection: "row", gap: 12, backgroundColor: "rgba(76,175,118,0.08)",
+    borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "rgba(76,175,118,0.15)",
+    alignItems: "flex-start",
+  },
+  proTipText: { flex: 1, fontSize: 13, fontFamily: "Epilogue_400Regular", color: "#7A7570" },
 
-  // ── Preferences ──────────────────────────────────────────────────────────
-  prefInput: { borderRadius: 14, borderWidth: 1.5, padding: 16, fontSize: 15, minHeight: 110, textAlignVertical: "top", lineHeight: 22 },
+  // ── Time chips ──────────────────────────────────────────────────────────
+  timeGrid:           { flexDirection: "row", flexWrap: "wrap", gap: 9 },
+  timeChip:           { borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 11, minWidth: "22%", alignItems: "center", minHeight: 44, justifyContent: "center" },
+  timeChipActive:     { backgroundColor: "#F5A623", borderColor: "#F5A623" },
+  timeChipInactive:   { backgroundColor: "#FFF1E4", borderColor: "#D7C3AE" },
+  timeChipText:       { fontSize: 13, fontFamily: "Epilogue_700Bold", textAlign: "center" },
+  timeChipTextActive: { color: "#FFFFFF" },
+  timeChipTextInactive:{ color: "#141210" },
 
-  // ── Shared buttons ───────────────────────────────────────────────────────
-  primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 17, borderRadius: 100, minHeight: 54, gap: 8 },
-  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  secondaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, borderRadius: 100, borderWidth: 1.5, minHeight: 54 },
-  secondaryBtnText: { fontSize: 15, fontWeight: "600" },
+  // ── Preferences ─────────────────────────────────────────────────────────
+  prefInput: {
+    borderRadius: 16, borderWidth: 1.5, borderColor: "#D7C3AE",
+    padding: 16, fontSize: 15, minHeight: 110, textAlignVertical: "top",
+    lineHeight: 22, backgroundColor: "#FFFFFF", color: "#141210",
+    fontFamily: "Epilogue_400Regular",
+  },
 
   // ── Loading ──────────────────────────────────────────────────────────────
-  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 80, gap: 6 },
-  loadingEmoji: { fontSize: 60, marginBottom: 8 },
-  loadingAppName: { fontSize: 24, fontWeight: "800" },
-  loadingTitle: { fontSize: 18, fontWeight: "700", textAlign: "center", marginTop: 8 },
-  loadingSub:   { fontSize: 15, textAlign: "center" },
+  loadingWrap:    { flex: 1, alignItems: "center", paddingVertical: 40, gap: 6 },
+  loadingHero:    { width: 160, height: 160, borderRadius: 80, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  loadingEmoji:   { fontSize: 60 },
+  loadingAppName: { fontFamily: "Epilogue_700Bold", fontSize: 24, color: "#F5A623" },
+  loadingTitle:   { fontFamily: "Epilogue_700Bold", fontSize: 18, color: "#141210", textAlign: "center", marginTop: 8 },
+  loadingSub:     { fontFamily: "Epilogue_400Regular", fontSize: 15, color: "#7A7570", textAlign: "center" },
 
   // ── Error ────────────────────────────────────────────────────────────────
-  errorWrap: { alignItems: "center", padding: 32, borderRadius: 20, borderWidth: 1, gap: 12, marginTop: 32 },
-  errorTitle: { fontSize: 20, fontWeight: "700" },
-  errorMsg:   { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  errorWrap:  { alignItems: "center", padding: 32, borderRadius: 20, borderWidth: 1, borderColor: "#D7C3AE", backgroundColor: "#FFFFFF", gap: 12, marginTop: 32 },
+  errorTitle: { fontFamily: "Epilogue_700Bold", fontSize: 20, color: "#141210" },
+  errorMsg:   { fontFamily: "Epilogue_400Regular", fontSize: 14, color: "#7A7570", textAlign: "center", lineHeight: 20 },
 
   // ── Plan back row ────────────────────────────────────────────────────────
   planBackRow: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingVertical: 14, marginBottom: 8,
-    borderBottomWidth: 1,
+    borderBottomWidth: 1, borderBottomColor: "#D7C3AE",
+    minHeight: 44,
   },
-  planBackText: { fontSize: 14, fontWeight: "500" },
+  planBackText: { fontFamily: "Epilogue_400Regular", fontSize: 14, color: "#7A7570" },
 
-  // ── Plan cards ───────────────────────────────────────────────────────────
-  planCard: { borderRadius: 18, borderWidth: 1, overflow: "hidden" },
-  planCardHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 15, gap: 10 },
-  planCardHeaderEmoji: { fontSize: 22 },
-  planCardHeaderTitle: { fontSize: 17, fontWeight: "800", color: "#fff", flex: 1 },
-  planCardBody: { padding: 16, gap: 10 },
+  // ── Plan hero ────────────────────────────────────────────────────────────
+  partyBadge: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "rgba(245,166,35,0.12)", borderRadius: 999,
+    paddingHorizontal: 14, paddingVertical: 8, alignSelf: "flex-start",
+    marginBottom: 8,
+  },
+  partyBadgeText: { fontFamily: "Epilogue_700Bold", fontSize: 11, letterSpacing: 1.5, color: "#F5A623" },
+  planHeadline:   { fontFamily: "Epilogue_700Bold", fontSize: 28, color: "#141210", letterSpacing: -0.5, marginBottom: 6 },
+  planSubtitle:   { fontFamily: "Epilogue_400Regular", fontSize: 15, color: "#7A7570", marginBottom: 20 },
+
+  // Stats bento
+  statsBento: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 20 },
+  statCell: {
+    width: CARD_WIDTH, height: 112, borderRadius: 16,
+    backgroundColor: "#FFF1E4", padding: 16, justifyContent: "center",
+  },
+  statLabel: { fontFamily: "Epilogue_700Bold", fontSize: 10, letterSpacing: 1.5, color: "#7A7570", textTransform: "uppercase", marginBottom: 4 },
+  statValue: { fontFamily: "Epilogue_700Bold", fontSize: 16, color: "#141210" },
+
+  // ── Plan card shell ──────────────────────────────────────────────────────
+  planCard:          { borderRadius: 18, overflow: "hidden", marginBottom: 16 },
+  planCardHeader:    { flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 15, gap: 10 },
+  planCardHeaderEmoji:{ fontSize: 22 },
+  planCardHeaderTitle:{ fontFamily: "Epilogue_700Bold", fontSize: 17, color: "#fff", flex: 1 },
+  planCardBody:      { padding: 16, gap: 10, backgroundColor: "#FFFFFF" },
 
   // ── Overview ─────────────────────────────────────────────────────────────
   overviewGrid: { gap: 0 },
-  overviewCell: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingVertical: 11, borderBottomWidth: 1, gap: 12 },
-  overviewKey: { fontSize: 13, fontWeight: "600", flex: 1 },
-  overviewVal: { fontSize: 13, fontWeight: "700", flex: 2, textAlign: "right" },
+  overviewCell: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#D7C3AE", gap: 12 },
+  overviewKey:  { fontFamily: "Epilogue_400Regular", fontSize: 13, color: "#7A7570", flex: 1 },
+  overviewVal:  { fontFamily: "Epilogue_700Bold",    fontSize: 13, color: "#141210", flex: 2, textAlign: "right" },
 
   // ── Menu tabs ────────────────────────────────────────────────────────────
   tabScroll: { marginHorizontal: -4, marginBottom: 4 },
   tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 100, borderWidth: 1, marginHorizontal: 4, minHeight: 38, justifyContent: "center" },
-  tabText: { fontSize: 13, fontWeight: "700" },
-  menuRow: { paddingVertical: 14, borderBottomWidth: 1, borderLeftWidth: 3, paddingLeft: 12, gap: 4 },
-  menuName:   { fontSize: 15, fontWeight: "700" },
-  menuReason: { fontSize: 13, lineHeight: 18 },
-  menuMeta: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 },
-  menuQty:  { fontSize: 13, fontWeight: "500" },
+  tabText: { fontFamily: "Epilogue_700Bold", fontSize: 13 },
+  menuRow: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#D7C3AE", borderLeftWidth: 3, paddingLeft: 12, gap: 4 },
+  menuName:   { fontFamily: "Epilogue_700Bold", fontSize: 15, color: "#141210" },
+  menuReason: { fontFamily: "Epilogue_400Regular", fontSize: 13, color: "#7A7570", lineHeight: 18 },
+  menuMeta:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 },
+  menuQty:    { fontFamily: "Epilogue_400Regular", fontSize: 13, color: "#7A7570" },
   menuCostBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  menuCost: { fontSize: 13, fontWeight: "700" },
-  menuPlain: { fontSize: 14, paddingVertical: 8, lineHeight: 20 },
+  menuCost:   { fontFamily: "Epilogue_700Bold", fontSize: 13 },
+  menuPlain:  { fontFamily: "Epilogue_400Regular", fontSize: 14, color: "#141210", paddingVertical: 8, lineHeight: 20 },
 
   // ── Shopping ─────────────────────────────────────────────────────────────
   shopCat: { marginBottom: 14 },
-  shopCatHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 6, borderBottomWidth: 1, marginBottom: 6 },
-  shopCatTitle: { fontSize: 13, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 },
+  shopCatHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: "#D7C3AE", marginBottom: 6 },
+  shopCatTitle: { fontFamily: "Epilogue_700Bold", fontSize: 13, textTransform: "uppercase", letterSpacing: 0.8, color: "#141210" },
   shopRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9, minHeight: 44 },
-  shopCheck: { width: 22, height: 22, borderRadius: 5, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  shopItem: { fontSize: 14, flex: 1, lineHeight: 20 },
+  shopItem: { fontFamily: "Epilogue_400Regular", fontSize: 14, flex: 1, lineHeight: 20, color: "#141210" },
+  shopItemChecked: { textDecorationLine: "line-through", opacity: 0.5 },
 
   // ── Budget bars ──────────────────────────────────────────────────────────
   budgetBarRow: { gap: 7, marginBottom: 10 },
   budgetLabelRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  budgetDot: { width: 8, height: 8, borderRadius: 4 },
-  budgetLabel: { fontSize: 14, fontWeight: "600", flex: 1 },
-  budgetAmt:   { fontSize: 14, fontWeight: "700" },
-  budgetBarBg:   { height: 10, borderRadius: 5, overflow: "hidden" },
+  budgetDot:   { width: 8, height: 8, borderRadius: 4 },
+  budgetLabel: { fontFamily: "Epilogue_400Regular", fontSize: 14, color: "#141210", flex: 1 },
+  budgetAmt:   { fontFamily: "Epilogue_700Bold",   fontSize: 14 },
+  budgetBarBg:   { height: 10, borderRadius: 5, overflow: "hidden", backgroundColor: "#EEE0D2" },
   budgetBarFill: { height: 10, borderRadius: 5 },
-  budgetSummary: { borderTopWidth: 1, paddingTop: 14, marginTop: 4, gap: 8 },
+  budgetSummary: { borderTopWidth: 1, borderTopColor: "#D7C3AE", paddingTop: 14, marginTop: 4, gap: 8 },
   budgetSumRow:  { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  budgetSumLabel: { fontSize: 14, fontWeight: "600" },
-  budgetSumAmt:   { fontSize: 15 },
+  budgetSumLabel:{ fontFamily: "Epilogue_400Regular", fontSize: 14, color: "#141210" },
+  budgetSumAmt:  { fontFamily: "Epilogue_400Regular", fontSize: 15, color: "#141210" },
 
   // ── Timeline ─────────────────────────────────────────────────────────────
-  timelineRow: { flexDirection: "row", gap: 14, minHeight: 44 },
-  timelineDotCol: { alignItems: "center", width: 18 },
-  timelineDot: { width: 12, height: 12, borderRadius: 6, marginTop: 4 },
-  timelineLine: { width: 2, flex: 1, marginTop: 4 },
+  timelineRow:     { flexDirection: "row", gap: 14, minHeight: 44 },
+  timelineDotCol:  { alignItems: "center", width: 18 },
+  timelineDot:     { width: 12, height: 12, borderRadius: 6, marginTop: 4 },
+  timelineLine:    { width: 2, flex: 1, marginTop: 4, backgroundColor: "#D7C3AE" },
   timelineContent: { flex: 1, paddingBottom: 18, gap: 3 },
-  timelineTime:   { fontSize: 14, fontWeight: "800" },
-  timelineAction: { fontSize: 14, lineHeight: 20 },
+  timelineTime:    { fontFamily: "Epilogue_700Bold", fontSize: 14 },
+  timelineAction:  { fontFamily: "Epilogue_400Regular", fontSize: 14, color: "#141210", lineHeight: 20 },
 
-  // ── Host tips ────────────────────────────────────────────────────────────
-  tipRow: { flexDirection: "row", gap: 12, paddingVertical: 6, alignItems: "flex-start" },
-  tipBullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7 },
-  tipText: { flex: 1, fontSize: 14, lineHeight: 21 },
+  // ── Host tips ─────────────────────────────────────────────────────────────
+  tipRow:    { flexDirection: "row", gap: 12, paddingVertical: 6, alignItems: "flex-start" },
+  tipBullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7, backgroundColor: "#FFA726" },
+  tipText:   { flex: 1, fontFamily: "Epilogue_400Regular", fontSize: 14, lineHeight: 21, color: "#141210" },
 
-  // ── Validation checklist ─────────────────────────────────────────────────
-  checklistRow: { flexDirection: "row", gap: 10, paddingVertical: 9, borderBottomWidth: 1, alignItems: "flex-start" },
-  checklistText: { flex: 1, fontSize: 14, lineHeight: 20 },
+  // ── Validation checklist ──────────────────────────────────────────────────
+  checklistRow:  { flexDirection: "row", gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "#D7C3AE", alignItems: "flex-start" },
+  checklistText: { flex: 1, fontFamily: "Epilogue_400Regular", fontSize: 14, color: "#141210", lineHeight: 20 },
 
-  // ── Warning banner ───────────────────────────────────────────────────────
-  warnBanner: { flexDirection: "row", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1.5, alignItems: "flex-start" },
-  warnText: { flex: 1, fontSize: 13, color: "#E65100", lineHeight: 18 },
+  // ── Warning banner ────────────────────────────────────────────────────────
+  warnBanner: { flexDirection: "row", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: "#F9A825", backgroundColor: "#FFF8E1", alignItems: "flex-start", marginBottom: 12 },
+  warnText:   { flex: 1, fontFamily: "Epilogue_400Regular", fontSize: 13, color: "#E65100", lineHeight: 18 },
 
-  // ── Plan actions ─────────────────────────────────────────────────────────
+  // ── Plan actions ──────────────────────────────────────────────────────────
   planActions: { gap: 10, marginTop: 8 },
+
+  // ── Shared buttons ────────────────────────────────────────────────────────
+  primaryBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    paddingVertical: 17, borderRadius: 999, minHeight: 54, gap: 8,
+    backgroundColor: "#F5A623",
+  },
+  primaryBtnDisabled: { opacity: 0.35, backgroundColor: "#7A7570" },
+  primaryBtnText: { fontFamily: "Epilogue_700Bold", fontSize: 16, color: "#FFFFFF" },
+  secondaryBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingVertical: 15, borderRadius: 999, borderWidth: 1.5,
+    borderColor: "#D7C3AE", minHeight: 54,
+  },
+  secondaryBtnText: { fontFamily: "Epilogue_700Bold", fontSize: 15, color: "#141210" },
+
+  // ── Wizard footer ─────────────────────────────────────────────────────────
+  wizFooter: {
+    paddingHorizontal: 20, paddingTop: 14,
+    borderTopWidth: 1, borderTopColor: "#D7C3AE", gap: 8,
+  },
+  footerBtnRow:     { flexDirection: "row", alignItems: "center", gap: 12 },
+  backBtn:          { backgroundColor: "#EEE0D2", borderRadius: 999, paddingVertical: 16, paddingHorizontal: 24, minHeight: 54, justifyContent: "center" },
+  backBtnText:      { fontFamily: "Epilogue_700Bold", fontSize: 16, color: "#141210" },
+  stepIndicatorText:{ fontFamily: "Epilogue_400Regular", fontSize: 12, color: "#7A7570", textAlign: "center" },
 });

@@ -1,0 +1,680 @@
+You are redesigning ONLY the visual styling of the Party Planner screen
+in the PantrySwipe Expo app. Stack: Expo SDK 54, expo-router v6, React
+Native 0.81, TypeScript, pnpm workspaces, @expo/vector-icons (Feather),
+react-native-reanimated, expo-haptics, expo-linear-gradient.
+
+THIS IS A STACK SCREEN at: artifacts/pantryswipe/app/party-planner.tsx
+It is a multi-step wizard with 6 steps managed by a single useState
+step variable inside the file. It is NOT a tab screen.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — READ BEFORE TOUCHING ANYTHING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Read these files completely:
+  - artifacts/pantryswipe/app/party-planner.tsx  ← TARGET FILE
+  - artifacts/pantryswipe/context/AppContext.tsx
+  - artifacts/pantryswipe/data/mockData.ts
+  - artifacts/pantryswipe/constants/colors.ts
+  - artifacts/pantryswipe/package.json
+
+From TARGET FILE, note the EXACT names of:
+  - The current step state variable (e.g. currentStep, step)
+  - The total number of steps (may differ from Stitch files)
+  - The selected occasion state variable and its setter
+  - The guest count state variable and its setter
+  - The budget state variable and its setter
+  - The service style state variable and its setter
+  - The selected diets state variable (array or Set) and its setter
+  - The checked shopping items state variable and its setter
+  - The "next step" handler function
+  - The "back/previous" handler function
+  - The "close/exit" handler (top-left X button)
+  - The "generate plan" or "submit" final handler
+  - The "export plan" and "sync to calendar" button handlers
+  - The "add item to shopping list" handler
+  - The "edit menu" handler
+  - How recipe data for results is generated (mockData or computed)
+  - Whether expo-haptics is already imported and used
+
+From mockData.ts, note:
+  - Whether partyRecipes, partyMenuItems, or similar arrays exist
+  - Image format (require or URI) for any party-related assets
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ABSOLUTE DO NOT TOUCH LIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Never modify:
+  - The step navigation logic (next/back/skip handlers)
+  - The wizard state variables and all their update calls
+  - The generate/submit plan logic
+  - The export plan and sync to calendar handlers
+  - The close/exit navigation
+  - AppContext.tsx, mockData.ts, _layout.tsx
+  - Any component imported by more than one screen
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LOCKED STEP NUMBERING
+(The 5 Stitch HTML files have inconsistent step counts — use this)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use WHATEVER step count the existing TARGET FILE uses.
+Read currentStep/totalSteps from the file first.
+If the file uses 5 steps: map Stitch files to steps 1-5 + results.
+If the file uses 4 steps: collapse service style into step 3.
+Do NOT guess — read the file.
+
+Progress bar: progressPercent = (currentStep / totalSteps) * 100
+Animate bar width change:
+  Use Animated.Value for width, Animated.timing on step change:
+    Animated.timing(progressAnim, {
+      toValue: progressPercent,
+      duration: 700, useNativeDriver: false
+    }).start();
+  Apply as: width: progressAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%']
+  })
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL TRANSLATION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RULE 1 — BANNED WEB-ONLY APIS:
+  window.*, document.*, querySelector(), querySelectorAll(),
+  getElementById(), classList, innerText, style.opacity,
+  style.transform, DOMContentLoaded, addEventListener(),
+  oninput=, window.navigator.vibrate(), focus(), blur() DOM,
+  input[type=checkbox] HTML element, peer-checked: CSS,
+  :focus-within CSS, :active CSS, hover: CSS, @keyframes CSS,
+  CSS grid (grid-cols-*), aspect-ratio CSS shorthand,
+  line-through CSS class (use textDecorationLine RN prop),
+  backdrop-filter CSS, bg-gradient-to-t CSS class,
+  box-shadow CSS (use Platform.select shadow props)
+
+RULE 2 — NO EXTERNAL IMAGE URLS
+  All hero/decorative images must use require() from mockData.
+  If no matching local asset exists, use a styled placeholder:
+    View: height 160/200, borderRadius 16,
+    LinearGradient colors from step theme (or plain colored View)
+    Centered content: Feather icon + label text
+  Never use lh3.googleusercontent.com or any remote URL.
+  User avatar in header: AppContext user.avatar or initials circle.
+
+RULE 3 — ALL SELECTIONS USE useState ONLY
+  No DOM. Every selection interaction uses existing state vars.
+
+  Occasion selection (step 1):
+    Read existing selectedOccasion state from TARGET FILE.
+    Each card: Pressable onPress={() => setSelectedOccasion(id)}
+    Active: borderWidth 3, borderColor Colors.primary,
+      backgroundColor '#F4E6D8', icon bg Colors.primary
+    Inactive: borderWidth 2, borderColor 'transparent',
+      backgroundColor '#FFF1E4', icon bg '#FFDDB4'
+    Next button: disabled={!selectedOccasion}
+
+  Guest count (step 2):
+    Read existing guestCount state from TARGET FILE.
+    Plus: onPress={() => setGuestCount(prev => prev + 1)}
+    Minus: onPress={() => setGuestCount(prev => Math.max(1, prev-1))}
+    Capacity note: {guestCount > 8 && <View>...</View>}
+    Animate count display: useSharedValue → withSpring(1.2) on change
+      then withSpring(1.0)
+
+  Budget (step 3):
+    Read existing budget state from TARGET FILE.
+    TextInput: keyboardType='numeric', value={String(budget)},
+      onChangeText={val => setBudget(Number(val) || 0)}
+    Per guest: computed as (budget / guestCount).toFixed(2)
+    Preset chips: onPress={() => setBudget(amount)}
+    Active preset chip: backgroundColor Colors.primary,
+      determined by budget === presetAmount
+
+  Service style (step 4 — if it exists in TARGET FILE):
+    Read existing serviceStyle state.
+    Each card: Pressable onPress={() => setServiceStyle(id)}
+    Active: borderWidth 2, borderColor Colors.textPrimary,
+      backgroundColor '#FAEBDD', scale 1.02 (Reanimated)
+
+  Dietary restrictions (step 5 — if it exists):
+    Read existing selectedDiets state (array or Set).
+    Each item: Pressable onPress toggles diet in/out of selection
+    Active: backgroundColor 'rgba(76,175,118,0.15)',
+      borderColor Colors.secondary, borderWidth 2
+      Feather "check-circle" shown, color Colors.secondary
+    Inactive: backgroundColor '#FAEBDD',
+      borderColor 'transparent', borderWidth 2
+      Feather "circle" not shown (or hidden)
+
+  Shopping list checkboxes (results step):
+    Read existing checkedItems state from TARGET FILE.
+    Each item: Pressable toggles item.id in/out of checkedItems
+    Checked text: textDecorationLine 'line-through', opacity 0.5
+    Checked icon: Feather "check-square" color Colors.secondary
+    Unchecked icon: Feather "square" color Colors.textMuted
+
+RULE 4 — HAPTIC FEEDBACK
+  Replace ALL window.navigator.vibrate() with:
+    import * as Haptics from 'expo-haptics';
+    Haptics.selectionAsync()
+  Call on every card selection tap.
+  If expo-haptics already imported in TARGET FILE: do not add twice.
+
+RULE 5 — CSS GRID → FlatList / Row Layout
+  import { Dimensions } from 'react-native';
+  const { width: screenWidth } = Dimensions.get('window');
+  const CARD_WIDTH = (screenWidth - 16 * 3) / 2;
+
+  2-column grids (occasion cards, dietary cards, stats bento):
+    Use FlatList numColumns={2} with columnWrapperStyle={{gap: 12}}
+    OR manual chunked rows using map with flexDirection: 'row'
+  Never use CSS grid classes anywhere.
+
+RULE 6 — DOMContentLoaded ANIMATIONS → REANIMATED
+  Step 1 staggered entrance:
+    import { FadeInDown } from 'react-native-reanimated';
+    Each occasion card Animated.View:
+      entering={FadeInDown.delay(index * 80).springify()}
+
+  Step 2 screen fade-in:
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 1, duration: 600, useNativeDriver: true
+      }).start();
+    }, []);
+    Wrap main View: <Animated.View style={{ opacity: fadeAnim }}>
+
+RULE 7 — FOCUS-WITHIN → REANIMATED
+  Step 3 budget input card focus animation:
+    const inputScale = useSharedValue(1);
+    const inputStyle = useAnimatedStyle(() => ({
+      transform: [{ scale: inputScale.value }]
+    }));
+    TextInput onFocus: inputScale.value = withSpring(1.02)
+    TextInput onBlur: inputScale.value = withSpring(1.0)
+    Wrap input card in Animated.View with inputStyle
+
+RULE 8 — NO MATERIAL SYMBOLS — FEATHER ONLY
+  cake            → Feather "gift"
+  dinner_dining   → Feather "coffee"
+  outdoor_grill   → Feather "sun"
+  egg_alt         → Feather "sunrise"
+  favorite        → Feather "heart"
+  sports_football → Feather "target"
+  liquor          → Feather "droplet"
+  celebration     → Feather "star"
+  close           → Feather "x"
+  arrow_back      → Feather "arrow-left"
+  arrow_forward   → Feather "arrow-right"
+  remove          → Feather "minus"
+  add             → Feather "plus"
+  info            → Feather "info"
+  restaurant      → Feather "coffee"
+  tapas           → Feather "grid"
+  flatware        → Feather "scissors"
+  groups          → Feather "users"
+  eco             → Feather "sun"
+  stars           → Feather "star"
+  water_drop      → Feather "droplet"
+  psychology      → Feather "brain" (if unavailable: "zap")
+  grain           → Feather "layers"
+  check_circle    → Feather "check-circle"
+  edit            → Feather "edit-2"
+  menu            → Feather "menu"
+  payments        → Feather "credit-card"
+  timer           → Feather "clock"
+  verified_user   → Feather "shield"
+  celebration     → Feather "star"
+  ios_share       → Feather "share-2"
+  calendar_add_on → Feather "calendar"
+  lightbulb       → Feather "zap"
+  check_circle    → Feather "check-circle"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CROSS-PLATFORM HELPERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  import { Platform, Dimensions } from 'react-native';
+  import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  const { width: screenWidth } = Dimensions.get('window');
+  const CARD_WIDTH = (screenWidth - 16 * 3) / 2;
+
+  const cardShadow = Platform.select({
+    ios: {
+      shadowColor: 'rgba(131,85,0,1)',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+    },
+    android: { elevation: 3 },
+    web: { boxShadow: '0 4px 16px rgba(131,85,0,0.08)' },
+  });
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SHARED HEADER (all steps)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+insets = useSafeAreaInsets()
+On iOS: BlurView tint="light" intensity=80 as absoluteFill
+On Android: backgroundColor 'rgba(250,250,248,0.95)'
+paddingTop: insets.top + 8, paddingHorizontal: 20,
+paddingBottom: 12, zIndex: 50
+
+Layout: flexDirection row, alignItems center
+
+LEFT: TouchableOpacity minH:44 minW:44
+  Feather "x" size 22, color Colors.textMuted
+  → existing close/exit handler from TARGET FILE
+
+CENTER (flex:1, paddingHorizontal: 16):
+  Progress bar track: height 6, borderRadius 3,
+    backgroundColor '#EEE0D2', overflow 'hidden'
+  Progress bar fill: Animated height '100%', borderRadius 3,
+    backgroundColor Colors.primary,
+    width animated from progressAnim
+    shadowColor Colors.primary, shadowOpacity 0.35,
+    shadowRadius 6, shadowOffset {width:0,height:0}, elevation 2
+
+RIGHT (for steps 1 and 6 only — if header has user avatar):
+  Read from TARGET FILE. If avatar present:
+    width 36, height 36, borderRadius 18, overflow hidden
+    source: AppContext user.avatar or initials circle
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — OCCASION SELECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step label row:
+  "Step X of Y" — fontSize 12, fontWeight '700',
+    letterSpacing 1.5, color Colors.primary, textTransform 'uppercase'
+  "X% Complete" — fontSize 12, color Colors.textMuted
+  (X computed from currentStep / totalSteps * 100)
+
+Headline: "What's the occasion?"
+  Epilogue_700Bold, fontSize 28, Colors.textPrimary, marginBottom 8
+Body: description text
+  fontSize 16, color Colors.textMuted, lineHeight 24
+
+Hero decorative image (if local asset exists, else placeholder):
+  height 160, borderRadius 16, overflow 'hidden', marginTop 32
+  Image fills container, resizeMode 'cover'
+  LinearGradient overlay: bottom half, transparent → rgba(0,0,0,0.6)
+  Overlay text: Epilogue_700Bold fontSize 18, color '#FFFFFF'
+
+Occasion grid (2 columns, FlatList numColumns=2):
+  CARD_WIDTH per card, borderRadius 16, padding 20,
+  alignItems 'center', marginBottom 12, ...cardShadow
+  Selected: borderWidth 3, borderColor Colors.primary,
+    backgroundColor '#F4E6D8'
+  Unselected: borderWidth 2, borderColor 'transparent',
+    backgroundColor '#FFF1E4'
+  Press animation: withSpring(0.96) on pressIn, withSpring(1) out
+  Haptics.selectionAsync() on selection
+
+  Icon circle: width 64, height 64, borderRadius 32, marginBottom 12
+    Selected: backgroundColor Colors.primary
+    Unselected: backgroundColor '#FFDDB4'
+    Feather icon size 28
+      Selected: color '#FFFFFF'
+      Unselected: color '#633F00'
+
+  Label: Epilogue_700Bold, fontSize 16, Colors.textPrimary,
+    textAlign 'center', numberOfLines={2}
+
+  Occasions (read from existing TARGET FILE occasions list):
+    If not defined, use: Birthday, Dinner Party, BBQ & Picnic,
+    Brunch, Date Night, Game Day, Cocktail Hour, Just Because
+
+Entrance animation: FadeInDown.delay(index * 80).springify()
+  on each card's Animated.View
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — GUEST COUNT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Screen fade-in: Animated.View with opacity from 0→1 (600ms)
+
+Hero image placeholder: height 200, borderRadius 16,
+  LinearGradient colors={['#F4E6D8','#FFF1E4']},
+  centered Feather "users" size 48, color Colors.primary
+
+Headline: "Who's coming to dinner?"
+Subtitle text: Colors.textMuted, fontSize 16
+
+Stepper row: flexDirection row, alignItems center,
+  justifyContent space-between, paddingHorizontal 32, marginTop 32
+
+  Minus button: width 64, height 64, borderRadius 32,
+    backgroundColor '#F4E6D8', ...cardShadow
+    Feather "minus" size 28, color Colors.primary
+    disabled when guestCount === 1: opacity 0.4
+    → existing minus handler
+
+  Count display:
+    Number: Epilogue_700Bold fontSize 56, Colors.primary,
+      animated scale spring on change
+    "Guests" label: fontSize 12, letterSpacing 1.5,
+      textTransform 'uppercase', color Colors.textMuted, marginTop 4
+
+  Plus button: width 64, height 64, borderRadius 32,
+    backgroundColor Colors.primary, ...cardShadow
+    Feather "plus" size 28, color '#FFFFFF'
+    shadowColor Colors.primary, shadowOpacity 0.3, elevation 4
+    → existing plus handler
+
+Capacity note (shown when guestCount > 8):
+  Animated.View opacity 0→1 on appearance
+  backgroundColor '#FFF1E4', borderRadius 16, padding 16,
+  borderWidth 1, borderColor '#D7C3AE', marginTop 24,
+  flexDirection row, gap 12
+  Feather "info" size 18, color Colors.secondary
+  Text: fontSize 13, color Colors.textMuted
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — BUDGET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Hero placeholder: height 180, borderRadius 16
+  LinearGradient or plain backgroundColor '#F4E6D8'
+  Guest count chip (bottom-left absolute):
+    backgroundColor Colors.primary, borderRadius 999,
+    paddingHorizontal 14, paddingVertical 6
+    Text: "Planning for {guestCount} Guests",
+      Epilogue_700Bold, fontSize 12, color '#644000'
+
+Input card: Animated.View with inputScale style (focus animation)
+  backgroundColor '#FFFFFF', borderRadius 16, padding 24,
+  borderWidth 2, borderColor isFocused ? Colors.primary : '#D7C3AE',
+  ...cardShadow
+
+  Label: "ENTER AMOUNT" — uppercase, fontSize 11,
+    letterSpacing 2, color Colors.textMuted, marginBottom 12
+
+  Amount row: flexDirection row, alignItems center
+    "$" prefix: Epilogue_700Bold, fontSize 40, color Colors.primary,
+      marginRight 8
+    TextInput: keyboardType='numeric', fontSize 40,
+      fontFamily Epilogue_700Bold, color Colors.textPrimary,
+      flex 1, backgroundColor 'transparent'
+      placeholder "500", placeholderTextColor '#D7C3AE'
+      value={String(budget)}, onChangeText handler from TARGET FILE
+      onFocus: inputScale withSpring(1.02)
+      onBlur: inputScale withSpring(1.0)
+
+Preset chips row: flexDirection row, flexWrap wrap, gap 12,
+  marginTop 24
+  Each: paddingHorizontal 24, paddingVertical 12, borderRadius 999
+  Active (budget === preset): backgroundColor Colors.primary,
+    Text color '#644000', Epilogue_700Bold
+  Inactive: backgroundColor '#EEE0D2',
+    Text color Colors.textMuted, borderWidth 1, borderColor '#D7C3AE'
+  Presets: $100, $500, $1000+, Custom
+  onPress: → existing preset handler from TARGET FILE
+
+Per-guest summary row: backgroundColor '#FFF1E4', borderRadius 16,
+  padding 16, marginTop 24, flexDirection row,
+  justifyContent space-between, alignItems center
+  Left: "ESTIMATED PER GUEST" uppercase label + computed value
+    Value: Epilogue_700Bold, fontSize 24, color Colors.secondary
+  Right: "Next Step" button → existing next handler
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — SERVICE STYLE (if in TARGET FILE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Read from TARGET FILE whether this step exists.
+If it does: restyle only, preserve selection logic.
+
+Cards (single column or 2-col depending on screen space):
+  Each: borderRadius 16, padding 20, marginBottom 12, ...cardShadow
+  Selected: borderWidth 2, borderColor Colors.textPrimary,
+    backgroundColor '#FAEBDD',
+    scale: withSpring(1.02) via Reanimated on selection
+  Unselected: borderWidth 2, borderColor 'transparent',
+    backgroundColor '#FFF1E4'
+  Press: withSpring(0.96) pressIn, withSpring(1) pressOut
+  Haptics.selectionAsync() on tap
+
+  Icon square: width 48, height 48, borderRadius 12, marginBottom 12
+    Buffet: backgroundColor Colors.primary, Feather "coffee"
+    Finger Food: backgroundColor Colors.secondary, Feather "grid"
+    Plated: backgroundColor Colors.saveBlue, Feather "scissors"
+    Family Style: backgroundColor 'rgba(245,166,35,0.2)',
+      Feather "users", color Colors.primary
+
+  Card title: Epilogue_700Bold, fontSize 20, Colors.textPrimary
+  Card body: fontSize 14, color Colors.textMuted,
+    lineHeight 20, marginTop 6
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 5 — DIETARY RESTRICTIONS (if in TARGET FILE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Read from TARGET FILE whether this step exists.
+Preserve all selectedDiets state and toggle logic exactly.
+
+Selection cards (2-column FlatList or single column):
+  CARD_WIDTH if 2-col, borderRadius 16, padding 16,
+  marginBottom 12, flexDirection row, alignItems center, gap 14
+
+  Active: backgroundColor 'rgba(76,175,118,0.12)',
+    borderWidth 2, borderColor Colors.secondary
+    Check icon: Feather "check-circle" size 20, color Colors.secondary,
+      shown at right edge (alignSelf flex-end or marginLeft auto)
+  Inactive: backgroundColor '#FAEBDD',
+    borderWidth 2, borderColor 'transparent'
+    Check icon: hidden (opacity 0 or not rendered)
+
+  Icon circle: width 44, height 44, borderRadius 22,
+    backgroundColor 'rgba(255,255,255,0.5)', alignItems center
+    Feather icon size 20, color Colors.secondary
+
+  Diet label: Epilogue_700Bold, fontSize 14, Colors.textPrimary
+  Press: Haptics.selectionAsync() + toggle in selectedDiets
+
+Custom allergy TextInput:
+  backgroundColor '#FFF1E4', borderRadius 16, padding 16,
+  borderWidth 2, borderColor '#D7C3AE', fontSize 15,
+  color Colors.textPrimary
+  Right: Feather "plus-circle" size 20, color Colors.textMuted
+  → preserve existing custom allergy handler from TARGET FILE
+
+Pro tip card: backgroundColor 'rgba(76,175,118,0.08)',
+  borderRadius 16, padding 16, borderWidth 1,
+  borderColor 'rgba(76,175,118,0.15)',
+  flexDirection row, gap 12
+  Feather "info" size 18, color Colors.secondary
+  Text: fontSize 13, color Colors.textMuted
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 6 — RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ALL DATA MUST COME FROM WIZARD STATE — zero hardcoded values.
+  Party type label: selectedOccasion (uppercased)
+  Guest count: guestCount
+  Budget: budget formatted as currency
+  Dietary summary: selectedDiets.join(', ')
+  Prep time: read from existing results logic in TARGET FILE
+  Menu recipes: from mockData partyRecipes or existing data
+
+Party badge:
+  flexDirection row, alignItems center, gap 8,
+  backgroundColor 'rgba(245,166,35,0.12)', borderRadius 999,
+  paddingHorizontal 14, paddingVertical 8, alignSelf 'flex-start'
+  Feather "star" size 14, color Colors.primary
+  Text: selectedOccasion toUpperCase, Epilogue_700Bold fontSize 11,
+    letterSpacing 1.5, color Colors.primary
+
+Headline: "Your Curated Celebration Plan"
+  Epilogue_700Bold, fontSize 28, Colors.textPrimary, letterSpacing -0.5
+Subtitle: description from existing logic, fontSize 15, Colors.textMuted
+
+Stats bento (4 cells, 2×2 grid):
+  CARD_WIDTH per cell, height 112, borderRadius 16,
+  backgroundColor '#FFF1E4', padding 16, ...cardShadow
+  Icon: Feather icon, color Colors.primary, size 20, marginBottom 8
+  Stat label: uppercase fontSize 10, letterSpacing 1.5, Colors.textMuted
+  Stat value: Epilogue_700Bold fontSize 18, Colors.textPrimary
+  Values from wizard state — never hardcoded
+
+Menu section ("The Menu"):
+  FlatList horizontal (3 recipe cards) or vertical depending
+  on TARGET FILE's existing layout.
+  Each recipe card: height 240, borderRadius 16, overflow hidden
+  Image: require() from mockData; null → gradient placeholder
+  LinearGradient overlay: transparent → rgba(0,0,0,0.75)
+  Course badge: absolute top-left, rounded,
+    backgroundColor 'rgba(0,0,0,0.4)', Feather + label
+  Recipe name: Epilogue_700Bold fontSize 18, color '#FFFFFF'
+  Prep time + dietary tag row: fontSize 12, color rgba(255,255,255,0.8)
+
+  EDIT MENU button: fontSize 13, fontWeight '700', color Colors.primary,
+    Feather "edit-2" size 14 → existing handler from TARGET FILE
+
+Preparation timeline:
+  Left border line: width 2, backgroundColor '#D7C3AE'
+  Each milestone: flexDirection row, gap 16
+    Dot: width 16, height 16, borderRadius 8,
+      Active: backgroundColor Colors.primary, borderWidth 4,
+        borderColor Colors.background
+      Inactive: backgroundColor '#D7C3AE', borderWidth 4,
+        borderColor Colors.background
+    Content: label + description + duration
+
+Budget breakdown:
+  Container: backgroundColor '#F4E6D8', borderRadius 20, padding 20
+  Each category row:
+    Label + amount: flexDirection row, justifyContent space-between,
+      marginBottom 6
+    Bar track: height 10, borderRadius 5, backgroundColor '#EEE0D2'
+    Bar fill: computed percentage from budget — never hardcoded
+      Proteins: Colors.primary
+      Produce: Colors.secondary  ← fix: this was primary-container
+      Bakery: Colors.saveBlue
+  Total row: borderTopWidth 1, borderTopColor '#D7C3AE', paddingTop 12,
+    flexDirection row, justifyContent space-between
+    "Projected Total" + budget from state
+
+Shopping list:
+  Each item: Pressable, flexDirection row, alignItems center, gap 12,
+    padding 14, backgroundColor Colors.surface, borderRadius 16,
+    borderWidth 1, borderColor '#D7C3AE', marginBottom 10, ...cardShadow
+    Left: Feather "check-square" (checked) or "square" (unchecked)
+      size 22, checked: color Colors.secondary, unchecked: '#D7C3AE'
+    Item name: flex 1, fontSize 15, Colors.textPrimary
+      Checked: textDecorationLine 'line-through', opacity 0.5
+    Price: fontSize 13, color Colors.textMuted
+    → existing checkedItems toggle handler from TARGET FILE
+
+  Add item button: borderStyle 'dashed', borderWidth 2,
+    borderColor Colors.primary, borderRadius 16, padding 14,
+    alignItems center, marginTop 4
+    Feather "plus" size 16 + "ADD ITEM" text, color Colors.primary
+    → existing add handler from TARGET FILE
+
+Host tips: backgroundColor 'rgba(76,175,118,0.08)', borderRadius 16
+  Pro tip: Feather "zap" color Colors.secondary
+  Dietary validation: Feather "check-circle" color Colors.saveBlue
+
+CTA buttons (bottom of results):
+  "Export Plan": flex 1, backgroundColor Colors.primary,
+    borderRadius 999, padding 18
+    Feather "share-2" + "Export Plan", Epilogue_700Bold,
+    color '#FFFFFF' → existing export handler
+
+  "Sync to Calendar": flex 1, backgroundColor '#EEE0D2',
+    borderRadius 999, padding 18
+    Feather "calendar" + "Sync to Calendar", color Colors.textPrimary
+    → existing calendar sync handler
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BOTTOM FOOTER (all steps except results)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NOT fixed — sits inside the scroll content or at bottom of screen.
+backgroundColor Colors.background, paddingBottom insets.bottom + 8,
+paddingHorizontal 16, paddingTop 12
+
+Skip button (step 1 only): padding 12, minH 44
+  Text: fontSize 13, fontWeight '600', color Colors.primary
+  → existing skip handler
+
+Next/Continue button: flex 1, backgroundColor Colors.primary,
+  borderRadius 999, paddingVertical 16, alignItems center
+  Disabled (step 1 only, when nothing selected):
+    opacity 0.35, backgroundColor Colors.textMuted
+  Epilogue_700Bold, fontSize 16, color '#FFFFFF'
+  → existing next handler from TARGET FILE
+
+Back button (steps 2+): backgroundColor '#EEE0D2',
+  borderRadius 999, paddingVertical 16, paddingHorizontal 24,
+  marginRight 12
+  Text: Epilogue_700Bold, fontSize 16, color Colors.textPrimary
+  → existing back handler
+
+Step indicator below button:
+  "Step X of Y" centered, fontSize 12, color Colors.textMuted
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STYLING RULES — MANDATORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ALL styles in StyleSheet.create() at bottom of file.
+   Zero inline style objects in render except:
+   - Dynamic: [styles.card, isSelected && styles.cardActive]
+   - Animated: style={[styles.container, { opacity: fadeAnim }]}
+   - Platform.select spreads: ...cardShadow
+
+2. Every touchable: minHeight 44, minWidth 44.
+
+3. No HTML input — TextInput only for budget field.
+
+4. No remote image URLs anywhere.
+
+5. No DOM manipulation of any kind.
+
+6. All selection state from existing TARGET FILE state vars.
+
+7. Haptics.selectionAsync() on every selection interaction.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY FINAL STEPS — DO NOT SKIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Grep checks — fix any found:
+   grep -n "window\." artifacts/pantryswipe/app/party-planner.tsx
+   grep -n "document\." artifacts/pantryswipe/app/party-planner.tsx
+   grep -n "querySelector" artifacts/pantryswipe/app/party-planner.tsx
+   grep -n "classList" artifacts/pantryswipe/app/party-planner.tsx
+   grep -n "innerText" artifacts/pantryswipe/app/party-planner.tsx
+   grep -n "googleusercontent" artifacts/pantryswipe/app/party-planner.tsx
+   grep -n "navigator.vibrate" artifacts/pantryswipe/app/party-planner.tsx
+
+2. TypeScript check:
+   cd artifacts/pantryswipe && pnpm run typecheck
+
+3. Logic integrity — read and verify:
+   - Step navigation uses existing handlers — not rewritten
+   - Occasion selection uses existing state var — no DOM
+   - Guest count uses existing state var — no DOM
+   - Budget uses TextInput keyboardType numeric — no HTML input
+   - Dietary uses existing state var — no HTML checkbox
+   - Shopping items checked state uses textDecorationLine — no classList
+   - Progress bar width animated from (currentStep/totalSteps)*100
+   - All result values from wizard state — zero hardcoded numbers
+   - No remote image URLs in any Image source
+   - Haptics.selectionAsync() called on all card selections
+
+4. Report back with:
+   - Confirmed exact step count from TARGET FILE
+   - Every file modified
+   - Whether service style step exists in the file
+   - Whether dietary restrictions step exists in the file
+   - What the generate/results logic uses for recipe data
+   - Grep check results (clean / found + fixed)
+   - TypeScript result (pass / errors + fixed)
+   - Confirm: zero hardcoded result values in step 6
+   - Confirm: zero remote image URLs in any Image
