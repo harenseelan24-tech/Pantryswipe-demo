@@ -376,7 +376,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUserProfile((prev) => {
       const updated = { ...prev, setupComplete: true };
       saveData(STORAGE_KEYS.PROFILE, updated);
-      fetchLiveRecipes(updated);
+      // IMPORTANT: do NOT call fetchLiveRecipes() inside a setState callback —
+      // that triggers setState (setRecipesLoading, setLiveRecipes) during a
+      // render cycle, which React 18 throws on. Schedule it for the next tick.
+      setTimeout(() => fetchLiveRecipes(updated), 0);
       return updated;
     });
   };

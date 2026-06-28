@@ -1,0 +1,456 @@
+You are a Staff Engineer doing targeted crash triage on the PantrySwipe
+Expo app. The app loads fine, completes onboarding, but CRASHES
+immediately when the "Account Created" confirmation screen appears.
+This is a specific, isolated crash — not a general bundle error.
+
+App location: artifacts/pantryswipe/
+Stack: Expo SDK 54, expo-router v6, React Native 0.81, TypeScript,
+pnpm workspaces.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — READ THE CRASH LOCATION FIRST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Before touching any code, read these files completely:
+
+1. Find the onboarding/auth files:
+   ls artifacts/pantryswipe/app/
+   ls artifacts/pantryswipe/app/\(auth\)/ 2>/dev/null || true
+   ls artifacts/pantryswipe/app/onboarding/ 2>/dev/null || true
+
+   Look for files named any of:
+     account-created.tsx, success.tsx, welcome.tsx,
+     register.tsx, signup.tsx, create-account.tsx,
+     confirm.tsx, onboarding.tsx, index.tsx (in auth group)
+
+2. Read the file that NAVIGATES TO the account-created screen:
+   grep -rn "account-created\|account_created\|AccountCreated\|success\|/confirm" \
+     artifacts/pantryswipe/app/
+
+   Read the file that contains the navigation call.
+   Note the EXACT router.push() or router.replace() call used.
+
+3. Read the account-created screen file itself completely.
+   Note every import, every function, and every useEffect.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — IDENTIFY THE CRASH CAUSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The crash happens at the moment the "Account Created" screen
+renders. There are 6 possible causes — check each one:
+
+CAUSE A — Broken import in the account-created screen file:
+  Read the import statements at the top of the file.
+  For every import, verify:
+    - The package exists in package.json
+    - Local file imports (../) point to files that exist
+    - No package is imported that requires native code not
+      available in Expo Go
+
+  Run: cd artifacts/pantryswipe && pnpm run typecheck
+  If the account-created screen file has TypeScript errors,
+  those are likely the crash cause. Fix them all.
+
+CAUSE B — Missing route definition:
+  expo-router creates routes from the file system.
+  If the navigation call does:
+    router.push('/account-created')
+  But the file lives at a different path than expo-router
+  expects, the route load fails and crashes the app.
+
+  Verify:
+    - The file path matches the route string exactly
+    - If using route groups like (auth), the navigation call
+      must include the group: router.push('/(auth)/account-created')
+      OR the group must be transparent (not in the nav path)
+    - Check _layout.tsx in the relevant folder for route config
+
+CAUSE C — Unhandled promise rejection during account creation:
+  The signup/register function (called before navigation) may
+  throw an error that is not caught, crashing the JS thread.
+
+  Find the function that:
+    1. Creates the user account (API call, AsyncStorage, etc.)
+    2. Then navigates to account-created screen
+
+  Check if it has try/catch:
+
+  WRONG (crashes on any error):
+    const handleSignup = async () => {
+      await createAccount(email, password);
+      router.push('/account-created');
+    };
+
+  RIGHT (catches errors safely):
+    const handleSignup = async () => {
+      try {
+        await createAccount(email, password);
+        router.push('/account-created');
+      } catch (error) {
+        console.error('Signup failed:', error);
+        setError('Account creation failed. Please try again.');
+      }
+    };
+
+  Add try/catch to every async function in the auth flow.
+
+CAUSE D — State update after navigation (memory leak crash):
+  If the signup screen calls setState after navigating away,
+  React will throw: "Can't perform a React state update on an
+  unmounted component."
+
+  Look for patterns like:
+    const handleSignup = async () => {
+      router.push('/account-created');  // navigates away
+      await doSomething();              // still running
+      setLoading(false);               // crashes — component gone
+    };
+
+  Fix by using a mounted ref:
+    const isMounted = useRef(true);
+    useEffect(() => {
+      return () => { isMounted.current = false; };
+    }, []);
+
+    const handleSignup = async () => {
+      try {
+        await createAccount(email, password);
+        if (isMounted.current) {
+          router.push('/account-created');
+        }
+      } catch (e) {
+        if (isMounted.current) setError(e.message);
+      }
+    };
+
+CAUSE E — AppContext state update on account creation:
+  If the signup function calls a context setter (e.g.
+  setUser(), setIsAuthenticated()) and the context update
+  triggers a re-render that crashes due to undefined data:
+
+  Find in AppContext.tsx: what happens when a user is set.
+  Check if any component reads user.name, user.avatar, etc.
+  without null-checking. If user is set to a partial object
+  during signup, accessing user.name crashes immediately.
+
+  Fix by null-checking every AppContext field access:
+  WRONG: <Text>{user.name}</Text>
+  RIGHT: <Text>{user?.name ?? 'User'}</Text>
+
+CAUSE F — Navigation to tabs while auth redirect is active:
+  expo-router may have a redirect configured in _layout.tsx
+  that sends unauthenticated users back to the auth screen.
+  After account creation, if isAuthenticated is set to true
+  AND there's a redirect check in the same render cycle,
+  two competing navigations can crash the router.
+
+  Look in _layout.tsx for:
+    useEffect(() => {
+      if (!isAuthenticated) router.replace('/login');
+    }, [isAuthenticated]);
+
+  If this exists alongside the post-signup navigation,
+  they conflict. Fix by using router.replace() for signup
+  completion (not router.push()) so the auth screen is removed
+  from the stack, preventing the redirect from firing on it.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — IMMEDIATE FIXES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Apply ALL of these regardless of which cause was found.
+These are defensive fixes that prevent the crash even if the
+root cause was different from what you identified.
+
+Fix 3a — Wrap the entire account-created screen in an error
+boundary to prevent a single component crash from killing
+the whole app. Create this file if it doesn't exist:
+
+  File: artifacts/pantryswipe/components/ErrorBoundary.tsx
+
+  import React from 'react';
+  import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+
+  interface Props {
+    children: React.ReactNode;
+    fallback?: React.ReactNode;
+  }
+
+  interface State {
+    hasError: boolean;
+    error: Error | null;
+  }
+
+  export class ErrorBoundary extends React.Component<Props, State> {
+    constructor(props: Props) {
+      super(props);
+      this.state = { hasError: false, error: null };
+    }
+
+    static getDerivedStateFromError(error: Error): State {
+      return { hasError: true, error };
+    }
+
+    componentDidCatch(error: Error, info: React.ErrorInfo) {
+      console.error('ErrorBoundary caught:', error, info);
+    }
+
+    render() {
+      if (this.state.hasError) {
+        return this.props.fallback ?? (
+          <View style={styles.container}>
+            <Text style={styles.title}>Something went wrong</Text>
+            <Text style={styles.message}>
+              {this.state.error?.message ?? 'Unknown error'}
+            </Text>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => this.setState({ hasError: false, error: null })}
+            >
+              <Text style={styles.buttonText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      }
+      return this.props.children;
+    }
+  }
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+      backgroundColor: '#FFF8F4',
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: '#141210',
+      marginBottom: 12,
+    },
+    message: {
+      fontSize: 14,
+      color: '#7A7570',
+      textAlign: 'center',
+      marginBottom: 24,
+    },
+    button: {
+      backgroundColor: '#F5A623',
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 999,
+    },
+    buttonText: {
+      color: '#FFFFFF',
+      fontWeight: '700',
+      fontSize: 14,
+    },
+  });
+
+Fix 3b — Wrap the account-created screen export with ErrorBoundary:
+  In the account-created screen file, find the default export.
+  Wrap it:
+
+  import { ErrorBoundary } from '../components/ErrorBoundary';
+
+  function AccountCreatedScreen() {
+    // ... existing component code ...
+  }
+
+  export default function AccountCreatedWithBoundary() {
+    return (
+      <ErrorBoundary>
+        <AccountCreatedScreen />
+      </ErrorBoundary>
+    );
+  }
+
+Fix 3c — Add try/catch to every async function in the auth flow:
+  Find every async function in:
+    - The signup/register screen
+    - The account-created screen
+    - AppContext.tsx auth functions
+  Wrap every one with try/catch as shown in Cause C above.
+
+Fix 3d — Add null safety to ALL AppContext user field reads:
+  grep -rn "user\." artifacts/pantryswipe/app/
+  grep -rn "user\." artifacts/pantryswipe/components/
+
+  For every access to user.anything, add optional chaining:
+  WRONG: user.name, user.email, user.avatar
+  RIGHT: user?.name, user?.email, user?.avatar
+
+  And provide fallback values:
+  WRONG: <Text>{user?.name}</Text>
+  RIGHT: <Text>{user?.name ?? 'User'}</Text>
+
+Fix 3e — Use router.replace() not router.push() after signup:
+  After account creation succeeds, the navigation must use
+  router.replace() to clear the auth stack:
+
+  WRONG: router.push('/account-created');
+  RIGHT: router.replace('/account-created');
+
+  And from account-created to main app:
+  WRONG: router.push('/(tabs)');
+  RIGHT: router.replace('/(tabs)');
+
+  This prevents back-navigation into the auth flow and avoids
+  competing navigation calls.
+
+Fix 3f — Check if account-created screen has a useEffect that
+  runs immediately and throws:
+
+  In the account-created screen, look for:
+    useEffect(() => {
+      someFunction();  // if this throws, screen crashes on mount
+    }, []);
+
+  Wrap the useEffect body:
+    useEffect(() => {
+      const run = async () => {
+        try {
+          await someFunction();
+        } catch (error) {
+          console.error('Mount effect error:', error);
+        }
+      };
+      run();
+    }, []);
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — VERIFY THE AUTH FLOW END TO END
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After applying all fixes, trace the FULL auth flow by reading
+the code — do not run the app yet:
+
+Step 4a — Map the complete signup flow:
+  Starting from the first onboarding screen, trace every:
+    router.push() / router.replace() call
+    Every navigation destination must have a matching file
+
+  Write out the flow like:
+    /onboarding → /onboarding/step-2 → /signup → /account-created
+    → /(tabs) (or wherever the main app lives)
+
+  Verify every file in this chain exists and has a default export.
+
+Step 4b — Check _layout.tsx for conflicting redirects:
+  Open every _layout.tsx in the app directory tree.
+  Look for useEffect hooks that call router.replace() or
+  router.push() based on auth state.
+  These must NOT fire during the signup flow — add a condition:
+
+  WRONG:
+    useEffect(() => {
+      if (isAuthenticated) router.replace('/(tabs)');
+    }, [isAuthenticated]);
+
+  This fires during signup AND when the user is already logged in,
+  potentially double-navigating.
+
+  RIGHT:
+    useEffect(() => {
+      if (isAuthenticated && !isOnboarding) {
+        router.replace('/(tabs)');
+      }
+    }, [isAuthenticated, isOnboarding]);
+
+  Add an isOnboarding flag to AppContext that is true during
+  the signup flow and set to false after account-created screen.
+
+Step 4c — Verify AppContext initializes user safely:
+  Open AppContext.tsx.
+  Find the initial state for user.
+  It must be either null (with null checks everywhere) or a
+  complete object with all fields filled:
+
+  SAFE (null with checks):
+    const [user, setUser] = useState<User | null>(null);
+
+  SAFE (complete default):
+    const [user, setUser] = useState<User>({
+      id: '',
+      name: '',
+      email: '',
+      avatar: null,
+      level: 1,
+      xp: 0,
+      xpToNextLevel: 500,
+      cookingStreak: 0,
+      recipesCooked: 0,
+      savedRecipes: [],
+      cookedRecipes: [],
+      achievements: [],
+    });
+
+  DANGEROUS (partial object — causes crashes on field access):
+    const [user, setUser] = useState({});
+
+  Fix to one of the safe patterns above.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 5 — TypeScript and Metro check
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Run in order:
+
+  cd artifacts/pantryswipe
+  pnpm run typecheck
+  → Fix every error. Zero tolerance.
+
+  pnpm start --clear
+  → Watch Metro output for any module resolution errors.
+  → Fix any "Unable to resolve module" immediately.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 6 — TEST THE FIX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Scan the QR code in Expo Go and run through the full flow:
+
+  □ Onboarding screens load correctly
+  □ Signup form submits without crash
+  □ Account Created screen appears without crash
+  □ Navigating from Account Created to main app works
+  □ Main tab screen (Pantry/Home) loads correctly
+  □ Back navigation does NOT return to auth screens
+  □ Reloading the app goes directly to the main tabs
+    (not back to onboarding)
+
+If the account-created screen still crashes after all fixes,
+add this console.log immediately inside the component:
+
+  export default function AccountCreatedScreen() {
+    console.log('AccountCreatedScreen rendering...');
+
+    useEffect(() => {
+      console.log('AccountCreatedScreen mounted');
+      return () => console.log('AccountCreatedScreen unmounted');
+    }, []);
+
+    // ... rest of component
+  }
+
+Watch the Metro console output when the screen tries to appear.
+The last log line before the crash tells you exactly where it dies.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FINAL REPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+When the full auth flow works end-to-end, report:
+
+1. Which of the 6 causes (A-F) was the actual crash cause?
+2. What was the exact error message from Metro or Expo Go?
+3. Which file contained the crash?
+4. What was the exact fix applied?
+5. Every file you modified — list them all
+6. TypeScript check result: zero errors confirmed
+7. Does the app now navigate past Account Created? Yes/No
+8. Does back navigation correctly prevent returning to auth? Yes/No
+9. Any other crashes found in the auth flow while testing?

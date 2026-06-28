@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
   Animated,
   Dimensions,
@@ -140,7 +141,7 @@ function isValidEmail(e: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.tr
 function isValidName(n: string) { return /^[a-zA-Z\s\-]+$/.test(n.trim()) && n.trim().length >= 2; }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function OnboardingScreen() {
+function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { updateProfile, completeSetup, addToPantry } = useApp();
@@ -326,6 +327,9 @@ export default function OnboardingScreen() {
     }
   };
 
+  const isMounted = useRef(true);
+  useEffect(() => { return () => { isMounted.current = false; }; }, []);
+
   const startCreating = () => {
     setShowCreating(true);
     foodAnims.forEach((anim, i) => {
@@ -348,7 +352,7 @@ export default function OnboardingScreen() {
     }, 580);
     setTimeout(() => {
       clearInterval(interval);
-      setLoadingDone(true);
+      if (isMounted.current) setLoadingDone(true);
       setTimeout(async () => {
         // Register account on backend — non-blocking, app works even if offline
         try {
@@ -368,14 +372,22 @@ export default function OnboardingScreen() {
         } catch {
           // API unavailable — continue without token
         }
-        updateProfile({ name: name.trim(), email: email.trim(), skillLevel, dietType: dietTypes, allergies, proteinPreferences, goal, cuisinePreferences: selectedCuisines, householdSize, weeklyBudget });
-        // Write SETUP_COMPLETE directly (not fire-and-forget) so Android's SQLite
-        // flushes before we navigate — then call completeSetup() to sync context state.
-        await AsyncStorage.setItem(STORAGE_KEYS.SETUP_COMPLETE, "true");
-        completeSetup();
-        // Give Android's JS bridge one extra tick before triggering navigation
-        await new Promise<void>((resolve) => setTimeout(resolve, 50));
-        router.replace("/(tabs)");
+        try {
+          if (!isMounted.current) return;
+          updateProfile({ name: name.trim(), email: email.trim(), skillLevel, dietType: dietTypes, allergies, proteinPreferences, goal, cuisinePreferences: selectedCuisines, householdSize, weeklyBudget });
+          // Write SETUP_COMPLETE directly (not fire-and-forget) so Android's SQLite
+          // flushes before we navigate — then call completeSetup() to sync context state.
+          await AsyncStorage.setItem(STORAGE_KEYS.SETUP_COMPLETE, "true");
+          completeSetup();
+          // Give Android's JS bridge one extra tick before triggering navigation
+          await new Promise<void>((resolve) => setTimeout(resolve, 50));
+          if (isMounted.current) router.replace("/(tabs)");
+        } catch (err) {
+          console.error("[onboarding] account setup failed:", err);
+          // Navigate anyway — AsyncStorage.setItem was called first so the app
+          // will still land on tabs if the user relaunches.
+          if (isMounted.current) router.replace("/(tabs)");
+        }
       }, 700);
     }, 3500);
   };
@@ -994,4 +1006,12 @@ function makeStyles(OB: OBType) {
   doneEmoji: { fontSize: 72 },
   doneText: { fontSize: 26, fontWeight: "800", color: OB.text, letterSpacing: -0.5 },
   });
+}
+
+export default function OnboardingWithBoundary() {
+  return (
+    <ErrorBoundary>
+      <OnboardingScreen />
+    </ErrorBoundary>
+  );
 }
