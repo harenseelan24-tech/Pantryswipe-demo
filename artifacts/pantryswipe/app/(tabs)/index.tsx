@@ -651,7 +651,7 @@ export default function HomeScreen() {
             ) : (
               <FlatList
                 data={searchResults}
-                keyExtractor={(_, i) => i.toString()}
+                keyExtractor={(item) => item.recipeId}
                 contentContainerStyle={{ paddingBottom: 40 }}
                 ListEmptyComponent={
                   <View style={styles.noResults}>

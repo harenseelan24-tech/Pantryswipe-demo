@@ -218,7 +218,7 @@ function SwipeableRow({
           onPress={() => { Animated.spring(tx, { toValue: 0, useNativeDriver: Platform.OS !== "web" }).start(); onDelete(); }}
         >
           <Feather name="trash-2" size={18} color="#fff" />
-          <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_500Medium" }}>Remove</Text>
+          <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Epilogue_400Regular" }}>Remove</Text>
         </TouchableOpacity>
       </View>
       <Animated.View style={{ transform: [{ translateX: tx }] }} {...pr.panHandlers}>
@@ -640,7 +640,7 @@ export default function PantryScreen() {
                 <View style={styles.expiryAlertAccent} />
                 <View style={styles.expiryAlertBody}>
                   <Text style={{ fontSize: 14 }}>⚠️</Text>
-                  <Text style={[styles.expiryAlertText, { fontFamily: "Inter_600SemiBold" }]}>
+                  <Text style={[styles.expiryAlertText, { fontFamily: "Epilogue_700Bold" }]}>
                     {expiringItems.length} {expiringItems.length === 1 ? "item" : "items"} expiring soon
                   </Text>
                   <Text style={[styles.expiryViewLink, { color: C.primary, fontFamily: "Epilogue_700Bold" }]}>
@@ -660,8 +660,8 @@ export default function PantryScreen() {
                 <View style={styles.lowStockAccent} />
                 <View style={styles.lowStockBody}>
                   <Text style={{ fontSize: 14 }}>{activeRanOut.length > 0 ? "⚠️" : "📉"}</Text>
-                  <Text style={[styles.lowStockText, { fontFamily: "Inter_400Regular" }]}>
-                    <Text style={{ fontFamily: "Inter_600SemiBold" }}>
+                  <Text style={[styles.lowStockText, { fontFamily: "Epilogue_400Regular" }]}>
+                    <Text style={{ fontFamily: "Epilogue_700Bold" }}>
                       {needRestockItems.length} item{needRestockItems.length !== 1 ? "s" : ""}
                       {activeRanOut.length > 0 ? ` · ${activeRanOut.length} ran out` : " running low"}
                     </Text>{" "}— tap to build your shopping list
@@ -1355,7 +1355,7 @@ export default function PantryScreen() {
                     </View>
                     <Animated.View style={[styles.scanLine, { backgroundColor: "rgba(255,255,255,0.7)", top: scanLineY }]} />
                   </View>
-                  <Text style={[styles.cameraHintText, { fontFamily: "Inter_500Medium" }]}>
+                  <Text style={[styles.cameraHintText, { fontFamily: "Epilogue_400Regular" }]}>
                     Point camera at a barcode
                   </Text>
                 </View>
@@ -1466,13 +1466,13 @@ export default function PantryScreen() {
               {activeRanOut.length > 0 && (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FECACA" }}>
                   <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#DC2626" }} />
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#DC2626" }}>{activeRanOut.length} ran out</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Epilogue_700Bold", color: "#DC2626" }}>{activeRanOut.length} ran out</Text>
                 </View>
               )}
               {needRestockItems.filter(i => i.quantity > 0).length > 0 && (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: "#FFFBEB", borderWidth: 1, borderColor: "#FDE68A" }}>
                   <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#D97706" }} />
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#B45309" }}>{needRestockItems.filter(i => i.quantity > 0).length} running low</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Epilogue_700Bold", color: "#B45309" }}>{needRestockItems.filter(i => i.quantity > 0).length} running low</Text>
                 </View>
               )}
             </View>
@@ -1484,10 +1484,10 @@ export default function PantryScreen() {
               <View style={{ backgroundColor: "#FEF3C7", borderRadius: 12, padding: 12, marginBottom: 12, flexDirection: "row", alignItems: "center", gap: 10 }}>
                 <Text style={{ fontSize: 16 }}>⚠️</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#92400E" }}>
+                  <Text style={{ fontSize: 13, fontFamily: "Epilogue_700Bold", color: "#92400E" }}>
                     {needRestockItems.filter((i) => !checkedItems.has(i.id)).length} item{needRestockItems.filter((i) => !checkedItems.has(i.id)).length !== 1 ? "s" : ""} still unchecked
                   </Text>
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: "#78350F", marginTop: 2 }}>
+                  <Text style={{ fontSize: 12, fontFamily: "Epilogue_400Regular", color: "#78350F", marginTop: 2 }}>
                     The alert will stay until all items are restocked.
                   </Text>
                 </View>
@@ -1499,7 +1499,7 @@ export default function PantryScreen() {
                     setShowUncheckedWarning(false);
                   }}
                 >
-                  <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: "#92400E" }}>Close anyway</Text>
+                  <Text style={{ fontSize: 13, fontFamily: "Epilogue_700Bold", color: "#92400E" }}>Close anyway</Text>
                 </TouchableOpacity>
               </View>
             )}

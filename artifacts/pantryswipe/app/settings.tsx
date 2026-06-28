@@ -536,6 +536,7 @@ export default function SettingsScreen() {
             placeholderTextColor={C.textMuted}
             keyboardType="numeric"
             autoFocus
+            autoCorrect={false}
             returnKeyType="done"
             onSubmitEditing={saveBudget}
           />

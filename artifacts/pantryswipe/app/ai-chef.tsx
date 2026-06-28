@@ -698,6 +698,8 @@ export default function AIChefScreen() {
               returnKeyType="send"
               onSubmitEditing={() => sendMessage()}
               editable={isSubscribed || !isAtLimit}
+              autoCorrect={false}
+              autoCapitalize="none"
             />
 
             {/* Send button */}

@@ -1,0 +1,495 @@
+You are a Staff Engineer and QA Lead doing a full pre-launch audit of
+the PantrySwipe Expo app. Your job is to find every bug, fix it,
+re-run the app, and not stop until it runs perfectly on both iOS and
+Android with zero errors. Do not ask for permission between steps.
+
+App location: artifacts/pantryswipe/
+Stack: Expo SDK 54, expo-router v6, React Native 0.81, TypeScript,
+pnpm workspaces, react-native-reanimated 3, expo-blur, expo-haptics,
+expo-linear-gradient, @expo-google-fonts/epilogue, @expo/vector-icons.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 0 — ENVIRONMENT SETUP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+cd artifacts/pantryswipe
+
+Step 0a — Verify dependency health:
+  npx expo-doctor@latest
+  Read the output. Fix every reported issue before continuing.
+  Common fixes:
+    Wrong package version: npx expo install <package>
+    Missing peer dep: pnpm add <package>
+  Do NOT proceed to phase 1 until expo-doctor reports zero issues.
+
+Step 0b — Verify all required packages are installed:
+  Check package.json for these — install any that are missing:
+    npx expo install expo-linear-gradient
+    npx expo install expo-blur
+    npx expo install expo-haptics
+    npx expo install @expo/vector-icons
+    npx expo install react-native-safe-area-context
+    npx expo install react-native-reanimated
+    npx expo install expo-font @expo-google-fonts/epilogue
+
+Step 0c — Clear Metro cache:
+  pnpm start --clear
+  Wait for Metro to confirm bundle ready, then Ctrl+C.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 1 — TYPESCRIPT AUDIT (fix ALL errors first)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Run: pnpm run typecheck
+Fix every single TypeScript error before moving to phase 2.
+Do not leave any error unresolved.
+
+Common error categories to look for and fix:
+
+1. Missing 'worklet' directive on Reanimated callbacks:
+   ANY function passed to useAnimatedStyle, useDerivedValue,
+   useAnimatedScrollHandler, or runOnUI must have 'worklet';
+   as its very first line.
+   WRONG:
+     const style = useAnimatedStyle(() => ({ opacity: val.value }));
+   RIGHT:
+     const style = useAnimatedStyle(() => {
+       'worklet';
+       return { opacity: val.value };
+     });
+
+2. Feather icon name typos — check these exact names are valid:
+   Valid: "arrow-left", "arrow-right", "check", "check-circle",
+   "check-square", "square", "heart", "bookmark", "share-2",
+   "message-circle", "bell", "settings", "user", "users",
+   "compass", "calendar", "clock", "zap", "star", "sun",
+   "moon", "coffee", "gift", "target", "droplet", "layers",
+   "grid", "scissors", "plus", "plus-circle", "minus", "x",
+   "edit-2", "send", "cpu", "image", "map", "map-pin",
+   "menu", "more-vertical", "more-horizontal", "search",
+   "sliders", "package", "file-text", "chevron-right",
+   "chevron-left", "info", "shield", "credit-card",
+   "share", "lock", "sunrise", "award", "log-out"
+   If a name is not in this list, replace with the closest
+   valid Feather icon name.
+
+3. StyleSheet property violations — React Native does not support:
+   calc(), vh, vw, rem, em units — use numeric px values
+   background-color (camelCase: backgroundColor)
+   border-radius (camelCase: borderRadius)
+   aspect-ratio shorthand — use { width: X, height: X }
+   CSS grid display — use flexDirection and FlatList instead
+   textDecoration — use textDecorationLine
+   fontVariationSettings — not supported
+   boxShadow as a string — use Platform.select shadow props
+
+4. Missing import statements:
+   Check every file for used-but-not-imported: Animated,
+   useRef, useEffect, useState, Platform, Dimensions,
+   StyleSheet, KeyboardAvoidingView, FlatList, TextInput,
+   ScrollView, Pressable, TouchableOpacity, SafeAreaView
+
+5. Reanimated 3 API changes:
+   OLD (Reanimated 2): useSharedValue, withSpring, etc. from
+     'react-native-reanimated' — still valid in v3
+   Check: Animated.View from 'react-native' is NOT the same
+     as Reanimated's Animated.View. If both are used, alias:
+     import Animated as RNAnimated from 'react-native';
+     import Animated from 'react-native-reanimated';
+   Ensure no file imports Animated from both without aliasing.
+
+After fixing all TypeScript errors, run typecheck again and
+confirm it reports zero errors before proceeding.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 2 — CROSS-PLATFORM CORRECTNESS CHECKS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Run these grep commands. Fix every result found.
+
+2a — Find any remaining web-only code:
+  grep -rn "window\." artifacts/pantryswipe/app/
+  grep -rn "document\." artifacts/pantryswipe/app/
+  grep -rn "classList" artifacts/pantryswipe/app/
+  grep -rn "addEventListener" artifacts/pantryswipe/app/
+  grep -rn "innerHTML" artifacts/pantryswipe/app/
+  grep -rn "innerText" artifacts/pantryswipe/app/
+  grep -rn "querySelector" artifacts/pantryswipe/app/
+  grep -rn "googleusercontent" artifacts/pantryswipe/app/
+  grep -rn "googleusercontent" artifacts/pantryswipe/components/
+  grep -rn "lh3\." artifacts/pantryswipe/app/
+  grep -rn "fontVariationSettings" artifacts/pantryswipe/app/
+  grep -rn "navigator\.vibrate" artifacts/pantryswipe/app/
+  Expected result for ALL: zero matches.
+  Fix any found before continuing.
+
+2b — Verify BlurView has Platform guard everywhere it's used:
+  grep -rn "BlurView" artifacts/pantryswipe/app/
+  grep -rn "BlurView" artifacts/pantryswipe/components/
+  For EVERY match, verify the surrounding code has:
+    Platform.OS === 'ios' ? <BlurView .../> : <View .../>
+  If any BlurView is used unconditionally (no Platform check),
+  add the guard.
+
+2c — Verify shadowColor has elevation sibling everywhere:
+  grep -rn "shadowColor" artifacts/pantryswipe/app/
+  For every match inside a StyleSheet.create() block, confirm
+  that the SAME object also has elevation: <number> for Android.
+  If not, wrap in Platform.select({ ios: {...shadowProps},
+    android: { elevation: N }, web: { boxShadow: '...' } })
+
+2d — Verify no inline style objects in FlatList renderItem:
+  Open pantry.tsx, social.tsx, discover/explore.tsx.
+  Find the renderItem function in each FlatList.
+  Confirm every style prop references StyleSheet.create() keys.
+  WRONG: style={{ borderRadius: 16, padding: 12 }}
+  RIGHT: style={styles.card}
+  Exception allowed: dynamic values like:
+    style={[styles.card, { backgroundColor: tint }]}
+  Fix any pure inline objects (no dynamic values).
+
+2e — Verify SafeAreaProvider setup:
+  Open artifacts/pantryswipe/app/_layout.tsx
+  Confirm it wraps the root with <SafeAreaProvider> from
+  'react-native-safe-area-context'.
+  If missing, add it as the outermost wrapper.
+  Then check EVERY tab and stack screen file:
+    grep -rn "SafeAreaView" artifacts/pantryswipe/app/
+  If any screen uses both SafeAreaView AND useSafeAreaInsets()
+  for the same edge, remove the SafeAreaView wrapper and keep
+  only the insets-based manual padding. Double-applying causes
+  double padding on notched devices.
+
+2f — Verify KeyboardAvoidingView in AI Chef screen:
+  Open artifacts/pantryswipe/app/ai-chef.tsx
+  Confirm the OUTERMOST element (after SafeAreaView if present)
+  is KeyboardAvoidingView:
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    style={{ flex: 1 }}
+  If missing, add it. This is critical for the chat to work.
+
+2g — Verify font loading gate in _layout.tsx:
+  Open artifacts/pantryswipe/app/_layout.tsx
+  Confirm this pattern exists:
+    const [fontsLoaded] = useFonts({
+      Epilogue_700Bold, Epilogue_400Regular
+    });
+    useEffect(() => {
+      if (fontsLoaded) SplashScreen.hideAsync();
+    }, [fontsLoaded]);
+    if (!fontsLoaded) return null;
+  If missing or incomplete, add it. Without this, fonts flash
+  from System to Epilogue on every cold start.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 3 — SCREEN-BY-SCREEN LOGIC AUDIT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For each screen below, read the file and verify each item.
+Fix anything that fails the check.
+
+─── PANTRY SCREEN (app/(tabs)/pantry.tsx) ───
+
+□ Category tab switching: tap each tab → list updates correctly
+□ LOW STOCK progress bar: if item.maxQuantity exists in mockData,
+  bar width = (item.quantity / item.maxQuantity) * 100 + '%'
+  If item.maxQuantity does NOT exist: bar must not render at all
+  Fix: check mockData.ts for the field, conditionally render
+□ Status dots: red (#E84040) for EXPIRES/REFILL, amber (#F5A623)
+  for LOW STOCK, green (#4CAF76) for IN STOCK/FRESH/GOOD
+□ FAB onPress: confirm it still calls the original add-item handler
+□ Sort by Status: confirm toggle still works
+□ No inline style objects in FlatList renderItem
+
+─── PROFILE SCREEN (app/(tabs)/profile.tsx) ───
+
+□ XP bar: uses Animated.Value(0) + Animated.timing to xpPercent
+  on mount (not a static width style)
+□ Achievements grid: .map() over AppContext achievements array
+  (not hardcoded JSX blocks)
+□ Recipe grids: FlatList over AppContext savedRecipes/cookedRecipes
+  (not static image placeholders)
+□ Tab switching (Saved/Cooked): uses useState, not DOM classList
+□ Back button: calls router.back() or original navigation
+□ Settings button: calls original settings navigation
+
+─── PLANNER SCREEN (app/(tabs)/planner.tsx) ───
+
+□ Segmented control (Day/Week/Month): uses useState, renders
+  correct view per selection
+□ Day view: meal data from AppContext, not hardcoded dishes
+□ Week view: day selector scroll works; auto-generate button
+  calls original handler
+□ Month view calendar: days generated from Date() API — verify
+  by checking: new Date(currentYear, currentMonth, 1).getDay()
+  determines the offset of the first row correctly
+□ Month day tap: selectedDay useState + Animated opacity fade
+  shows preview panel correctly
+□ Macro bars: all heights/widths computed from AppContext data
+  (not hardcoded 75%, 45%, 60%)
+□ FAB: calls original add-meal handler
+
+─── SOCIAL SCREEN (app/(tabs)/social.tsx) ───
+
+□ Tab switching (For You/Following/Trending/Near Me): useState
+□ Like toggle: isLiked from AppContext, color change on tap,
+  original onPress handler called
+□ Follow toggle: isFollowing from AppContext, original onPress
+□ Post data: from AppContext socialPosts array (no hardcoded names)
+□ Active tab underline: rendered as real View, not ::after CSS
+□ Notification badge: from AppContext unreadNotifications count
+
+─── DISCOVER/EXPLORE SCREEN ───
+
+□ SwipeCard.tsx: confirm file has ZERO changes from original
+  Run: git diff artifacts/pantryswipe/components/SwipeCard.tsx
+  If any changes exist, revert them immediately with:
+    git checkout HEAD -- artifacts/pantryswipe/components/SwipeCard.tsx
+□ Swipe gestures: test left (skip), right (cook), up (save) —
+  all three must register and update AppContext correctly
+□ Search TextInput: keyboard opens on tap, onChangeText works
+□ Filter chips: active chip highlights, filter updates card deck
+□ Meal type tabs: selection updates recipe deck
+□ Pantry match %: from AppContext computed value (not hardcoded 0%)
+□ Greeting: uses dynamic time (Morning/Afternoon/Evening) + user.name
+□ Card image: require() from mockData (no remote URLs)
+□ Swipe instruction text: Reanimated pulse animation plays
+
+─── AI CHEF SCREEN (app/ai-chef.tsx) ───
+
+□ KeyboardAvoidingView: wraps entire screen
+□ Send button: calls original mock AI handler
+□ Messages display: from existing messages state array
+□ Typing indicator: 3 dots with Reanimated bounce animation
+□ Green status dot: Reanimated pulse animation plays
+□ Suggestion chips: populate TextInput or trigger send correctly
+□ Back button: calls router.back()
+□ No ** asterisks visible in any AI message text
+□ FlatList scrollToEnd fires on new message added
+
+─── PARTY PLANNER SCREEN (app/party-planner.tsx) ───
+
+□ Occasion selection: tapping a card updates selectedOccasion,
+  "Next" button enables
+□ Guest stepper: +/- buttons update guestCount in state
+□ Budget TextInput: keyboard type numeric, value updates, per-guest
+  calculation updates correctly
+□ Dietary restriction toggles: tapping cards updates selectedDiets
+□ Shopping list: tapping items toggles checked state,
+  textDecorationLine 'line-through' applied to checked items
+□ Progress bar: updates correctly on each step change
+□ Results screen: guest count, budget, occasion shown from wizard
+  state (zero hardcoded values)
+□ Export Plan button: calls original export handler
+□ Sync to Calendar: calls original calendar handler
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 4 — ANDROID-SPECIFIC CHECKS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+These issues only appear on Android. Check and fix each:
+
+4a — elevation without borderRadius clip:
+  On Android, elevation (shadow) does not clip to borderRadius.
+  Verify all elevated cards also have overflow: 'hidden' if they
+  contain images that should be clipped to the card's corners.
+
+4b — Font weight on Android:
+  Android maps fontWeight numerically. '700' works but 'bold'
+  may render differently. Verify all fontWeight values are
+  numeric strings: '400', '600', '700', '800'.
+  grep -rn "fontWeight.*bold" artifacts/pantryswipe/app/
+  Replace any 'bold' with '700'.
+
+4c — StatusBar style:
+  Open artifacts/pantryswipe/app/_layout.tsx
+  Confirm StatusBar style is set appropriately:
+    <StatusBar style="auto" /> or platform-specific
+  The AI Chef dark screen needs: <StatusBar style="light" />
+  Add a per-screen StatusBar component if not already present.
+
+4d — Android back gesture and navigation:
+  Expo Router handles hardware back button by default, but verify
+  no screen is preventing it with hardwareBackPress listeners
+  that swallow the event without navigating back.
+  grep -rn "hardwareBackPress" artifacts/pantryswipe/app/
+  If found, confirm each listener calls navigation.goBack() or
+  returns false to allow default behaviour.
+
+4e — TextInput autoCorrect and autoCapitalize:
+  The AI Chef TextInput and budget TextInput should have:
+    autoCorrect={false} for numeric input
+    autoCapitalize="none" for the chat input
+  Add if missing.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 5 — iOS-SPECIFIC CHECKS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+5a — iOS 26 NativeTabs conflict:
+  Open artifacts/pantryswipe/app/_layout.tsx
+  If the tab bar uses NativeTabs (expo-router's tabBar config
+  for iOS 26), do NOT add a custom BlurView background to it.
+  The NativeTabs liquid glass already provides frosted glass.
+  Adding BlurView on top creates a double-blur visual glitch.
+  Check: if tabBarStyle includes backgroundColor or BlurView,
+  wrap it in: Platform.OS === 'ios' && parseInt(Platform.Version
+  as string, 10) >= 26 ? null : customTabBarStyle
+
+5b — Dynamic Island safe area:
+  On iPhone 14 Pro and later with Dynamic Island, insets.top
+  is 59px (not 44px). Verify every screen's header uses
+  insets.top from useSafeAreaInsets() — not a hardcoded value.
+  grep -rn "paddingTop.*44" artifacts/pantryswipe/app/
+  grep -rn "marginTop.*44" artifacts/pantryswipe/app/
+  Replace any hardcoded 44 top padding with insets.top + offset.
+
+5c — iPhone SE (4.7") small screen:
+  Verify the Party Planner guest stepper and the AI Chef input
+  bar don't overflow on a 375px wide screen. The stepper row
+  (minus button + count + plus button) must fit within 375px
+  with adequate padding.
+
+5d — Haptics on iOS:
+  Confirm expo-haptics is imported correctly and calls are:
+    Haptics.selectionAsync() — not Haptics.impact()
+  for card selection interactions. selectionAsync is the
+  lightest and most appropriate for selection feedback.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 6 — PERFORMANCE CHECKS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+6a — Memoize all FlatList renderItem components:
+  Pantry, Social, Discover screens all have large FlatLists.
+  Every item component rendered inside renderItem must be wrapped
+  in React.memo() to prevent unnecessary re-renders.
+  Check each FlatList's renderItem:
+    WRONG: renderItem={({ item }) => <PantryCard item={item} />}
+      where PantryCard is defined inline or not memoized
+    RIGHT: const PantryCard = React.memo(({ item }) => ...)
+  Add React.memo() wrapping to any card component that is
+  missing it.
+
+6b — keyExtractor must use stable unique IDs:
+  grep -rn "keyExtractor" artifacts/pantryswipe/app/
+  Every FlatList keyExtractor must return a unique stable string.
+    WRONG: keyExtractor={(item, index) => String(index)}
+    RIGHT: keyExtractor={(item) => item.id}
+  Fix any index-based keyExtractors.
+
+6c — Reanimated animations use useNativeDriver where possible:
+  Opacity and transform animations MUST use useNativeDriver: true.
+  Width and height animations CANNOT use useNativeDriver: true.
+  Check all Animated.timing calls:
+    opacity, transform → useNativeDriver: true
+    width, height → useNativeDriver: false
+  Fix any mismatches (they cause yellow-box warnings that
+  escalate to errors in strict mode).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 7 — RUN THE APP AND TEST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After all phases above are complete with zero errors:
+
+Step 7a — Start Metro:
+  cd artifacts/pantryswipe && pnpm start --clear
+
+Step 7b — Open in Expo Go on a physical device or simulator.
+  Test BOTH iOS and Android if possible.
+  If only one is available, test that platform thoroughly.
+
+Step 7c — Navigate to EVERY screen and perform these actions:
+
+  PANTRY TAB:
+  □ Switch between Pantry / Fridge / Spices tabs
+  □ Tap Sort by Status
+  □ Tap the FAB (+) button
+  □ Verify all card status dots are correct colors
+
+  PROFILE TAB:
+  □ XP bar animates in on screen mount
+  □ Switch Saved/Cooked recipe tabs
+  □ Scroll through achievements grid
+
+  PLANNER TAB:
+  □ Switch Day/Week/Month views
+  □ Tap a day in month view — preview panel appears
+  □ Tap Auto-generate week button (Week view)
+  □ Verify macro bars are not 0% (data is loading)
+
+  SOCIAL TAB:
+  □ Switch all 4 tabs (For You, Following, Trending, Near Me)
+  □ Like a post — heart turns red
+  □ Follow a user — button changes to "Following"
+  □ Scroll through story bar
+
+  DISCOVER/EXPLORE TAB:
+  □ Swipe right on a card — cook action fires
+  □ Swipe left on a card — skip action fires
+  □ Swipe up on a card — save action fires
+  □ Tap a filter chip — active chip highlights
+  □ Type in search bar — keyboard opens, text appears
+  □ Switch meal type tabs
+
+  AI CHEF (navigate to from another screen):
+  □ Tap text input — keyboard opens, input bar moves up
+  □ Type a message and tap Send — AI responds
+  □ Typing indicator (3 bouncing dots) shows during AI response
+  □ Tap a suggestion chip — text populates or sends
+  □ Tap back arrow — navigates back correctly
+
+  PARTY PLANNER (navigate to from another screen):
+  □ Tap an occasion card — card highlights, Next enables
+  □ Tap Next — moves to step 2
+  □ Tap + and - — guest count changes
+  □ Budget step: tap preset chips — amount updates
+  □ Type custom budget — per-guest updates live
+  □ If dietary step: tap restriction cards — toggle highlights
+  □ Final results: verify guest count and budget match inputs
+  □ Tap Export Plan and Sync to Calendar buttons
+
+Step 7d — Check for yellow-box warnings:
+  In Metro console, scroll through warnings.
+  Fix any warning that says:
+    "Warning: Each child in a list should have a unique key"
+    "Animated: `useNativeDriver` was not specified"
+    "VirtualizedLists should never be nested"
+    "Warning: Cannot update a component from inside"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 8 — FINAL VERIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Run this checklist. Do not declare done until all pass:
+
+□ pnpm run typecheck → zero errors
+□ expo-doctor → zero issues
+□ grep for web APIs → zero matches
+□ grep for remote image URLs → zero matches
+□ grep for hardcoded 'bold' fontWeight → zero matches
+□ grep for index-based keyExtractor → zero matches
+□ SwipeCard.tsx git diff → zero changes
+□ All 7 core screens navigate to and render without crash
+□ All 3 swipe directions work on Discover screen
+□ Keyboard pushes content up on AI Chef screen
+□ Party Planner wizard advances through all steps correctly
+□ No yellow-box warnings in Metro console
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FINAL REPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+When all phases are complete, report back with:
+
+1. expo-doctor result (clean / issues found + fixed)
+2. TypeScript check result (zero errors confirmed)
+3. All web-API grep results (all zero confirmed)
+4. SwipeCard.tsx diff result (zero changes confirmed)
+5. List of every file you modified in this QA pass
+6. List of every bug you found and fixed, with severity
+7. Any issue you found that you could NOT fix and why
+8. Confirmed: app runs on iOS without crash
+9. Confirmed: app runs on Android without crash
+10. Any remaining yellow-box warnings and their root cause
