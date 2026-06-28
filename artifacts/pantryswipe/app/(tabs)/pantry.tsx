@@ -21,7 +21,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { CameraView, useCameraPermissions } from "expo-camera";
 import { useColors } from "@/hooks/useColors";
 import { useApp } from "@/context/AppContext";
 import { PantryItem, Recipe } from "@/data/mockData";
@@ -30,6 +29,20 @@ import ScanReceiptModal from "@/components/ScanReceiptModal";
 import ConfirmationEditScreen from "@/components/ConfirmationEditScreen";
 import { getItemEmoji } from "@/utils/emojiLookup";
 import type { DetectedItem } from "@/types/scanning";
+
+// expo-camera v14+ dropped Expo Go support — dynamic require with Expo Go fallback
+let CameraViewComponent: React.ComponentType<any> | null = null;
+let useCameraPerms: () => [any, () => Promise<any>] = () => [
+  { granted: false, canAskAgain: false },
+  async () => {},
+];
+try {
+  const cam = require("expo-camera");
+  CameraViewComponent = cam.CameraView;
+  useCameraPerms = cam.useCameraPermissions;
+} catch {
+  // expo-camera native module not available in Expo Go
+}
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -373,7 +386,7 @@ export default function PantryScreen() {
   const [manualExpiry, setManualExpiry] = useState("");
 
   const scanLineAnim = useRef(new Animated.Value(0)).current;
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [cameraPermission, requestCameraPermission] = useCameraPerms();
   const barcodeScanLock = useRef(false);
 
   const TAB_BAR_H = Platform.OS === "web" ? 68 : 60;
@@ -1302,6 +1315,18 @@ export default function PantryScreen() {
                     </Text>
                   </TouchableOpacity>
                 </>
+              ) : CameraViewComponent == null ? (
+                <View style={styles.permissionBox}>
+                  <View style={[styles.permissionIconWrap, { backgroundColor: C.primary + "18" }]}>
+                    <Feather name="camera" size={36} color={C.primary} />
+                  </View>
+                  <Text style={[styles.permissionTitle, { color: C.textPrimary, fontFamily: "Epilogue_700Bold" }]}>
+                    Camera Not Available
+                  </Text>
+                  <Text style={[styles.permissionText, { color: C.textMuted, fontFamily: "Epilogue_400Regular" }]}>
+                    Barcode scanning isn't supported in Expo Go. Use the Demo Scan button above instead.
+                  </Text>
+                </View>
               ) : !cameraPermission ? (
                 <View style={styles.permissionBox}>
                   <ActivityIndicator size="small" color={C.primary} />
@@ -1339,7 +1364,7 @@ export default function PantryScreen() {
                 </View>
               ) : (
                 <View style={styles.cameraWrapper}>
-                  <CameraView
+                  <CameraViewComponent
                     style={StyleSheet.absoluteFillObject}
                     facing="back"
                     onBarcodeScanned={handleBarcodeScanned}
